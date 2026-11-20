@@ -25,7 +25,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-class LogDumpService(
+internal class LogDumpService(
     private val protocolHandler: PebbleProtocolHandler,
     private val appContext: AppContext,
     private val identifier: PebbleIdentifier,
@@ -125,11 +125,11 @@ class LogDumpService(
     }
 }
 
-suspend fun ByteWriteChannel.writeLine(line: String) {
+internal suspend fun ByteWriteChannel.writeLine(line: String) {
     writeString("$line\n")
 }
 
-enum class LogLevel(val code: UByte, val str: String) {
+internal enum class LogLevel(val code: UByte, val str: String) {
     Always(0u, "*"),
     Error(1u, "E"),
     Warning(50u, "W"),

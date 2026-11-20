@@ -22,11 +22,11 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
-class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
+internal class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
     private val logger = Logger.withTag("ConnectivityWatcher")
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     private var gattClient: ConnectedGattClient? = null
-    val status = _status.asStateFlow().filterNotNull()
+    val status: Flow<ConnectivityStatus> = _status.asStateFlow().filterNotNull()
 
     suspend fun subscribe(client: ConnectedGattClient): Boolean = withTimeoutOrNull(10.seconds) {
         gattClient = client
@@ -96,7 +96,7 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
     }
 }
 
-class ConnectivityStatus(characteristicValue: ByteArray) {
+internal class ConnectivityStatus(characteristicValue: ByteArray) {
     val connected: Boolean
     val paired: Boolean
     val encrypted: Boolean
@@ -133,7 +133,7 @@ class ConnectivityStatus(characteristicValue: ByteArray) {
         "< ConnectivityStatus connected = ${connected} paired = ${paired} encrypted = ${encrypted} hasBondedGateway = ${hasBondedGateway} supportsPinningWithoutSlaveSecurity = ${supportsPinningWithoutSlaveSecurity} hasRemoteAttemptedToUseStalePairing = ${hasRemoteAttemptedToUseStalePairing} pairingErrorCode = ${pairingErrorCode}>"
 }
 
-enum class PairingErrorCode(val value: Byte) {
+internal enum class PairingErrorCode(val value: Byte) {
     NO_ERROR(0),
     PASSKEY_ENTRY_FAILED(1),
     OOB_NOT_AVAILABLE(2),

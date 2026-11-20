@@ -107,47 +107,47 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
-data class PlatformFlags(val flags: UInt)
+internal data class PhoneCapabilities internal constructor(val capabilities: Set<ProtocolCapsFlag>)
+internal data class PlatformFlags(val flags: UInt)
 
-sealed class PebbleConnectionEvent {
-    data class PebbleConnectedEvent(val device: CommonConnectedDevice) : PebbleConnectionEvent()
-    data class PebbleDisconnectedEvent(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
+public sealed class PebbleConnectionEvent {
+    public data class PebbleConnectedEvent internal constructor(val device: CommonConnectedDevice) : PebbleConnectionEvent()
+    public data class PebbleDisconnectedEvent internal constructor(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
 }
 
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
+public interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
     PluginFileAccessApi, NotificationReplies, AppDataUsageApi, PluginActionLogApi {
-    fun init()
+    public fun init()
 
-    val config: StateFlow<LibPebbleConfig>
-    fun updateConfig(config: LibPebbleConfig)
+    public val config: StateFlow<LibPebbleConfig>
+    public fun updateConfig(config: LibPebbleConfig)
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
-    suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
-    suspend fun markNotificationRead(itemId: Uuid)
-    suspend fun sendPing(cookie: UInt)
-    suspend fun launchApp(uuid: Uuid)
-    suspend fun stopApp(uuid: Uuid)
+    public suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
+    public suspend fun markNotificationRead(itemId: Uuid)
+    public suspend fun sendPing(cookie: UInt)
+    public suspend fun launchApp(uuid: Uuid)
+    public suspend fun stopApp(uuid: Uuid)
     // ....
 
-    fun doStuffAfterPermissionsGranted()
-    fun checkForFirmwareUpdates(force: Boolean)
-    suspend fun updateTimeIfNeeded()
+    public fun doStuffAfterPermissionsGranted()
+    public fun checkForFirmwareUpdates(force: Boolean)
+    public suspend fun updateTimeIfNeeded()
 }
 
-sealed class UserFacingError {
-    abstract val message: String
+public sealed class UserFacingError {
+    public abstract val message: String
 
-    data class FailedToDownloadPbw(override val message: String) : UserFacingError()
-    data class FailedToRemovePbwFromLocker(override val message: String) : UserFacingError()
-    data class FailedToSideloadApp(override val message: String) : UserFacingError()
-    data class FailedToScan(override val message: String) : UserFacingError()
-    data class FailedToInstallLanguagePack(override val message: String) : UserFacingError()
-    data class MissingCompanionApp(
+    public data class FailedToDownloadPbw internal constructor(override val message: String) : UserFacingError()
+    public data class FailedToRemovePbwFromLocker internal constructor(override val message: String) : UserFacingError()
+    public data class FailedToSideloadApp internal constructor(override val message: String) : UserFacingError()
+    public data class FailedToScan internal constructor(override val message: String) : UserFacingError()
+    public data class FailedToInstallLanguagePack internal constructor(override val message: String) : UserFacingError()
+    public data class MissingCompanionApp internal constructor(
         override val message: String,
         val appName: String,
         val appUuid: Uuid,
@@ -155,55 +155,55 @@ sealed class UserFacingError {
     ) : UserFacingError()
 }
 
-data class OtherPebbleApp(
+public data class OtherPebbleApp internal constructor(
     val pkg: String,
     val name: String,
 )
 
-interface HealthApi {
-    val healthSettings: Flow<HealthSettings>
-    fun updateHealthSettings(healthSettings: HealthSettings)
-    suspend fun updateImperialUnits(imperialUnits: Boolean)
-    suspend fun getHealthDebugStats(): HealthDebugStats
-    fun requestHealthData(fullSync: Boolean = false)
-    fun sendHealthAveragesToWatch()
-    val healthDataUpdated: SharedFlow<Unit>
+public interface HealthApi {
+    public val healthSettings: Flow<HealthSettings>
+    public fun updateHealthSettings(healthSettings: HealthSettings)
+    public suspend fun updateImperialUnits(imperialUnits: Boolean)
+    public suspend fun getHealthDebugStats(): HealthDebugStats
+    public fun requestHealthData(fullSync: Boolean = false)
+    public fun sendHealthAveragesToWatch()
+    public val healthDataUpdated: SharedFlow<Unit>
 }
 
 /**
  * Represents the most recent heart rate reading from the watch.
  */
-data class LatestHeartRate(
+public data class LatestHeartRate internal constructor(
     val bpm: Int,
     val timestampEpochSec: Long,
 )
 
-interface HealthDataApi {
-    suspend fun getLatestTimestamp(): Long?
-    suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
-    suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
+public interface HealthDataApi {
+    public suspend fun getLatestTimestamp(): Long?
+    public suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
+    public suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
 
     /** Returns minute-level health data for the given epoch-second range. */
-    suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+    public suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
 
     /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
-    suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
+    public suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
 
     /** Returns a single aggregate (total steps, calories, distance, active minutes) for the entire range. */
-    suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates?
+    public suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates?
 
     /** Returns the average heart rate (BPM) for non-zero readings in the range, or null if no data. */
-    suspend fun getAverageHeartRate(start: Long, end: Long): Double?
+    public suspend fun getAverageHeartRate(start: Long, end: Long): Double?
 
     /** Returns sleep overlay entries (Sleep + DeepSleep types) in the range. */
-    suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
+    public suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
 
     /** Returns all sleep sessions for a given day plus aggregate totals, using the 6PM-2PM search window.
      *  @param dayStartEpochSec start-of-day in epoch seconds (midnight local time) */
-    suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep?
+    public suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep?
 
     /** Returns the most recent non-zero heart rate reading, or null if none exists. */
-    suspend fun getLatestHeartRateReading(): LatestHeartRate?
+    public suspend fun getLatestHeartRateReading(): LatestHeartRate?
 
     /**
      * Computes the resting heart rate (BPM) for the given day from sleep + HR samples. Returns
@@ -211,64 +211,64 @@ interface HealthDataApi {
      *
      * @param dayStartEpochSec start-of-day in epoch seconds (midnight local time)
      */
-    suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int?
+    public suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int?
 
     /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
-    suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
+    public suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
 
     /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
-    suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
+    public suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
 
     /** Returns hourly typical (historical average) step counts for the given weekday.
      *  @param dayOfWeek kotlinx.datetime.DayOfWeek ordinal (0=Monday, 6=Sunday) */
-    suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>
+    public suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>
 
     /** Returns the 30-day average sleep duration in seconds. */
-    suspend fun getTypicalSleepSeconds(): Long
+    public suspend fun getTypicalSleepSeconds(): Long
 
     /** Wipes all health data and populates 30 days of fake data for testing. */
-    suspend fun populateDebugHealthData()
+    public suspend fun populateDebugHealthData()
 }
 
-interface Weather {
-    fun updateWeatherData(weatherData: List<WeatherLocationData>)
+public interface Weather {
+    public fun updateWeatherData(weatherData: List<WeatherLocationData>)
 
     /** Latest stored weather, one entry per saved location. Temperatures are already in the
      *  user's configured unit — whoever wrote them converted first. */
-    val currentWeather: Flow<List<WeatherAppEntry>>
+    public val currentWeather: Flow<List<WeatherAppEntry>>
 }
 
 /** The installed plugins, and the only way to call them (see `new-plugin-api.md`). */
-interface Plugins {
+public interface Plugins {
     /** For plugins outside libpebble3, whose Koin context is isolated. */
-    fun registerPlugin(plugin: NativePlugin)
+    public fun registerPlugin(plugin: NativePlugin)
 
     /** Removes a plugin added with [registerPlugin]; a built-in disappears from every listing. */
-    fun unregisterPlugin(pluginUuid: Uuid)
+    public fun unregisterPlugin(pluginUuid: Uuid)
 
     /** Built-in plugins (phone-side data sources like Music or Weather), not backed by a pbw. */
-    fun nativePlugins(): Flow<List<PluginMetadata>>
+    public fun nativePlugins(): Flow<List<PluginMetadata>>
 
-    val disabledBuiltInPlugins: StateFlow<Set<Uuid>>
+    public val disabledBuiltInPlugins: StateFlow<Set<Uuid>>
 
     /** A disabled built-in is hidden from every caller, as if it weren't installed. */
-    fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean)
+    public fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean)
 
     /** The user's choice of plugin for each source several plugins serve, keyed by `category/item`. */
-    val preferredSourcePlugins: StateFlow<Map<String, Uuid>>
+    public val preferredSourcePlugins: StateFlow<Map<String, Uuid>>
 
     /** Null goes back to the default order. */
-    fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?)
+    public fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?)
 
     /** The plugin that answers a read of [category]/[item] that doesn't name one. */
-    fun sourcePlugin(category: String, item: String): PluginMetadata?
+    public fun sourcePlugin(category: String, item: String): PluginMetadata?
 
     /** The script behind [pluginUuid]'s settings page, or null if it has none. */
-    fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
+    public fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
 
-    fun getAllPlugins(): List<PluginMetadata>
+    public fun getAllPlugins(): List<PluginMetadata>
 
-    fun observe(
+    public fun observe(
         caller: PluginCaller,
         plugin: PluginMetadata,
         category: String,
@@ -279,7 +279,7 @@ interface Plugins {
     ): Flow<SourceUpdate>
 
     /** The first update, or a [PluginErrors.TIMEOUT] error. */
-    suspend fun read(
+    public suspend fun read(
         caller: PluginCaller,
         plugin: PluginMetadata,
         category: String,
@@ -288,7 +288,7 @@ interface Plugins {
         timeout: Duration = DEFAULT_READ_TIMEOUT,
     ): SourceUpdate
 
-    suspend fun invoke(
+    public suspend fun invoke(
         caller: PluginCaller,
         plugin: PluginMetadata,
         action: String,
@@ -297,84 +297,84 @@ interface Plugins {
         timeout: Duration? = null,
     ): ActionResult
 
-    companion object {
-        val DEFAULT_READ_TIMEOUT = 10.seconds
+    public companion object {
+        public val DEFAULT_READ_TIMEOUT: Duration = 10.seconds
     }
 }
 
-interface NotificationReplies {
-    suspend fun replyToDisplayedNotification(text: String, at: Instant): DisplayedNotificationReplyResult
+public interface NotificationReplies {
+    public suspend fun replyToDisplayedNotification(text: String, at: Instant): DisplayedNotificationReplyResult
 }
 
-sealed interface DisplayedNotificationReplyResult {
-    data class Sent(val title: String?) : DisplayedNotificationReplyResult
-    data object NoNotificationDisplayed : DisplayedNotificationReplyResult
-    data object NotReplyable : DisplayedNotificationReplyResult
-    data object Failed : DisplayedNotificationReplyResult
-    data object Unsupported : DisplayedNotificationReplyResult
+public sealed interface DisplayedNotificationReplyResult {
+    public data class Sent(val title: String?) : DisplayedNotificationReplyResult
+    public data object NoNotificationDisplayed : DisplayedNotificationReplyResult
+    public data object NotReplyable : DisplayedNotificationReplyResult
+    public data object Failed : DisplayedNotificationReplyResult
+    public data object Unsupported : DisplayedNotificationReplyResult
 }
 
-interface Timeline {
-    fun insertOrReplace(pin: TimelinePin)
-    fun delete(pinUuid: Uuid)
-    suspend fun insertOrReplace(reminder: TimelineReminder)
-    suspend fun deleteReminder(reminderUuid: Uuid)
+public interface Timeline {
+    public fun insertOrReplace(pin: TimelinePin)
+    public fun delete(pinUuid: Uuid)
+    public suspend fun insertOrReplace(reminder: TimelineReminder)
+    public suspend fun deleteReminder(reminderUuid: Uuid)
 
     /**
      * Handles notification and reminder actions with this `internalType`. The action is stored
      * with its item, so this works for items sent before an app restart.
      */
-    fun setActionHandler(internalType: String, handler: InternalActionHandler)
+    public fun setActionHandler(internalType: String, handler: InternalActionHandler)
 }
 
-interface Errors {
+public interface Errors {
     /**
      * Errors which should be displayed to the user (e.g. using a snackbar).
      */
-    val userFacingErrors: Flow<UserFacingError>
+    public val userFacingErrors: Flow<UserFacingError>
 }
 
-data class AnalyticsEvent(
+public data class AnalyticsEvent internal constructor(
     val name: String,
     val parameters: Map<String, String>,
 )
 
-interface AnalyticsEvents {
-    val analyticsEvents: Flow<AnalyticsEvent>
-    val heartbeatCounterIncrements: Flow<String>
+public interface AnalyticsEvents {
+    public val analyticsEvents: Flow<AnalyticsEvent>
+    public val heartbeatCounterIncrements: Flow<String>
 }
 
-interface WatchPrefs {
-    val watchPrefs: Flow<List<WatchPreference<*>>>
-    fun setWatchPref(watchPref: WatchPreference<*>)
+public interface WatchPrefs {
+    public val watchPrefs: Flow<List<WatchPreference<*>>>
+    public fun setWatchPref(watchPref: WatchPreference<*>)
 }
 
-interface Watches {
+public interface Watches {
     /** Doesn't emit until known watches have been loaded. */
-    val watches: Flow<List<PebbleDevice>>
-    val connectionEvents: Flow<PebbleConnectionEvent>
-    fun watchesDebugState(): String
+    public val watches: Flow<List<PebbleDevice>>
+    public val connectionEvents: Flow<PebbleConnectionEvent>
+    public fun watchesDebugState(): String
 }
 
-interface WebServices {
-    suspend fun fetchLocker(): LockerModelWrapper?
-    suspend fun removeFromLocker(id: Uuid): Boolean
-    suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult
-    fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
-    fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo)
+public interface WebServices {
+    public suspend fun fetchLocker(): LockerModelWrapper?
+    public suspend fun removeFromLocker(id: Uuid): Boolean
+    public suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult
+    public fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
+    public fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo)
 }
 
-interface TokenProvider {
-    suspend fun getDevToken(): String?
+public interface TokenProvider {
+    public suspend fun getDevToken(): String?
 }
 
-data class FirmwareUpdateCheckState(
+public data class FirmwareUpdateCheckState internal constructor(
     val checkingForUpdates: Boolean,
     val result: FirmwareUpdateCheckResult?,
 )
 
-sealed class FirmwareUpdateCheckResult {
-    data class FoundUpdate(
+public sealed class FirmwareUpdateCheckResult {
+    public data class FoundUpdate(
         val version: FirmwareVersion,
         val url: String,
         val notes: String,
@@ -382,43 +382,43 @@ sealed class FirmwareUpdateCheckResult {
         val installsDirectly: Boolean,
     ) : FirmwareUpdateCheckResult()
 
-    data object FoundNoUpdate : FirmwareUpdateCheckResult()
+    public data object FoundNoUpdate : FirmwareUpdateCheckResult()
 
-    data class UpdateCheckFailed(
+    public data class UpdateCheckFailed(
         val error: String,
     ) : FirmwareUpdateCheckResult()
 }
 
-interface Calendar {
-    fun calendars(): Flow<List<CalendarEntity>>
-    fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
-    suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String?
+public interface Calendar {
+    public fun calendars(): Flow<List<CalendarEntity>>
+    public fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
+    public suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String?
     /** The synced calendar matching the platform's default for new events, if known. */
-    suspend fun defaultCalendar(): CalendarEntity?
+    public suspend fun defaultCalendar(): CalendarEntity?
 }
 
-fun Flow<List<PebbleDevice>>.forDevice(identifier: String): Flow<PebbleDevice> {
+public fun Flow<List<PebbleDevice>>.forDevice(identifier: String): Flow<PebbleDevice> {
     return mapNotNull { it.firstOrNull { it.identifier.asString == identifier } }
 }
 
-interface Scanning {
-    val bluetoothEnabled: StateFlow<BluetoothState>
-    val isScanningBle: StateFlow<Boolean>
-    val isScanningClassic: StateFlow<Boolean>
-    fun startBleScan()
-    fun stopBleScan()
-    fun startClassicScan()
-    fun stopClassicScan()
+public interface Scanning {
+    public val bluetoothEnabled: StateFlow<BluetoothState>
+    public val isScanningBle: StateFlow<Boolean>
+    public val isScanningClassic: StateFlow<Boolean>
+    public fun startBleScan()
+    public fun stopBleScan()
+    public fun startClassicScan()
+    public fun stopClassicScan()
 
     /** Adds a watch reached over a TCP socket at [address] ("host:port"), bypassing any scan. */
-    fun addQemuWatch(address: String, connect: Boolean = false)
+    public fun addQemuWatch(address: String, connect: Boolean = false)
 }
 
-interface RequestSync {
-    fun requestLockerSync(): Deferred<Unit>
+public interface RequestSync {
+    public fun requestLockerSync(): Deferred<Unit>
 }
 
-interface LockerApi {
+public interface LockerApi {
     /**
      * @return true if the app was successfully synced and launched on all connected watches.
      */
@@ -426,109 +426,109 @@ interface LockerApi {
      * [loadOnWatch] launches it once it has synced; leave it off for background installs.
      * [granted]: the answers to [reviewSideload].
      */
-    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true, granted: Map<String, Boolean?> = emptyMap()): Boolean
+    public suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true, granted: Map<String, Boolean?> = emptyMap()): Boolean
     /** Null if there's nothing to ask, or the pbw can't be read. */
-    suspend fun reviewSideload(pbwPath: Path): InstallReview?
-    suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview?
-    fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
-    fun getAllLockerUuids(): Flow<List<Uuid>>
-    fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
-    fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
+    public suspend fun reviewSideload(pbwPath: Path): InstallReview?
+    public suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview?
+    public fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
+    public fun getAllLockerUuids(): Flow<List<Uuid>>
+    public fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
+    public fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
     /**
      * [id]'s permissions, or every installed app's if [id] is null. For one app, null until its pbw
      * has been fetched, so what it uses isn't known yet.
      */
-    fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?>
+    public fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?>
     /**
      * The config page URL for an installed app, from its appinfo `configPage` — an http(s) URL as
      * given, or an HTML file bundled in the pbw returned as a data URL. Null when the app declares
      * none, so callers fall back to the PKJS `showConfiguration` flow.
      */
-    suspend fun appConfigPageUrl(uuid: Uuid): String?
+    public suspend fun appConfigPageUrl(uuid: Uuid): String?
     /** Whether [uuid]'s config page may load [url], checked like the app's own requests. */
-    suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean
+    public suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean
     /** The domains [uuid]'s config page may connect to, each covering its subdomains; null for any. */
-    suspend fun configPageDomains(uuid: Uuid): List<String>?
+    public suspend fun configPageDomains(uuid: Uuid): List<String>?
     /** A text file from an installed app's pbw, or null if the app or file is missing. */
-    suspend fun getAppFile(uuid: Uuid, name: String): String?
-    suspend fun setAppOrder(id: Uuid, order: Int)
-    suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
+    public suspend fun getAppFile(uuid: Uuid, name: String): String?
+    public suspend fun setAppOrder(id: Uuid, order: Int)
+    public suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     /** Also erases everything the app stored, on this phone and on connected watches. */
-    suspend fun removeApp(id: Uuid): Boolean
-    suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
+    public suspend fun removeApp(id: Uuid): Boolean
+    public suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
     /** [permissions]: the user's decisions for these apps from other devices or the web store. */
-    suspend fun addAppsToLocker(
+    public suspend fun addAppsToLocker(
         apps: List<LockerEntry>,
         permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>,
     )
     /** Lets the next locker sync replace a sideloaded app with its copy in the user's locker. */
-    suspend fun clearSideloaded(id: Uuid)
-    fun restoreSystemAppOrder()
-    val activeWatchface: StateFlow<LockerWrapper?>
+    public suspend fun clearSideloaded(id: Uuid)
+    public fun restoreSystemAppOrder()
+    public val activeWatchface: StateFlow<LockerWrapper?>
 }
 
-interface Contacts {
-    fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
-    fun getContact(id: String): Flow<ContactWithCount?>
-    fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
-    suspend fun getContactImage(lookupKey: String): ImageBitmap?
+public interface Contacts {
+    public fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
+    public fun getContact(id: String): Flow<ContactWithCount?>
+    public fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
+    public suspend fun getContactImage(lookupKey: String): ImageBitmap?
 }
 
 @Stable
-interface NotificationApps {
-    fun notificationApps(): Flow<List<AppWithCount>>
-    fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
-    fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
-    fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>>
+public interface NotificationApps {
+    public fun notificationApps(): Flow<List<AppWithCount>>
+    public fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
+    public fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
+    public fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>>
 
     /**
      * Update mute state of the specified app. Updates all apps if [packageName] is null.
      */
-    fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
-    fun updateNotificationAppState(
+    public fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
+    public fun updateNotificationAppState(
         packageName: String,
         vibePatternName: String?,
         colorName: String?,
         iconCode: String?,
     )
-    fun updateNotificationChannelMuteState(
+    public fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
         muteState: MuteState,
     )
-    fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean)
-    fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean)
+    public fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean)
+    public fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean)
 
-    fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
-    fun upsertNotificationRule(rule: NotificationRuleEntity)
-    fun deleteNotificationRule(rule: NotificationRuleEntity)
+    public fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
+    public fun upsertNotificationRule(rule: NotificationRuleEntity)
+    public fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */
-    suspend fun getAppIcon(packageName: String): ImageBitmap?
+    public suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
 
-interface Vibrations {
-    fun vibePatterns(): Flow<List<VibePattern>>
-    fun addCustomVibePattern(name: String, pattern: List<Long>)
-    fun deleteCustomPattern(name: String)
+public interface Vibrations {
+    public fun vibePatterns(): Flow<List<VibePattern>>
+    public fun addCustomVibePattern(name: String, pattern: List<Long>)
+    public fun deleteCustomPattern(name: String)
 }
 
-interface OtherPebbleApps {
+public interface OtherPebbleApps {
     /** Any other companion apps installed will likely break connecitivity (multiple PPoG services) */
-    fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>>
+    public fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>>
 }
 
-interface CallManagement {
-    val currentCall: MutableStateFlow<Call?>
+public interface CallManagement {
+    public val currentCall: MutableStateFlow<Call?>
 }
 
-interface PKJSToken {
-    suspend fun getAccountToken(appUuid: Uuid): String?
+public interface PKJSToken {
+    public suspend fun getAccountToken(appUuid: Uuid): String?
 }
 
 // Impl
 
-class LibPebble3(
+public class LibPebble3 internal constructor(
     private val watchManager: WatchManager,
     private val scanning: Scanning,
     private val locker: Locker,
@@ -673,12 +673,12 @@ class LibPebble3(
         }
     }
 
-    companion object {
+    public companion object {
         private lateinit var koin: Koin
 
         internal val isCreated: Boolean get() = ::koin.isInitialized
 
-        fun create(
+        public fun create(
             /**
              * Default config, before any changes are made.
              *

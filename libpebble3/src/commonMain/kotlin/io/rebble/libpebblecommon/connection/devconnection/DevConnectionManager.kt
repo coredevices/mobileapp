@@ -26,11 +26,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Watches with an active dev connection (value = forceLan), resumed on reconnection. */
-class DevConnectionResumer {
-    val active = MutableStateFlow<Map<PebbleIdentifier, Boolean>>(emptyMap())
+internal class DevConnectionResumer {
+    val active: MutableStateFlow<Map<PebbleIdentifier, Boolean>> = MutableStateFlow<Map<PebbleIdentifier, Boolean>>(emptyMap())
 }
 
-class DevConnectionManager(
+internal class DevConnectionManager internal constructor(
     private val transport: Flow<DevConnectionTransport>,
     private val lanServer: DevConnectionServer,
     private val identifier: PebbleIdentifier,

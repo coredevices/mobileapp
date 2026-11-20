@@ -15,11 +15,11 @@ import kotlin.uuid.Uuid
  * `cell` is which generation the radio is on; `mobile_data` is whether anything is actually
  * going over it, which is false whenever Wi-Fi is carrying the traffic instead.
  */
-class PhoneStatePlugin(
+internal class PhoneStatePlugin(
     private val phoneBattery: PhoneBatteryMonitor,
     private val phoneNetwork: PhoneNetworkMonitor,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_PHONE_STATE_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.PHONE_STATE
     override val name: String = "Phone"
     override val description: String = "The phone's battery level and network connectivity."
 
@@ -108,20 +108,16 @@ class PhoneStatePlugin(
         Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "phone"
-        const val ITEM_PHONE_STATE = "phone_state"
-        const val PROPERTY_BATTERY_LEVEL = "battery_level"
-        const val PROPERTY_CELL = "cell"
-        const val PROPERTY_WIFI = "wifi"
-        const val PROPERTY_MOBILE_DATA = "mobile_data"
+        const val CATEGORY: String = "phone"
+        const val ITEM_PHONE_STATE: String = "phone_state"
+        const val PROPERTY_BATTERY_LEVEL: String = "battery_level"
+        const val PROPERTY_CELL: String = "cell"
+        const val PROPERTY_WIFI: String = "wifi"
+        const val PROPERTY_MOBILE_DATA: String = "mobile_data"
 
         private const val WIFI = "Wi-Fi"
         private const val MOBILE = "Mobile"
         private const val OFF = "Off"
         private const val INSTANCE_ID = "phone"
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_PHONE_STATE_UUID: Uuid =
-            Uuid.parse("00000000-0000-0000-0001-000000000001")
     }
 }

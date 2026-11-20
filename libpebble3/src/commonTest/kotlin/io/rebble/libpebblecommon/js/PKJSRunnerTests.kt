@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-abstract class PKJSRunnerTests(
+internal abstract class PKJSRunnerTests(
     private val createJsRunner: (
         libPebble: LibPebble,
         scope: CoroutineScope,

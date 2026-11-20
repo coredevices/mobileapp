@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-class ErrorTracker : Errors {
+internal class ErrorTracker : Errors {
     private val _errors = MutableSharedFlow<UserFacingError>(extraBufferCapacity = 1)
     override val userFacingErrors: Flow<UserFacingError> = _errors.asSharedFlow()
 

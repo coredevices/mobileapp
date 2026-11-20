@@ -10,37 +10,37 @@ import io.rebble.libpebblecommon.util.Bitmap
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
-class AppCustomizationSetStockAppTitleMessage(
+internal class AppCustomizationSetStockAppTitleMessage(
     appType: AppType,
     newName: String
 ) : PebblePacket(ProtocolEndpoint.APP_CUSTOMIZE) {
-    val appType = SUByte(m, appType.value)
-    val name = SFixedString(m, 30, newName)
+    val appType: SUByte = SUByte(m, appType.value)
+    val name: SFixedString = SFixedString(m, 30, newName)
 }
 
-class AppCustomizationSetStockAppIconMessage(
+internal class AppCustomizationSetStockAppIconMessage(
     appType: AppType,
     icon: Bitmap
 ) : PebblePacket(ProtocolEndpoint.APP_CUSTOMIZE) {
     // First bit being set signifies that this is icon packet instead of name packet
-    val appType = SUByte(m, appType.value or 0b10000000u)
-    val bytesPerLine = SUShort(m, endianness = Endian.Little)
+    val appType: SUByte = SUByte(m, appType.value or 0b10000000u)
+    val bytesPerLine: SUShort = SUShort(m, endianness = Endian.Little)
 
     /**
      * No idea what flags are possible. Stock app always sends 4096 here.
      */
-    val flags = SUShort(m, 4096u, endianness = Endian.Little)
+    val flags: SUShort = SUShort(m, 4096u, endianness = Endian.Little)
 
     /**
      * Offset is not supported by app. Always 0.
      */
-    val originY = SUShort(m, 0u, endianness = Endian.Little)
-    val originX = SUShort(m, 0u, endianness = Endian.Little)
+    val originY: SUShort = SUShort(m, 0u, endianness = Endian.Little)
+    val originX: SUShort = SUShort(m, 0u, endianness = Endian.Little)
 
-    val width = SUShort(m, endianness = Endian.Little)
-    val height = SUShort(m, endianness = Endian.Little)
+    val width: SUShort = SUShort(m, endianness = Endian.Little)
+    val height: SUShort = SUShort(m, endianness = Endian.Little)
 
-    val imageData = SBytes(m)
+    val imageData: SBytes = SBytes(m)
 
     init {
         val width = icon.width
@@ -86,7 +86,7 @@ class AppCustomizationSetStockAppIconMessage(
     }
 }
 
-enum class AppType(val value: UByte) {
+internal enum class AppType(val value: UByte) {
     SPORTS(0x00u),
     GOLF(0x01u),
 }

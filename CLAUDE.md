@@ -126,6 +126,13 @@ Never write checks like "firmwareVersion > 1.2.3". Either use a capability bit, 
 
 Use kotlin.time.Duration whenever possible (i.e. not milliseconds express as a long)
 
+### 15. libpebble3 API
+
+libpebble3 has an explicit API. The module uses gradle's `explicitApi()` which means that every
+class must define whether it is internal/public/private. There must be a very good reason to make 
+anything public in libpebble3 - we want to the keep API limited in scope. There is further work
+needed to reduce the scope.
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.

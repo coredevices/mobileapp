@@ -15,6 +15,7 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.BOOLEAN
@@ -72,6 +73,8 @@ class BlobDbEntityProcessor(
                 throw IllegalStateException("couldn't find primary key: $primaryKey")
             }
 
+            val visibility = if (Modifier.INTERNAL in classDeclaration.modifiers) KModifier.INTERNAL else KModifier.PUBLIC
+
             // Entity
             val entityClassName = classDeclaration.simpleName.asString() + "Entity"
             val entityTypeName = ClassName(classDeclaration.packageName.asString(), entityClassName)
@@ -87,7 +90,7 @@ class BlobDbEntityProcessor(
                         "BlobDbRecord"
                     )
                 )
-                .addModifiers(KModifier.DATA)
+                .addModifiers(KModifier.DATA, visibility)
             val entityConstructorBuilder = FunSpec.constructorBuilder()
             addField(
                 entityBuilder, entityConstructorBuilder,
@@ -144,7 +147,7 @@ class BlobDbEntityProcessor(
                         )
                         .build()
                 )
-                .addModifiers(KModifier.DATA)
+                .addModifiers(KModifier.DATA, visibility)
             val syncEntityConstructorBuilder = FunSpec.constructorBuilder()
             addField(
                 syncEntityBuilder,
@@ -169,6 +172,7 @@ class BlobDbEntityProcessor(
             // Dao
             val daoClassName = classDeclaration.simpleName.asString() + "Dao"
             val daoBuilder = TypeSpec.interfaceBuilder(daoClassName)
+                .addModifiers(visibility)
                 .addAnnotation(ClassName("androidx.room", "Dao"))
                 .addSuperinterface(ClassName("io.rebble.libpebblecommon.database.dao", "BlobDbDao").parameterizedBy(entityTypeName))
             val listTypeOfBlobDbRecord = List::class.asClassName().parameterizedBy(entityTypeName)

@@ -26,7 +26,7 @@ import io.rebble.libpebblecommon.packets.voicePacketsRegister
 /**
  * Singleton to track endpoint / type discriminators for deserialization
  */
-object PacketRegistry {
+internal object PacketRegistry {
     private var typeOffsets: MutableMap<ProtocolEndpoint, Int> = mutableMapOf()
     private var typedDecoders: MutableMap<ProtocolEndpoint, MutableMap<UByte, (UByteArray) -> PebblePacket>> =
         mutableMapOf()

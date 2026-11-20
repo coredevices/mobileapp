@@ -6,12 +6,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-interface LibPebbleAnalytics {
+internal interface LibPebbleAnalytics {
     fun logEvent(name: String, parameters: Map<String, String> = emptyMap())
     fun incrementHeartbeatCounter(name: String)
 }
 
-class RealLibPebbleAnalytics : LibPebbleAnalytics, AnalyticsEvents {
+internal class RealLibPebbleAnalytics : LibPebbleAnalytics, AnalyticsEvents {
     private val _events = MutableSharedFlow<AnalyticsEvent>(extraBufferCapacity = 10)
 
     override fun logEvent(

@@ -8,7 +8,7 @@ import kotlin.uuid.Uuid
     tableName = "AppDataUsage",
     primaryKeys = ["appUuid", "permission", "day", "connection"],
 )
-data class AppDataUsageEntity(
+public data class AppDataUsageEntity internal constructor(
     val appUuid: Uuid,
     /** `GlobalInternet` for a legacy app; otherwise `LocalNetwork`, or the `Internet/<domain>` key covering the host. */
     val permission: String,
@@ -23,4 +23,4 @@ data class AppDataUsageEntity(
     val receivedBytes: Long,
 )
 
-const val UNKNOWN_CONNECTION = "Unknown"
+internal const val UNKNOWN_CONNECTION: String = "Unknown"

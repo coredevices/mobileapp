@@ -4,10 +4,10 @@ import io.rebble.libpebblecommon.packets.VoiceAttribute
 import io.rebble.libpebblecommon.packets.VoiceAttributeType
 import io.rebble.libpebblecommon.util.DataBuffer
 
-sealed class VoiceEncoderInfo {
-    abstract val sampleRate: Long
+public sealed class VoiceEncoderInfo {
+    public abstract val sampleRate: Long
 
-    data class Speex(
+    public data class Speex internal constructor(
         override val sampleRate: Long,
         val version: String,
         val bitRate: Int,
@@ -16,8 +16,8 @@ sealed class VoiceEncoderInfo {
     ) : VoiceEncoderInfo()
 
 
-    companion object Companion {
-        fun fromProtocol(attributes: List<VoiceAttribute>): VoiceEncoderInfo? {
+    public companion object Companion {
+        public fun fromProtocol(attributes: List<VoiceAttribute>): VoiceEncoderInfo? {
             val speexInfoData = attributes.firstOrNull {
                 it.id.get() == VoiceAttributeType.SpeexEncoderInfo.value
             }?.content?.get() ?: return null

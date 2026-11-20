@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WIN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import kotlin.time.Duration
 
-data class BlePlatformConfig(
+internal data class BlePlatformConfig(
     val pinAddress: Boolean = true,
     val phoneRequestsPairing: Boolean = true,
     val writeConnectivityTrigger: Boolean = true,

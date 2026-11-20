@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.withLock
  * on the endpoint, delegating the ones a consumer has registered for and telling the watch the rest
  * are unsupported. Consumers never deal with the endpoint, chunking or the no-image fallback.
  */
-class ImagingService(
+internal class ImagingService(
     private val protocolHandler: PebbleProtocolHandler,
     private val watchScope: ConnectionCoroutineScope,
 ) : ProtocolService {
@@ -88,7 +88,7 @@ class ImagingService(
         token: UByte,
         type: Imaging.ImageType,
         image: EncodedImage?,
-    ) = sendLock.withLock {
+    ): Unit = sendLock.withLock {
         val chunks = buildResponse(token, type, image)
         logger.d { "responding token=$token type=$type: ${chunks.size} chunk(s), hasImage=${image != null}" }
         chunks.forEach { protocolHandler.send(it) }
@@ -100,7 +100,7 @@ class ImagingService(
 
     companion object {
         /** Largest dimension we'll encode, mirroring the firmware's IMAGING_MAX_DIM. */
-        const val MAX_DIM = 300
+        const val MAX_DIM: Int = 300
     }
 }
 

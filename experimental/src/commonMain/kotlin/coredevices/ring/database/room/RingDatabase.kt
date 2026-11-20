@@ -69,7 +69,7 @@ import coredevices.ring.data.entity.room.SavedGeofenceLocation
 import coredevices.ring.database.room.dao.SavedGeofenceLocationDao
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -340,7 +340,7 @@ class Migrate43To44 : Migration(43, 44) {
 }
 
 /** Plugins the Index agent may not use until the user turns them on. */
-private val PLUGINS_DENIED_BY_DEFAULT = listOf(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID)
+private val PLUGINS_DENIED_BY_DEFAULT = listOf(BuiltInPlugins.WATCH_SETTINGS)
 
 private fun SQLiteConnection.denyDefaultPluginGrants() {
     val statement = prepare(

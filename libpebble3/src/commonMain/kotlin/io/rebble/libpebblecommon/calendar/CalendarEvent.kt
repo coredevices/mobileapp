@@ -6,9 +6,10 @@ import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.util.trimWithEllipsis
 import kotlinx.datetime.DayOfWeek
 import kotlin.time.Instant
@@ -19,7 +20,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
-data class CalendarEvent(
+internal data class CalendarEvent(
     val id: String,
     val calendarId: String,
     val title: String,
@@ -54,7 +55,7 @@ data class CalendarEvent(
  * Parameters for creating a new event in the device's primary/default calendar.
  * Minimal v1 field set; all-day/attendees/recurrence intentionally omitted (see RING-84).
  */
-data class NewCalendarEvent(
+public data class NewCalendarEvent(
     val title: String,
     val startTime: Instant,
     val endTime: Instant,
@@ -69,7 +70,7 @@ internal fun transformDescription(rawDescription: String): String {
     return rawDescription.replace(regex, "").trimWithEllipsis(300)
 }
 
-fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePattern: List<UInt>? = null): TimelineReminder =
+internal fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePattern: List<UInt>? = null): TimelineReminder =
     buildTimelineReminder(
         parentId = pinUuid,
         timestamp = timestamp,
@@ -94,7 +95,7 @@ fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePatt
             // in notification_window.c), and the firmware only offers its own Snooze
             // inside that menu. Without at least one action here, a calendar reminder
             // buzzes but can be neither dismissed nor snoozed.
-            action(TimelineItem.Action.Type.Dismiss) {
+            action(TimelineActionType.Dismiss) {
                 attributes { title { DefaultTitles.DISMISS } }
             }
         }
@@ -105,11 +106,11 @@ fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePatt
  * Used on action-invocation replay to route to the right handler without depending on
  * the user-visible (and localizable) action title. Never sent to the watch.
  */
-object CalendarPinInternalType {
-    const val ACCEPT = "calendar_accept"
-    const val MAYBE = "calendar_maybe"
-    const val DECLINE = "calendar_decline"
-    const val CANCEL = "calendar_cancel"
+internal object CalendarPinInternalType {
+    const val ACCEPT: String = "calendar_accept"
+    const val MAYBE: String = "calendar_maybe"
+    const val DECLINE: String = "calendar_decline"
+    const val CANCEL: String = "calendar_cancel"
 }
 
 /** Default English titles shown on the watch. Safe to localize without affecting dispatch. */
@@ -121,7 +122,7 @@ private object DefaultTitles {
     const val CANCEL = "Cancel"
 }
 
-fun CalendarEvent.toTimelinePin(
+internal fun CalendarEvent.toTimelinePin(
     calendar: CalendarEntity,
     supportsRsvpActions: Boolean,
 ): TimelinePin = buildTimelinePin(
@@ -135,7 +136,7 @@ fun CalendarEvent.toTimelinePin(
             isAllDay()
         }
     }
-    layout = TimelineItem.Layout.CalendarPin
+    layout = TimelineItemLayout.CalendarPin
     attributes {
         val headings = mutableListOf<String>()
         val paragraphs = mutableListOf<String>()
@@ -191,32 +192,32 @@ fun CalendarEvent.toTimelinePin(
             val self = attendees.find { it.isCurrentUser }
             val isOrganizer = self?.isOrganizer == true
             if (isOrganizer) {
-                action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.CANCEL) {
+                action(TimelineActionType.Generic, CalendarPinInternalType.CANCEL) {
                     attributes { title { DefaultTitles.CANCEL } }
                 }
             } else {
                 when (self?.attendanceStatus) {
                     EventAttendee.AttendanceStatus.Invited -> {
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.ACCEPT) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.ACCEPT) {
                             attributes { title { DefaultTitles.ACCEPT } }
                         }
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.MAYBE) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.MAYBE) {
                             attributes { title { DefaultTitles.MAYBE } }
                         }
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.DECLINE) {
                             attributes { title { DefaultTitles.DECLINE } }
                         }
                     }
                     EventAttendee.AttendanceStatus.Tentative -> {
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.ACCEPT) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.ACCEPT) {
                             attributes { title { DefaultTitles.ACCEPT } }
                         }
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.DECLINE) {
                             attributes { title { DefaultTitles.DECLINE } }
                         }
                     }
                     EventAttendee.AttendanceStatus.Accepted -> {
-                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                        action(TimelineActionType.Generic, CalendarPinInternalType.DECLINE) {
                             attributes { title { DefaultTitles.DECLINE } }
                         }
                     }
@@ -233,7 +234,7 @@ fun CalendarEvent.toTimelinePin(
     }
 }
 
-data class EventAttendee(
+internal data class EventAttendee(
     val name: String?,
     val email: String?,
     val role: Role?,
@@ -258,7 +259,7 @@ data class EventAttendee(
     }
 }
 
-data class EventRecurrenceRule(
+internal data class EventRecurrenceRule(
     val totalOccurrences: Int?,
     val interval: Int?,
     val endDate: Instant?,
@@ -310,7 +311,7 @@ data class EventRecurrenceRule(
     }
 }
 
-data class EventReminder(
+internal data class EventReminder(
     /**
      * Minutes before the event when the reminder should trigger. Negative fires after the start
      * (e.g. iOS birthday alerts, which are set for 9am on the day of a midnight-start event).
@@ -322,7 +323,7 @@ data class EventReminder(
          * [offsetSeconds] is seconds from the event start, negative meaning before it (EventKit's
          * `EKAlarm.relativeOffset` convention).
          */
-        fun fromStartOffset(offsetSeconds: Double) = EventReminder(-(offsetSeconds.toInt() / 60))
+        fun fromStartOffset(offsetSeconds: Double): EventReminder = EventReminder(-(offsetSeconds.toInt() / 60))
     }
 }
 
@@ -330,5 +331,5 @@ data class EventReminder(
  * The watch treats all-day timestamps as local wall-clock and applies the timezone offset itself,
  * so all-day items must be anchored to UTC midnight of the local date.
  */
-fun Instant.anchorAllDayToUtc(timeZone: TimeZone): Instant =
+internal fun Instant.anchorAllDayToUtc(timeZone: TimeZone): Instant =
     toLocalDateTime(timeZone).toInstant(TimeZone.UTC)

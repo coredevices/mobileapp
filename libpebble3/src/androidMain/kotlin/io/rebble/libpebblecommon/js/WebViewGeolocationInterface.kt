@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.js.JsRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlin.uuid.Uuid
 
-class WebViewGeolocationInterface(
+internal class WebViewGeolocationInterface(
     scope: CoroutineScope,
     jsRunner: JsRunner
 ): GeolocationInterface(scope, jsRunner::eval, Uuid.parse(jsRunner.appInfo.uuid)) {

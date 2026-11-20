@@ -9,7 +9,7 @@ import kotlin.experimental.or
 /**
  * Describes a GATT packet, which is NOT a pebble packet, it is simply a discrete chunk of data sent to the watch with a header (the data contents is chunks of the pebble packet currently being sent, size depending on MTU)
  */
-class GATTPacket {
+internal class GATTPacket {
 
     enum class PacketType(val value: Byte) {
         DATA(0),

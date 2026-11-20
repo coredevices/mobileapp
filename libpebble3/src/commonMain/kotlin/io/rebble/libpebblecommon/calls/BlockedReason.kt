@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.calls
 
-enum class BlockedReason {
+internal enum class BlockedReason {
     NotBlocked,
     BlockedNumber,
     CallScreening,

@@ -8,16 +8,16 @@ import io.rebble.libpebblecommon.database.entity.TargetType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface NotificationRuleDao {
+public interface NotificationRuleDao {
     @Query("SELECT * FROM NotificationRuleEntity WHERE targetType = :targetType AND target = :packageName")
-    fun getRulesForApp(targetType: TargetType = TargetType.App, packageName: String): Flow<List<NotificationRuleEntity>>
+    public fun getRulesForApp(targetType: TargetType = TargetType.App, packageName: String): Flow<List<NotificationRuleEntity>>
 
     @Query("SELECT * FROM NotificationRuleEntity WHERE targetType = :targetType AND target = :packageName")
-    suspend fun getRulesForAppOnce(targetType: TargetType = TargetType.App, packageName: String): List<NotificationRuleEntity>
+    public suspend fun getRulesForAppOnce(targetType: TargetType = TargetType.App, packageName: String): List<NotificationRuleEntity>
 
     @Upsert
-    suspend fun upsert(rule: NotificationRuleEntity): Long
+    public suspend fun upsert(rule: NotificationRuleEntity): Long
 
     @Query("DELETE FROM NotificationRuleEntity WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    public suspend fun deleteById(id: Long)
 }

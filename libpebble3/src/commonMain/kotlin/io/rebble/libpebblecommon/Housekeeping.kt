@@ -12,7 +12,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 
-class Housekeeping(
+internal class Housekeeping(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val notificationsDao: NotificationDao,
     private val healthDao: HealthDao,
@@ -48,5 +48,5 @@ class Housekeeping(
     }
 }
 
-const val DATA_USAGE_KEPT_DAYS = 30
-const val PLUGIN_ACTION_LOG_KEPT_DAYS = 30
+public const val DATA_USAGE_KEPT_DAYS: Int = 30
+public const val PLUGIN_ACTION_LOG_KEPT_DAYS: Int = 30

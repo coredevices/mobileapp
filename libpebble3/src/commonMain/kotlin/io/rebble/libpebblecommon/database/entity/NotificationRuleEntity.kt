@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(indices = [Index(value = ["targetType", "target"])])
-data class NotificationRuleEntity(
+public data class NotificationRuleEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val targetType: TargetType,
     val target: String?,
@@ -15,16 +15,16 @@ data class NotificationRuleEntity(
     val caseSensitive: Boolean = false,
 )
 
-enum class TargetType {
+public enum class TargetType {
     App,
 }
 
-enum class MatchType {
+public enum class MatchType {
     Text,
     Regex,
 }
 
-enum class MatchField {
+public enum class MatchField {
     Both,
     Title,
     Body,

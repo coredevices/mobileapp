@@ -18,7 +18,7 @@ import org.koin.core.component.inject
 import kotlin.random.Random
 import kotlin.random.nextUInt
 
-class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
+internal class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     companion object {
         private val logger = Logger.withTag("LibPebbleInCallService")
 

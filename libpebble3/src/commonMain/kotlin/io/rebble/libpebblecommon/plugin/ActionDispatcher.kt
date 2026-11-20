@@ -18,7 +18,7 @@ import kotlin.uuid.Uuid
  * each call resolves exactly once and nothing is cached. Sits alongside [SourceDispatcher],
  * which owns the long-lived subscription side.
  */
-class ActionDispatcher(
+internal class ActionDispatcher(
     private val registry: PluginRegistry,
     private val jsRunner: JsRunner,
     private val scope: CoroutineScope,

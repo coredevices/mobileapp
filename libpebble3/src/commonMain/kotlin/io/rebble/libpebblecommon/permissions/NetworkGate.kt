@@ -5,13 +5,13 @@ import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlin.uuid.Uuid
 
-fun interface NetworkAccess {
+internal fun interface NetworkAccess {
     /** [wait]: never from a blocking callback. */
     suspend fun check(url: String, wait: Boolean): PluginNetworkVerdict
 }
 
 /** A legacy app is checked against `GlobalInternet` instead. */
-class NetworkGate(
+internal class NetworkGate(
     private val permissions: AppPermissions,
     private val name: String,
     private val appUuid: Uuid,

@@ -19,87 +19,53 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
-class TimelineItem(
+public class TimelineItem internal constructor(
     itemId: Uuid = Uuid.NIL,
     parentId: Uuid = Uuid.NIL,
     timestampSecs: UInt = 0u,
     duration: UShort = 0u,
-    type: Type = Type.Notification,
+    type: TimelineItemType = TimelineItemType.Notification,
     flags: UShort = 0u,
-    layout: Layout = Layout.GenericNotification,
+    layout: TimelineItemLayout = TimelineItemLayout.GenericNotification,
     attributes: List<Attribute> = emptyList(),
     actions: List<Action> = emptyList()
 ) : StructMappable() {
-    enum class Type(val value: UByte) {
-        Notification(1u),
-        Pin(2u),
-        Reminder(3u);
-
-        companion object {
-            fun fromValue(value: UByte): Type {
-                return entries.firstOrNull { it.value == value }
-                    ?: error("Unknown timeline item type: $value")
-            }
-        }
-    }
-
-    enum class Layout(val value: UByte, val code: String) {
-        GenericPin(1u, "genericPin"),
-        CalendarPin(2u, "calendarPin"),
-        GenericReminder(3u, "genericReminder"),
-        GenericNotification(4u, "genericNotification"),
-        CommNotification(5u, "commNotification"),
-        WeatherPin(6u, "weatherPin"),
-        SportsPin(7u, "sportsPin");
-
-        companion object {
-            fun fromValue(value: UByte): Layout {
-                return entries.firstOrNull { it.value == value }
-                    ?: error("Unknown timeline item layout: $value")
-            }
-
-            fun fromCode(code: String): Layout? {
-                return entries.firstOrNull { it.code == code }
-            }
-        }
-    }
-
-    val itemId = SUUID(m, itemId)
-    val parentId = SUUID(m, parentId)
+    internal val itemId: SUUID = SUUID(m, itemId)
+    internal val parentId: SUUID = SUUID(m, parentId)
 
     /**
      * Timeline pin timestamp in unix time
      */
-    val timestampSecs = SUInt(m, timestampSecs, endianness = Endian.Little)
+    internal val timestampSecs: SUInt = SUInt(m, timestampSecs, endianness = Endian.Little)
 
     /**
      * Duration of the pin in minutes
      */
-    val duration = SUShort(m, duration, endianness = Endian.Little)
+    internal val duration: SUShort = SUShort(m, duration, endianness = Endian.Little)
 
     /**
-     * Serialization of [Type]. Use [Type.value].
+     * Serialization of [TimelineItemType]. Use [TimelineItemType.value].
      */
-    val type = SUByte(m, type.value)
+    internal val type: SUByte = SUByte(m, type.value)
 
     /**
-     * Serialization of [Flag] entries. Use [Flag.makeFlags].
+     * Serialization of [TimelineItemFlag] entries. Use [TimelineItemFlag.makeFlags].
      */
-    val flags = SUShort(m, flags, endianness = Endian.Little)
+    internal val flags: SUShort = SUShort(m, flags, endianness = Endian.Little)
 
-    val layout = SUByte(m, layout.value)
-    val dataLength = SUShort(m, endianness = Endian.Little)
-    val attrCount = SUByte(m, attributes.size.toUByte())
-    val actionCount = SUByte(m, actions.size.toUByte())
-    val attributes = SFixedList(m, attrCount.get().toInt(), attributes) {
+    internal val layout: SUByte = SUByte(m, layout.value)
+    internal val dataLength: SUShort = SUShort(m, endianness = Endian.Little)
+    internal val attrCount: SUByte = SUByte(m, attributes.size.toUByte())
+    internal val actionCount: SUByte = SUByte(m, actions.size.toUByte())
+    internal val attributes: SFixedList<TimelineItem.Attribute> = SFixedList(m, attrCount.get().toInt(), attributes) {
         Attribute(0u, ubyteArrayOf())
     }.apply {
         linkWithCount(attrCount)
     }
-    val actions = SFixedList(m, actionCount.get().toInt(), actions) {
+    internal val actions: SFixedList<TimelineItem.Action> = SFixedList(m, actionCount.get().toInt(), actions) {
         Action(
             0u,
-            Action.Type.Empty,
+            TimelineActionType.Empty,
             emptyList()
         )
     }.apply {
@@ -110,33 +76,13 @@ class TimelineItem(
         dataLength.set((this.attributes.toBytes().size + this.actions.toBytes().size).toUShort())
     }
 
-    class Action(actionID: UByte, type: Type, attributes: List<Attribute>) : Mappable() {
-        val m = StructMapper()
+    internal class Action internal constructor(actionID: UByte, type: TimelineActionType, attributes: List<Attribute>) : Mappable() {
+        internal val m: StructMapper = StructMapper()
 
-        enum class Type(val value: UByte) {
-            AncsDismiss(0x01u),
-            Generic(0x02u),
-            Response(0x03u),
-            Dismiss(0x04u),
-            HTTP(0x05u),
-            Snooze(0x06u),
-            OpenWatchapp(0x07u),
-            Empty(0x08u),
-            Remove(0x09u),
-            OpenPin(0x0au);
-
-            companion object {
-                fun fromValue(value: UByte): Type {
-                    return entries.firstOrNull { it.value == value }
-                        ?: error("Unknown action type: $value")
-                }
-            }
-        }
-
-        val actionID = SUByte(m, actionID)
-        val type = SUByte(m, type.value)
-        val attributeCount = SUByte(m, attributes.size.toUByte())
-        val attributes = SFixedList(m, attributeCount.get().toInt(), attributes) {
+        internal val actionID: SUByte = SUByte(m, actionID)
+        internal val type: SUByte = SUByte(m, type.value)
+        internal val attributeCount: SUByte = SUByte(m, attributes.size.toUByte())
+        internal val attributes: SFixedList<TimelineItem.Attribute> = SFixedList(m, attributeCount.get().toInt(), attributes) {
             Attribute(
                 0u,
                 ubyteArrayOf()
@@ -147,18 +93,18 @@ class TimelineItem(
 
         override fun toBytes(): UByteArray = m.toBytes()
 
-        override fun fromBytes(bytes: DataBuffer) = m.fromBytes(bytes)
+        override fun fromBytes(bytes: DataBuffer): Unit = m.fromBytes(bytes)
 
         override val size: Int
             get() = m.size
     }
 
-    class Attribute(contentEndianness: Endian = Endian.Unspecified) : StructMappable() {
-        val attributeId = SUByte(m)
-        val length = SUShort(m, endianness = Endian.Little)
-        val content = SBytes(m, 0, endianness = contentEndianness)
+    public class Attribute internal constructor(contentEndianness: Endian = Endian.Unspecified) : StructMappable() {
+        internal val attributeId: SUByte = SUByte(m)
+        internal val length: SUShort = SUShort(m, endianness = Endian.Little)
+        internal val content: SBytes = SBytes(m, 0, endianness = contentEndianness)
 
-        constructor(
+        internal constructor(
             attributeId: UByte,
             content: UByteArray,
             contentEndianness: Endian = Endian.Unspecified
@@ -174,63 +120,117 @@ class TimelineItem(
             content.linkWithSize(length)
         }
     }
+}
 
-    @Serializable
-    enum class Flag(val value: Int) {
-        /**
-         * ???
-         *
-         * Name suggests that setting this to false would hide the pin on the watch,
-         * but it does not seem to do anything
-         */
-        IS_VISIBLE(0),
+public enum class TimelineItemType(public val value: UByte) {
+    Notification(1u),
+    Pin(2u),
+    Reminder(3u);
 
-        /**
-         * When set, pin is always displayed in UTC timezone on the watch
-         */
-        IS_FLOATING(1),
-
-        /**
-         * Whether pin spans throughout the whole day
-         */
-        IS_ALL_DAY(2),
-
-        FROM_WATCH(3),
-        FROM_ANCS(4),
-
-        /**
-         * When set, quick view will be displayed on the watchface when event in progress.
-         */
-        PERSIST_QUICK_VIEW(5),
-
-        /**
-         * Notification was silenced on the phone (e.g. Do Not Disturb). The watch delivers it
-         * quietly when the notifRespectPhoneSilence pref is on.
-         */
-        SILENT(6),
-
-        /**
-         * Marks a notification as read (dismisses if visible, and removes actions).
-         */
-        STATE_READ(12),
-        ;
-
-        companion object {
-            fun makeFlags(flags: List<Flag>): UShort {
-                var short: UShort = 0u
-
-                for (flag in flags) {
-                    short = (1u shl flag.value).toUShort() or short
-                }
-
-                return short
-            }
+    public companion object {
+        public fun fromValue(value: UByte): TimelineItemType {
+            return entries.firstOrNull { it.value == value }
+                ?: error("Unknown timeline item type: $value")
         }
     }
 }
 
-open class TimelineAction(message: Message) : PebblePacket(endpoint) {
-    val command = SUByte(m, message.value)
+public enum class TimelineItemLayout(public val value: UByte, public val code: String) {
+    GenericPin(1u, "genericPin"),
+    CalendarPin(2u, "calendarPin"),
+    GenericReminder(3u, "genericReminder"),
+    GenericNotification(4u, "genericNotification"),
+    CommNotification(5u, "commNotification"),
+    WeatherPin(6u, "weatherPin"),
+    SportsPin(7u, "sportsPin");
+
+    public companion object {
+        public fun fromValue(value: UByte): TimelineItemLayout {
+            return entries.firstOrNull { it.value == value }
+                ?: error("Unknown timeline item layout: $value")
+        }
+
+        public fun fromCode(code: String): TimelineItemLayout? {
+            return entries.firstOrNull { it.code == code }
+        }
+    }
+}
+
+public enum class TimelineActionType(public val value: UByte) {
+    AncsDismiss(0x01u),
+    Generic(0x02u),
+    Response(0x03u),
+    Dismiss(0x04u),
+    HTTP(0x05u),
+    Snooze(0x06u),
+    OpenWatchapp(0x07u),
+    Empty(0x08u),
+    Remove(0x09u),
+    OpenPin(0x0au);
+
+    public companion object {
+        public fun fromValue(value: UByte): TimelineActionType {
+            return entries.firstOrNull { it.value == value }
+                ?: error("Unknown action type: $value")
+        }
+    }
+}
+
+@Serializable
+public enum class TimelineItemFlag(public val value: Int) {
+    /**
+     * ???
+     *
+     * Name suggests that setting this to false would hide the pin on the watch,
+     * but it does not seem to do anything
+     */
+    IS_VISIBLE(0),
+
+    /**
+     * When set, pin is always displayed in UTC timezone on the watch
+     */
+    IS_FLOATING(1),
+
+    /**
+     * Whether pin spans throughout the whole day
+     */
+    IS_ALL_DAY(2),
+
+    FROM_WATCH(3),
+    FROM_ANCS(4),
+
+    /**
+     * When set, quick view will be displayed on the watchface when event in progress.
+     */
+    PERSIST_QUICK_VIEW(5),
+
+    /**
+     * Notification was silenced on the phone (e.g. Do Not Disturb). The watch delivers it
+     * quietly when the notifRespectPhoneSilence pref is on.
+     */
+    SILENT(6),
+
+    /**
+     * Marks a notification as read (dismisses if visible, and removes actions).
+     */
+    STATE_READ(12),
+    ;
+
+    public companion object {
+        internal fun makeFlags(flags: List<TimelineItemFlag>): UShort {
+            var short: UShort = 0u
+
+            for (flag in flags) {
+                short = (1u shl flag.value).toUShort() or short
+            }
+
+            return short
+        }
+    }
+}
+
+internal open class TimelineAction internal constructor(message: Message) : PebblePacket(endpoint) {
+    internal val command: SUByte = SUByte(m, message.value)
 
     enum class Message(val value: UByte) {
         InvokeAction(0x02u),
@@ -238,47 +238,47 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
         ActionResponse(0x11u)
     }
 
-    class InvokeAction(
+    internal class InvokeAction internal constructor(
         itemID: Uuid = Uuid.NIL,
         actionID: UByte = 0u,
         attributes: List<Attribute> = listOf()
     ) : TimelineAction(
         Message.InvokeAction
     ) {
-        val itemID = SUUID(m, itemID)
-        val actionID = SUByte(m, actionID)
-        val numAttributes = SUByte(m, attributes.size.toUByte())
-        val attributes = SFixedList(m, attributes.size, attributes, ::Attribute)
+        internal val itemID: SUUID = SUUID(m, itemID)
+        internal val actionID: SUByte = SUByte(m, actionID)
+        internal val numAttributes: SUByte = SUByte(m, attributes.size.toUByte())
+        internal val attributes: SFixedList<TimelineItem.Attribute> = SFixedList(m, attributes.size, attributes, ::Attribute)
 
         init {
             this.attributes.linkWithCount(numAttributes)
         }
     }
 
-    class DisplayedItem(itemID: Uuid = NOTHING_DISPLAYED) : TimelineAction(Message.DisplayedItem) {
-        val itemID = SUUID(m, itemID)
+    internal class DisplayedItem internal constructor(itemID: Uuid = NOTHING_DISPLAYED) : TimelineAction(Message.DisplayedItem) {
+        internal val itemID: SUUID = SUUID(m, itemID)
     }
 
-    class ActionResponse(
+    internal class ActionResponse internal constructor(
         itemID: Uuid = Uuid.NIL,
         response: UByte = 0u,
         attributes: List<Attribute> = listOf()
     ) : TimelineAction(
         Message.ActionResponse
     ) {
-        val itemID = SUUID(m, itemID)
-        val response = SUByte(m, response)
-        val numAttributes = SUByte(m, attributes.size.toUByte())
-        val attributes = SFixedList(m, attributes.size, attributes, ::Attribute)
+        internal val itemID: SUUID = SUUID(m, itemID)
+        internal val response: SUByte = SUByte(m, response)
+        internal val numAttributes: SUByte = SUByte(m, attributes.size.toUByte())
+        internal val attributes: SFixedList<TimelineItem.Attribute> = SFixedList(m, attributes.size, attributes, ::Attribute)
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.TIMELINE_ACTIONS
-        val NOTHING_DISPLAYED = Uuid.fromByteArray(ByteArray(16) { 0xFF.toByte() })
+        internal val endpoint: ProtocolEndpoint = ProtocolEndpoint.TIMELINE_ACTIONS
+        internal val NOTHING_DISPLAYED: Uuid = Uuid.fromByteArray(ByteArray(16) { 0xFF.toByte() })
     }
 }
 
-enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
+public enum class TimelineAttribute(public val id: UByte, public val maxLength: Int = -1) {
     Title(0x01u, 64),
     Subtitle(0x02u, 64),
     Body(0x03u, 512),
@@ -326,12 +326,12 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     WeatherPinKind(0x35u),
     ;
 
-    companion object {
-        fun fromByte(value: UByte): TimelineAttribute? = entries.firstOrNull { it.id == value }
+    public companion object {
+        internal fun fromByte(value: UByte): TimelineAttribute? = entries.firstOrNull { it.id == value }
     }
 }
 
-fun timelinePacketsRegister() {
+internal fun timelinePacketsRegister() {
     PacketRegistry.register(
         TimelineAction.endpoint,
         TimelineAction.Message.InvokeAction.value

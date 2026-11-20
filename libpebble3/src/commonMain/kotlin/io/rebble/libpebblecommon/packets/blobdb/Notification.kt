@@ -8,7 +8,7 @@ import kotlin.uuid.Uuid
 
 private val notifsUUID = Uuid.parse("B2CAE818-10F8-46DF-AD2B-98AD2254A3C1")
 
-enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (probably fw >3)
+internal enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (probably fw >3)
     Generic(1u),
     Twitter(6u),
     Facebook(11u),
@@ -40,7 +40,7 @@ enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (pr
 //
 //        val actions = mutableListOf(
 //            TimelineItem.Action(
-//                0u, TimelineItem.Action.Type.Dismiss, mutableListOf(
+//                0u, TimelineActionType.Dismiss, mutableListOf(
 //                    TimelineItem.Attribute(
 //                        0x01u,
 //                        "Dismiss".encodeToByteArray().toUByteArray()
@@ -56,9 +56,9 @@ enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (pr
 //            Uuid.NIL,
 //            timestampSecs.toUInt(),
 //            0u,
-//            TimelineItem.Type.Notification,
+//            TimelineItemType.Notification,
 //            0u,
-//            TimelineItem.Layout.GenericPin,
+//            TimelineItemLayout.GenericPin,
 //            attributes,
 //            actions
 //        )

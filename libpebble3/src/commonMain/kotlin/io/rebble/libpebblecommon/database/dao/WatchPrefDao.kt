@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
 @Dao
-interface WatchPrefRealDao : WatchPrefItemDao {
+internal interface WatchPrefRealDao : WatchPrefItemDao {
     @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         if (!params.libPebbleConfigFlow.value.watchConfig.enableWatchSettingsSync) {
@@ -58,15 +58,15 @@ interface WatchPrefRealDao : WatchPrefItemDao {
     }
 }
 
-data class WatchPreference<T>(
+public data class WatchPreference<T>(
     val pref: WatchPref<T>,
     // Only populated if non-default has been set (by phone or watch)
     val value: T?,
 ) {
-    fun valueOrDefault(): T = value ?: pref.defaultValue
+    public fun valueOrDefault(): T = value ?: pref.defaultValue
 }
 
-class RealWatchPrefs(
+internal class RealWatchPrefs(
     private val watchPrefRealDao: WatchPrefRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val clock: Clock,

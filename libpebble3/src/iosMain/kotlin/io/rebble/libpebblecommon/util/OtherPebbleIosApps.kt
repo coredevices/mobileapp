@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class OtherPebbleIosApps : OtherPebbleApps {
+internal class OtherPebbleIosApps : OtherPebbleApps {
     override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =
         MutableStateFlow(emptyList())
 }

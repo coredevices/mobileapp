@@ -3,11 +3,11 @@ package io.rebble.libpebblecommon.database.dao
 import androidx.room.Dao
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemFlag
 import kotlin.uuid.Uuid
 
 @Dao
-interface TimelineNotificationRealDao : TimelineNotificationDao {
+internal interface TimelineNotificationRealDao : TimelineNotificationDao {
     suspend fun markNotificationRead(itemId: Uuid) {
         val existingNotification = getEntry(itemId)
         if (existingNotification == null) {
@@ -17,7 +17,7 @@ interface TimelineNotificationRealDao : TimelineNotificationDao {
         insertOrReplace(
             existingNotification.copy(
                 content = existingNotification.content.copy(
-                    flags = existingNotification.content.flags.plus(TimelineItem.Flag.STATE_READ)
+                    flags = existingNotification.content.flags.plus(TimelineItemFlag.STATE_READ)
                 )
             )
         )

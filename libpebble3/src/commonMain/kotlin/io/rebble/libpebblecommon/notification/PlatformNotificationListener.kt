@@ -24,28 +24,28 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-interface NotificationListenerConnection {
+internal interface NotificationListenerConnection {
     fun init(libPebble: LibPebble)
 }
 
-interface NotificationAppsSync {
+internal interface NotificationAppsSync {
     /** Apps kept out of [NotificationApps.notificationApps]. */
     val hiddenPackages: Set<String> get() = emptySet()
 
     fun init()
 }
 
-data class VibePattern(
+public data class VibePattern(
     val name: String,
     val pattern: List<Long>,
     val bundled: Boolean,
 ) {
-    companion object {
-        fun VibePattern.uIntPattern() = pattern.map { it.toUInt() }
+    public companion object {
+        public fun VibePattern.uIntPattern(): List<UInt> = pattern.map { it.toUInt() }
     }
 }
 
-class NotificationApi(
+internal class NotificationApi(
     private val notificationAppsSync: NotificationAppsSync,
     private val notificationAppDao: NotificationAppRealDao,
     private val notificationsDao: NotificationDao,
@@ -193,4 +193,4 @@ class NotificationApi(
     }
 }
 
-expect fun iconFor(packageName: String, appContext: AppContext): ImageBitmap?
+internal expect fun iconFor(packageName: String, appContext: AppContext): ImageBitmap?

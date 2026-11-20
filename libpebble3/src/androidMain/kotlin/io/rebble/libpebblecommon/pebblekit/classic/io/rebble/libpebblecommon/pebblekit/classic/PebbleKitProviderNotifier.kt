@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class PebbleKitProviderNotifier(
+internal class PebbleKitProviderNotifier(
     private val watches: Watches,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val context: Context

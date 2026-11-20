@@ -32,11 +32,11 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.coroutines.cancellation.CancellationException
 
-interface LanguagePackInstaller {
+internal interface LanguagePackInstaller {
     val state: StateFlow<LanguagePackInstallState>
 }
 
-class RealLanguagePackInstaller(
+internal class RealLanguagePackInstaller(
     private val putBytesSession: PutBytesSession,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val firmwareDownloader: FirmwareDownloader,
@@ -119,7 +119,7 @@ class RealLanguagePackInstaller(
     }
 
     private val _state = MutableStateFlow<LanguagePackInstallState>(LanguagePackInstallState.Idle())
-    override val state = _state.asStateFlow()
+    override val state: StateFlow<LanguagePackInstallState> = _state.asStateFlow()
 
     override fun installLanguagePack(url: String, name: String, activate: Boolean) {
         installLanguagePackInternal(null, url, name, activate)
@@ -213,22 +213,22 @@ class RealLanguagePackInstaller(
     }
 }
 
-sealed class LanguagePackInstallState {
-    data class Idle(
+public sealed class LanguagePackInstallState {
+    public data class Idle(
         val activeLanguage: String? = null,
     ) : LanguagePackInstallState()
-    data class Downloading(val language: String) : LanguagePackInstallState()
-    data class Installing(val progress: StateFlow<Float>, val language: String) :
+    public data class Downloading internal constructor(val language: String) : LanguagePackInstallState()
+    public data class Installing internal constructor(val progress: StateFlow<Float>, val language: String) :
         LanguagePackInstallState()
 }
 
-fun LanguagePackInstallState.installing(): String? = when (this) {
+public fun LanguagePackInstallState.installing(): String? = when (this) {
     is LanguagePackInstallState.Downloading -> language
     is LanguagePackInstallState.Installing -> language
     else -> null
 }
 
-fun WatchInfo.installedLanguagePack(): InstalledLanguagePack? =
+internal fun WatchInfo.installedLanguagePack(): InstalledLanguagePack? =
     if (language.isNotEmpty() && languageVersion > 0) {
         InstalledLanguagePack(
             isoLocal = language,
@@ -238,12 +238,12 @@ fun WatchInfo.installedLanguagePack(): InstalledLanguagePack? =
         null
     }
 
-data class InstalledLanguagePack(
+public data class InstalledLanguagePack internal constructor(
     val isoLocal: String,
     val version: Int,
 )
 
-data class WatchLanguagePack(
+public data class WatchLanguagePack internal constructor(
     val slot: Int,
     val locale: String,
     val name: String,

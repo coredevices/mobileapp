@@ -24,9 +24,9 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.Endian
 import kotlinx.serialization.Serializable
 
-sealed class SystemPacket(endpoint: ProtocolEndpoint) : PebblePacket(endpoint)
+internal sealed class SystemPacket(endpoint: ProtocolEndpoint) : PebblePacket(endpoint)
 
-open class TimeMessage(message: Message) : SystemPacket(
+internal open class TimeMessage(message: Message) : SystemPacket(
     ProtocolEndpoint.TIME
 ) {
     enum class Message(val value: UByte) {
@@ -37,7 +37,7 @@ open class TimeMessage(message: Message) : SystemPacket(
         GetUTC(0x04u),
     }
 
-    val command = SUByte(m, message.value)
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -46,31 +46,31 @@ open class TimeMessage(message: Message) : SystemPacket(
     class GetTimeRequest : TimeMessage(Message.GetTimeRequest)
     class GetTimeUtcRequest : TimeMessage(Message.GetUTC)
     class GetTimeResponse(time: UInt = 0u) : TimeMessage(Message.GetTimeResponse) {
-        val time = SUInt(m, time)
+        val time: SUInt = SUInt(m, time)
     }
 
     class SetLocalTime(time: UInt = 0u) : TimeMessage(Message.SetLocalTime) {
-        val time = SUInt(m, time)
+        val time: SUInt = SUInt(m, time)
     }
 
     class SetUTC(unixTime: UInt = 0u, utcOffset: Short = 0, timeZoneName: String = "") :
         TimeMessage(
             Message.SetUTC
         ) {
-        val unixTime = SUInt(m, unixTime)
-        val utcOffset = SShort(m, utcOffset)
+        val unixTime: SUInt = SUInt(m, unixTime)
+        val utcOffset: SShort = SShort(m, utcOffset)
 
-        val timeZoneName = SString(m, timeZoneName)
+        val timeZoneName: SString = SString(m, timeZoneName)
     }
 }
 
-open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
+internal open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {
         AppVersionRequest(0x00u),
         AppVersionResponse(0x01u)
     }
 
-    val command = SUByte(m, message.value)
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -136,7 +136,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          *
          * Unused as of v3.0
          */
-        val protocolVersion = SUInt(m)
+        val protocolVersion: SUInt = SUInt(m)
 
         /**
          * [SessionCapsFlag] flags. Purpose unknown.
@@ -145,7 +145,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          *
          * Unused as of v3.0
          */
-        val sessionCaps = SUInt(m)
+        val sessionCaps: SUInt = SUInt(m)
 
         /**
          * Combined flag for [PlatformFlag] (list of supported features of the phone) and
@@ -156,12 +156,12 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          *
          * Note [PlatformFlag] part seems to be left unused in the Pebble app.
          */
-        val platformFlags = SUInt(m)
+        val platformFlags: SUInt = SUInt(m)
 
         /**
          * Unknown (Pebble app always sends 2 here)
          */
-        val responseVersion = SUByte(m, 2u)
+        val responseVersion: SUByte = SUByte(m, 2u)
 
         /**
          * Major version of the phone app.
@@ -169,7 +169,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          * Last Pebble app version was 4.4.2, so using "4" here would probably
          * result in a best compatibility with the original Pebble firmware
          */
-        val majorVersion = SUByte(m)
+        val majorVersion: SUByte = SUByte(m)
 
         /**
          * Minor version of the phone app.
@@ -177,7 +177,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          * Last Pebble app version was 4.4.2, so using "4" here would probably
          * result in a best compatibility with the original Pebble firmware
          */
-        val minorVersion = SUByte(m)
+        val minorVersion: SUByte = SUByte(m)
 
         /**
          * Bugfix version of the phone app.
@@ -185,7 +185,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          * Last Pebble app version was 4.4.2, so using "2" here would probably
          * result in a best compatibility with the original Pebble firmware
          */
-        val bugfixVersion = SUByte(m)
+        val bugfixVersion: SUByte = SUByte(m)
 
         /**
          * Flags for supported protocol features.
@@ -193,7 +193,7 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
          * Use [ProtocolCapsFlag.makeFlags] to serialize and [ProtocolCapsFlag.fromFlags] to
          * deserialize.
          */
-        val protocolCaps = SBytes(m, 8)
+        val protocolCaps: SBytes = SBytes(m, 8)
 
         constructor(
             protocolVersion: UInt,
@@ -217,17 +217,17 @@ open class PhoneAppVersion(message: Message) : SystemPacket(endpoint) {
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.PHONE_VERSION
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.PHONE_VERSION
     }
 }
 
-open class WatchVersion(message: Message) : SystemPacket(endpoint) {
+internal open class WatchVersion(message: Message) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {
         WatchVersionRequest(0x00u),
         WatchVersionResponse(0x01u)
     }
 
-    val command = SUByte(m, message.value)
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -238,42 +238,42 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
         /**
          * Version of the running firmware
          */
-        val running = WatchFirmwareVersion().also { m.register(it) }
+        val running: WatchFirmwareVersion = WatchFirmwareVersion().also { m.register(it) }
 
         /**
          * Version of the recovery firmware
          */
-        val recovery = WatchFirmwareVersion().also { m.register(it) }
+        val recovery: WatchFirmwareVersion = WatchFirmwareVersion().also { m.register(it) }
 
         /**
          * Likely the timestamp of the bootloader build
          */
-        val bootloaderTimestamp = SUInt(m)
+        val bootloaderTimestamp: SUInt = SUInt(m)
 
         /**
          * Board name
          */
-        val board = SFixedString(m, 9)
+        val board: SFixedString = SFixedString(m, 9)
 
         /**
          * Serial number of the watch
          */
-        val serial = SFixedString(m, 12)
+        val serial: SFixedString = SFixedString(m, 12)
 
         /**
          * Bluetooth MAC address of the watch
          */
-        val btAddress = SBytes(m, 6)
+        val btAddress: SBytes = SBytes(m, 6)
 
         /**
          * ???
          */
-        val resourceCrc = SUInt(m)
+        val resourceCrc: SUInt = SUInt(m)
 
         /**
          * ???
          */
-        val resourceTimestamp = SUInt(m)
+        val resourceTimestamp: SUInt = SUInt(m)
 
         // TODO everything after this is only set after fw version x, but the buffer might be
         //  present + <undefined> before that
@@ -281,12 +281,12 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
         /**
          * Currently selected language on the watch
          */
-        val language = SFixedString(m, 6)
+        val language: SFixedString = SFixedString(m, 6)
 
         /**
          * Version of the currently selected language
          */
-        val languageVersion = SUShort(m)
+        val languageVersion: SUShort = SUShort(m)
 
         /**
          * Flags for supported protocol features.
@@ -294,7 +294,7 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
          * Use [ProtocolCapsFlag.makeFlags] to serialize and [ProtocolCapsFlag.fromFlags] to
          * deserialize.
          */
-        val capabilities = SBytes(m, 8)
+        val capabilities: SBytes = SBytes(m, 8)
 
         /**
          * When *true*, it means watch has been connected to a different phone before this phone.
@@ -304,15 +304,15 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
          * sent to the watch
          * Note: currently always present when serialized, but optional when deserialized
          */
-        val isUnfaithful = SOptional(m, SBoolean(StructMapper()), true)
+        val isUnfaithful: SOptional<Boolean> = SOptional(m, SBoolean(StructMapper()), true)
 
-        val healthInsightsVersion = SOptional(m, SUShort(StructMapper()), true)
+        val healthInsightsVersion: SOptional<UShort> = SOptional(m, SUShort(StructMapper()), true)
 
-        val javascriptVersion = SOptional(m, SUShort(StructMapper()), true)
+        val javascriptVersion: SOptional<UShort> = SOptional(m, SUShort(StructMapper()), true)
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.WATCH_VERSION
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.WATCH_VERSION
     }
 }
 
@@ -323,38 +323,38 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
  *
  * `mfg_color` - returns watch model number (UInt32)
  */
-open class WatchFactoryData(message: Message) : SystemPacket(endpoint) {
+internal open class WatchFactoryData(message: Message) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {
         WatchModelRequest(0x00u),
         WatchModelResponse(0x01u),
         WatchModelError(0xffu)
     }
 
-    val command = SUByte(m, message.value)
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
     }
 
     class WatchFactoryDataRequest(key: String) : WatchFactoryData(Message.WatchModelRequest) {
-        val key = SString(m, key)
+        val key: SString = SString(m, key)
     }
 
     class WatchFactoryDataError : WatchFactoryData(Message.WatchModelError)
     class WatchFactoryDataResponse() : WatchFactoryData(Message.WatchModelResponse) {
-        val length = SUByte(m)
-        val model = SBytes(m, 0).apply { linkWithSize(length) }
+        val length: SUByte = SUByte(m)
+        val model: SBytes = SBytes(m, 0).apply { linkWithSize(length) }
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.FCT_REG
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.FCT_REG
     }
 }
 
-const val MAX_LANGUAGE_PACKS = 4
+public const val MAX_LANGUAGE_PACKS: Int = 4
 
 @Serializable
-enum class ProtocolCapsFlag(val value: Int) {
+public enum class ProtocolCapsFlag(public val value: Int) {
     SupportsAppRunStateProtocol(0),
     SupportsInfiniteLogDump(1),
     SupportsExtendedMusicProtocol(2),
@@ -384,8 +384,8 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsMultipleLanguagePacks(28),
     ;
 
-    companion object {
-        fun makeFlags(flags: List<ProtocolCapsFlag>): UByteArray {
+    public companion object {
+        internal fun makeFlags(flags: List<ProtocolCapsFlag>): UByteArray {
             val bytes = UByteArray(8)
 
             for (flag in flags) {
@@ -398,7 +398,7 @@ enum class ProtocolCapsFlag(val value: Int) {
             return bytes
         }
 
-        fun fromFlags(flags: UByteArray): Set<ProtocolCapsFlag> {
+        internal fun fromFlags(flags: UByteArray): Set<ProtocolCapsFlag> {
             return values().filter {
                 val combinedPosition = it.value
                 val byteIndex: Int = combinedPosition / 8
@@ -409,7 +409,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     }
 }
 
-enum class FirmwareProperty(val value: Int) {
+internal enum class FirmwareProperty(val value: Int) {
     IsRecoveryFirmware(0),
     IsBleFirmware(1),
     IsDualSlot(2),
@@ -426,20 +426,20 @@ enum class FirmwareProperty(val value: Int) {
     }
 }
 
-class WatchFirmwareVersion : StructMappable() {
-    val timestamp = SUInt(m)
-    val versionTag = SFixedString(m, 32)
-    val gitHash = SFixedString(m, 8)
-    val flags = SUByte(m)
+internal class WatchFirmwareVersion : StructMappable() {
+    val timestamp: SUInt = SUInt(m)
+    val versionTag: SFixedString = SFixedString(m, 32)
+    val gitHash: SFixedString = SFixedString(m, 8)
+    val flags: SUByte = SUByte(m)
 
     /**
      * See [WatchHardwarePlatform]
      */
-    val hardwarePlatform = SUByte(m)
-    val metadataVersion = SUByte(m)
+    val hardwarePlatform: SUByte = SUByte(m)
+    val metadataVersion: SUByte = SUByte(m)
 }
 
-open class SystemMessage(message: Message) : SystemPacket(endpoint) {
+internal open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {
         NewFirmwareAvailable(0x00u),
         FirmwareUpdateStart(0x01u),
@@ -461,21 +461,21 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
         LanguageSelectResponse(0x13u)
     }
 
-    val command = SUByte(m, 0x0u)
-    val messageType = SUByte(m, message.value)
+    val command: SUByte = SUByte(m, 0x0u)
+    val messageType: SUByte = SUByte(m, message.value)
 
     init {
         type = messageType.get()
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.SYSTEM_MESSAGE
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.SYSTEM_MESSAGE
     }
 
     class NewFirmwareAvailable: SystemMessage(Message.NewFirmwareAvailable)
     class FirmwareUpdateStart(bytesAlreadyTransferred: UInt, bytesToSend: UInt): SystemMessage(Message.FirmwareUpdateStart) {
-        val bytesAlreadyTransferred = SUInt(m, bytesAlreadyTransferred, endianness = Endian.Little)
-        val bytesToSend = SUInt(m, bytesToSend, endianness = Endian.Little)
+        val bytesAlreadyTransferred: SUInt = SUInt(m, bytesAlreadyTransferred, endianness = Endian.Little)
+        val bytesToSend: SUInt = SUInt(m, bytesToSend, endianness = Endian.Little)
     }
     class FirmwareUpdateComplete: SystemMessage(Message.FirmwareUpdateComplete)
     class FirmwareUpdateFailed: SystemMessage(Message.FirmwareUpdateFailed)
@@ -485,7 +485,7 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     class MAPDisabled: SystemMessage(Message.MAPDisabled)
     class MAPEnabled: SystemMessage(Message.MAPEnabled)
     class FirmwareUpdateStartResponse: SystemMessage(Message.FirmwareUpdateStartResponse) {
-        val response = SUByte(m)
+        val response: SUByte = SUByte(m)
     }
     class FirmwareUpdateStatusRequest: SystemMessage(Message.FirmwareUpdateStatus)
 
@@ -493,63 +493,63 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
      * Per-object status of a partially-transferred firmware update, so it can be resumed.
      */
     class FirmwareUpdateStatusResponse: SystemMessage(Message.FirmwareUpdateStatusResponse) {
-        val reserved = SBytes(m, 2)
-        val resourcesBytesWritten = SUInt(m, endianness = Endian.Little)
-        val resourcesCrc = SUInt(m, endianness = Endian.Little)
-        val firmwareBytesWritten = SUInt(m, endianness = Endian.Little)
-        val firmwareCrc = SUInt(m, endianness = Endian.Little)
+        val reserved: SBytes = SBytes(m, 2)
+        val resourcesBytesWritten: SUInt = SUInt(m, endianness = Endian.Little)
+        val resourcesCrc: SUInt = SUInt(m, endianness = Endian.Little)
+        val firmwareBytesWritten: SUInt = SUInt(m, endianness = Endian.Little)
+        val firmwareCrc: SUInt = SUInt(m, endianness = Endian.Little)
     }
 
     class LanguagePacksRequest(token: UByte) : SystemMessage(Message.LanguagePacksRequest) {
-        val token = SUByte(m, token)
+        val token: SUByte = SUByte(m, token)
     }
 
     class LanguagePackRecord : StructMappable() {
-        val slot = SUByte(m)
-        val flags = SUByte(m)
-        val version = SUShort(m, endianness = Endian.Little)
-        val locale = SFixedString(m, 6)
-        val name = SFixedString(m, 30)
+        val slot: SUByte = SUByte(m)
+        val flags: SUByte = SUByte(m)
+        val version: SUShort = SUShort(m, endianness = Endian.Little)
+        val locale: SFixedString = SFixedString(m, 6)
+        val name: SFixedString = SFixedString(m, 30)
 
-        val present get() = flags.get().toInt() and 1 != 0
-        val readable get() = flags.get().toInt() and 2 != 0
-        val hasTranslation get() = flags.get().toInt() and 4 != 0
+        val present: Boolean get() = flags.get().toInt() and 1 != 0
+        val readable: Boolean get() = flags.get().toInt() and 2 != 0
+        val hasTranslation: Boolean get() = flags.get().toInt() and 4 != 0
     }
 
     class LanguagePacksResponse : SystemMessage(Message.LanguagePacksResponse) {
-        val token = SUByte(m)
-        val activeSlot = SUByte(m)
-        val packs = SFixedList(m, MAX_LANGUAGE_PACKS, List(MAX_LANGUAGE_PACKS) { LanguagePackRecord() }) {
+        val token: SUByte = SUByte(m)
+        val activeSlot: SUByte = SUByte(m)
+        val packs: SFixedList<SystemMessage.LanguagePackRecord> = SFixedList(m, MAX_LANGUAGE_PACKS, List(MAX_LANGUAGE_PACKS) { LanguagePackRecord() }) {
             LanguagePackRecord()
         }
     }
 
     class LanguagePackRemoveRequest(token: UByte, slot: UByte, version: UShort, locale: String) :
         SystemMessage(Message.LanguagePackRemoveRequest) {
-        val token = SUByte(m, token)
-        val slot = SUByte(m, slot)
-        val version = SUShort(m, version, endianness = Endian.Little)
-        val locale = SFixedString(m, 6, locale)
+        val token: SUByte = SUByte(m, token)
+        val slot: SUByte = SUByte(m, slot)
+        val version: SUShort = SUShort(m, version, endianness = Endian.Little)
+        val locale: SFixedString = SFixedString(m, 6, locale)
     }
 
     class LanguagePackRemoveResponse : SystemMessage(Message.LanguagePackRemoveResponse) {
-        val token = SUByte(m)
-        val slot = SUByte(m)
-        val success = SUByte(m)
+        val token: SUByte = SUByte(m)
+        val slot: SUByte = SUByte(m)
+        val success: SUByte = SUByte(m)
     }
 
     class LanguageSelectRequest(token: UByte, slot: UByte, version: UShort, locale: String) :
         SystemMessage(Message.LanguageSelectRequest) {
-        val token = SUByte(m, token)
-        val slot = SUByte(m, slot)
-        val version = SUShort(m, version, endianness = Endian.Little)
-        val locale = SFixedString(m, 6, locale)
+        val token: SUByte = SUByte(m, token)
+        val slot: SUByte = SUByte(m, slot)
+        val version: SUShort = SUShort(m, version, endianness = Endian.Little)
+        val locale: SFixedString = SFixedString(m, 6, locale)
     }
 
     class LanguageSelectResponse : SystemMessage(Message.LanguageSelectResponse) {
-        val token = SUByte(m)
-        val slot = SUByte(m)
-        val success = SUByte(m)
+        val token: SUByte = SUByte(m)
+        val slot: SUByte = SUByte(m)
+        val success: SUByte = SUByte(m)
     }
 
     enum class FirmwareUpdateStartStatus(val value: UByte) {
@@ -566,13 +566,13 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     }
 }
 
-class BLEControl(opcode: UByte = 0x4u, discoverable: Boolean, duration: UShort) : SystemPacket(
+internal class BLEControl(opcode: UByte = 0x4u, discoverable: Boolean, duration: UShort) : SystemPacket(
     endpoint
 ) {
-    val command = SUByte(m, opcode)
+    val command: SUByte = SUByte(m, opcode)
 
     //val discoverable = SBool(m, discoverable)
-    val duration = SUShort(m, duration)
+    val duration: SUShort = SUShort(m, duration)
 
     init {
         type = command.get()
@@ -580,18 +580,18 @@ class BLEControl(opcode: UByte = 0x4u, discoverable: Boolean, duration: UShort) 
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.BLE_CONTROL
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.BLE_CONTROL
     }
 }
 
-open class PingPong(message: Message, cookie: UInt) : SystemPacket(endpoint) {
+internal open class PingPong(message: Message, cookie: UInt) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {
         Ping(0u),
         Pong(1u)
     }
 
-    val command = SUByte(m, message.value)
-    val cookie = SUInt(m, cookie)
+    val command: SUByte = SUByte(m, message.value)
+    val cookie: SUInt = SUInt(m, cookie)
 
     init {
         type = command.get()
@@ -604,17 +604,17 @@ open class PingPong(message: Message, cookie: UInt) : SystemPacket(endpoint) {
     }
 
     companion object {
-        val endpoint = ProtocolEndpoint.PING
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.PING
     }
 }
 
-fun timePacketsRegister() {
+internal fun timePacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.TIME, TimeMessage.Message.SetUTC.value) {
         TimeMessage.SetUTC()
     }
 }
 
-fun systemPacketsRegister() {
+internal fun systemPacketsRegister() {
     PacketRegistry.register(
         PhoneAppVersion.endpoint,
         PhoneAppVersion.Message.AppVersionRequest.value

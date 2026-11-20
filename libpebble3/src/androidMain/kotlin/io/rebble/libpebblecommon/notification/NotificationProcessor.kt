@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import kotlin.uuid.Uuid
 
-interface NotificationProcessor {
+internal interface NotificationProcessor {
     suspend fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,

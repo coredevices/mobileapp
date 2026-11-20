@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.music
 
-enum class MusicAction {
+public enum class MusicAction {
     Play,
     Pause,
     PlayPause,

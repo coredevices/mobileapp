@@ -8,26 +8,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-interface BluetoothStateProvider {
+internal interface BluetoothStateProvider {
     fun init()
     val state: StateFlow<BluetoothState>
     // On Android <12 this is false when location services are off, even if `state` is Enabled.
     fun scanningAvailable(): Boolean
 }
 
-enum class BluetoothState {
+public enum class BluetoothState {
     Enabled,
     Disabled,
     ;
 
-    fun enabled(): Boolean = this == Enabled
+    public fun enabled(): Boolean = this == Enabled
 }
 
-expect fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState>
+internal expect fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState>
 
-expect fun locationServicesBlockScanning(appContext: AppContext): Boolean
+internal expect fun locationServicesBlockScanning(appContext: AppContext): Boolean
 
-class RealBluetoothStateProvider(
+internal class RealBluetoothStateProvider(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
 ) : BluetoothStateProvider {

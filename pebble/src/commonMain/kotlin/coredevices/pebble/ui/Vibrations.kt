@@ -50,8 +50,9 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.notification.VibePattern.Companion.uIntPattern
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -71,7 +72,7 @@ fun CoroutineScope.testPattern(vibePattern: VibePattern, libPebble: LibPebble) {
             timestamp = Clock.System.now(),
             parentId = Uuid.NIL,
         ) {
-            layout = TimelineItem.Layout.GenericNotification
+            layout = TimelineItemLayout.GenericNotification
             attributes {
                 title { "Test Vibe Pattern" }
                 body { "Testing vibe pattern: ${vibePattern.name}" }
@@ -79,7 +80,7 @@ fun CoroutineScope.testPattern(vibePattern: VibePattern, libPebble: LibPebble) {
                 vibrationPattern { vibePattern.uIntPattern() }
             }
             actions {
-                action(TimelineItem.Action.Type.Generic) {
+                action(TimelineActionType.Generic) {
                     attributes {
                         title { "Test" }
                     }

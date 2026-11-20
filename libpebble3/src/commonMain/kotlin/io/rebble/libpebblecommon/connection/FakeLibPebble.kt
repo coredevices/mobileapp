@@ -107,7 +107,7 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-class FakeLibPebble : LibPebble {
+public class FakeLibPebble : LibPebble {
     override fun init() {
         // No-op
     }
@@ -136,7 +136,7 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override suspend fun replyToDisplayedNotification(text: String, at: Instant) =
+    override suspend fun replyToDisplayedNotification(text: String, at: Instant): DisplayedNotificationReplyResult =
         DisplayedNotificationReplyResult.Unsupported
 
     override suspend fun sendPing(cookie: UInt) {
@@ -207,7 +207,7 @@ class FakeLibPebble : LibPebble {
         return flow { emit(emptyList()) }
     }
 
-    val locker = MutableStateFlow(fakeLockerEntries)
+    internal val locker: MutableStateFlow<List<LockerWrapper>> = MutableStateFlow(fakeLockerEntries)
 
     override fun getLocker(
         type: AppType,
@@ -578,12 +578,12 @@ class FakeLibPebble : LibPebble {
 
     override suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo> = emptyList()
 
-    override suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode) = PermissionDecision.Denied
+    override suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode): PermissionDecision = PermissionDecision.Denied
 
-    override suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String) =
+    override suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String): FileHandleInfo? =
         FileHandleInfo(scope, FileEntryKind.File, scope, mode)
 
-    override suspend fun revokePluginFile(appUuid: Uuid, scope: String) = Unit
+    override suspend fun revokePluginFile(appUuid: Uuid, scope: String): Unit = Unit
 
     override fun getAllPlugins(): List<PluginMetadata> = emptyList()
 
@@ -623,22 +623,22 @@ class FakeLibPebble : LibPebble {
         types: List<Int>
     ): List<OverlayDataEntity> = emptyList()
 
-    override suspend fun getHealthDataForRange(start: Long, end: Long) = emptyList<HealthDataEntity>()
-    override suspend fun getDailyAggregates(start: Long, end: Long) = emptyList<DailyMovementAggregate>()
+    override suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity> = emptyList<HealthDataEntity>()
+    override suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate> = emptyList<DailyMovementAggregate>()
     override suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates? = null
     override suspend fun getAverageHeartRate(start: Long, end: Long): Double? = null
-    override suspend fun getSleepEntries(start: Long, end: Long) = emptyList<OverlayDataEntity>()
+    override suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity> = emptyList<OverlayDataEntity>()
     override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? = null
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? = null
     override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? = null
-    override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
-    override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()
-    override suspend fun getTypicalSteps(dayOfWeek: Int) = emptyList<Long>()
-    override suspend fun getTypicalSleepSeconds() = 0L
+    override suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long> = emptyMap<Int, Long>()
+    override suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity> = emptyList<OverlayDataEntity>()
+    override suspend fun getTypicalSteps(dayOfWeek: Int): List<Long> = emptyList<Long>()
+    override suspend fun getTypicalSleepSeconds(): Long = 0L
     override suspend fun populateDebugHealthData() {}
 }
 
-fun fakeWatches(): List<PebbleDevice> {
+internal fun fakeWatches(): List<PebbleDevice> {
     return buildList {
         for (i in 1..8) {
             add(fakeWatch())
@@ -646,7 +646,7 @@ fun fakeWatches(): List<PebbleDevice> {
     }
 }
 
-fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
+internal fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
     val name = "Core $num"
     val fakeIdentifier = if (PlatformUtils.IS_JVM) {
@@ -712,7 +712,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
     }
 }
 
-class FakeConnectedDevice(
+internal class FakeConnectedDevice(
     override val identifier: PebbleIdentifier,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
@@ -876,7 +876,7 @@ class FakeConnectedDevice(
     override suspend fun requestHealthData(fullSync: Boolean): Boolean = true
 }
 
-class FakeConnectedDeviceInRecovery(
+internal class FakeConnectedDeviceInRecovery(
     override val identifier: PebbleIdentifier,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
@@ -964,7 +964,7 @@ class FakeConnectedDeviceInRecovery(
 
 private val fakeNotificationApps by lazy { fakeNotificationApps() }
 
-fun fakeNotificationApps(): List<NotificationAppItem> {
+internal fun fakeNotificationApps(): List<NotificationAppItem> {
     return buildList {
         for (i in 1..50) {
             add(fakeNotificationApp())
@@ -972,7 +972,7 @@ fun fakeNotificationApps(): List<NotificationAppItem> {
     }
 }
 
-fun fakeNotificationApp(): NotificationAppItem {
+internal fun fakeNotificationApp(): NotificationAppItem {
     return NotificationAppItem(
         name = randomName(),
         packageName = randomName(),
@@ -987,7 +987,7 @@ fun fakeNotificationApp(): NotificationAppItem {
     )
 }
 
-fun fakeChannelGroups(): List<ChannelGroup> {
+internal fun fakeChannelGroups(): List<ChannelGroup> {
     return buildList {
         for (i in 1..Random.nextInt(2, 5)) {
             add(
@@ -1001,7 +1001,7 @@ fun fakeChannelGroups(): List<ChannelGroup> {
     }
 }
 
-fun fakeChannels(): List<ChannelItem> {
+internal fun fakeChannels(): List<ChannelItem> {
     return buildList {
         for (i in 1..Random.nextInt(1, 8)) {
             add(
@@ -1015,9 +1015,9 @@ fun fakeChannels(): List<ChannelItem> {
     }
 }
 
-val fakeLockerEntries by lazy { fakeLockerEntries() }
+internal val fakeLockerEntries: List<LockerWrapper> by lazy { fakeLockerEntries() }
 
-fun fakeLockerEntries(): List<LockerWrapper> {
+internal fun fakeLockerEntries(): List<LockerWrapper> {
     return buildList {
         for (i in 1..40) {
             add(fakeLockerEntry())
@@ -1025,7 +1025,7 @@ fun fakeLockerEntries(): List<LockerWrapper> {
     }
 }
 
-fun randomName(): String {
+internal fun randomName(): String {
     val length = Random.nextInt(5, 20)
     val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     return (1..length)
@@ -1033,7 +1033,7 @@ fun randomName(): String {
         .joinToString("")
 }
 
-fun randomMacAddress(): String {
+internal fun randomMacAddress(): String {
     val allowedChars = "0123456789ABCDEF"
     return (1..6).joinToString(":") {
         (1..2).map {
@@ -1045,7 +1045,7 @@ fun randomMacAddress(): String {
     }
 }
 
-fun fakeLockerEntry(): LockerWrapper {
+internal fun fakeLockerEntry(): LockerWrapper {
     val appType = if (Random.nextBoolean()) AppType.Watchface else AppType.Watchapp
     return LockerWrapper.NormalApp(
         properties = AppProperties(

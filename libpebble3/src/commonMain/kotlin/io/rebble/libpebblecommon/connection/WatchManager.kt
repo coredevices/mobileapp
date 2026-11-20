@@ -55,7 +55,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
-data class KnownWatchProperties(
+internal data class KnownWatchProperties(
     val name: String,
     val nickname: String?,
     val runningFwVersion: String,
@@ -95,7 +95,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
     )
 }
 
-interface WatchConnector {
+internal interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
     fun requestConnection(identifier: PebbleIdentifier)
     fun requestDisconnection(identifier: PebbleIdentifier)
@@ -148,7 +148,7 @@ private data class CombinedState(
     val btstate: BluetoothState,
 )
 
-class WatchManager(
+internal class WatchManager(
     private val knownWatchDao: KnownWatchDao,
     private val pebbleDeviceFactory: PebbleDeviceFactory,
     private val createPlatformIdentifier: CreatePlatformIdentifier,
@@ -756,12 +756,12 @@ class WatchManager(
     }
 }
 
-data class CurrentAndPreviousState(
+internal data class CurrentAndPreviousState(
     val previousState: ActivePebbleState?,
     val currentState: ActivePebbleState?,
 )
 
-data class ActivePebbleState(
+internal data class ActivePebbleState(
     val connectingPebbleState: ConnectingPebbleState,
     val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     val firmwareUpdateStatus: FirmwareUpdateStatus,

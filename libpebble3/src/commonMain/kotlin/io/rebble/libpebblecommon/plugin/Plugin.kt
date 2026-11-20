@@ -12,26 +12,26 @@ import kotlin.uuid.Uuid
  * plugins are backed by JS (see [JsPlugin]). libpebble only hands out [metadata]; calls go
  * through `Plugins`. See `new-plugin-api.md`.
  */
-interface Plugin {
+public interface Plugin {
     /** Stable identifier for this plugin. Built-ins use the reserved UUID namespace. */
-    val pluginUuid: Uuid
+    public val pluginUuid: Uuid
 
     /** Display name, shown to the user and to an LLM caller. */
-    val name: String
+    public val name: String
 
     /** Description of the plugin. */
-    val description: String
+    public val description: String
 
-    val sources: List<SourceDeclaration>
+    public val sources: List<SourceDeclaration>
 
-    val actions: List<ActionDeclaration>
+    public val actions: List<ActionDeclaration>
         get() = emptyList()
 
     /** Path of the plugin's script inside its pbw; null for built-in plugins. */
-    val scriptPath: String?
+    public val scriptPath: String?
         get() = null
 
-    val metadata: PluginMetadata
+    public val metadata: PluginMetadata
         get() = PluginMetadata(pluginUuid, name, description, sources, actions, scriptPath)
 
     /**
@@ -53,7 +53,7 @@ interface Plugin {
      *
      * [prompt]: whether the plugin's own permission checks may ask the user.
      */
-    fun observe(
+    public fun observe(
         category: String,
         item: String,
         properties: List<String>?,
@@ -62,19 +62,19 @@ interface Plugin {
         prompt: Boolean,
     ): Flow<SourceUpdate>
 
-    suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult
+    public suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult
 
-    fun serves(category: String, item: String) = sources.any { it.serves(category, item) }
+    public fun serves(category: String, item: String): Boolean = sources.any { it.serves(category, item) }
 
-    fun action(name: String) = actions.firstOrNull { it.name == name }
+    public fun action(name: String): ActionDeclaration? = actions.firstOrNull { it.name == name }
 
-    companion object {
-        const val MAX_LIMIT = 200
+    public companion object {
+        public const val MAX_LIMIT: Int = 200
     }
 }
 
 /** What a [Plugin] offers, without the means to call it. */
-data class PluginMetadata(
+public data class PluginMetadata(
     val pluginUuid: Uuid,
     val name: String,
     val description: String,
@@ -82,35 +82,35 @@ data class PluginMetadata(
     val actions: List<ActionDeclaration>,
     val scriptPath: String? = null,
 ) {
-    fun serves(category: String, item: String) = sources.any { it.serves(category, item) }
+    public fun serves(category: String, item: String): Boolean = sources.any { it.serves(category, item) }
 
-    fun action(name: String) = actions.firstOrNull { it.name == name }
+    public fun action(name: String): ActionDeclaration? = actions.firstOrNull { it.name == name }
 }
 
 @Serializable
-data class IconPixelSize(val w: Int, val h: Int) {
+public data class IconPixelSize(val w: Int, val h: Int) {
     /** No bigger than the largest watch screen. */
-    fun clamped() = IconPixelSize(w.coerceIn(1, MAX_SIDE), h.coerceIn(1, MAX_SIDE))
+    public fun clamped(): IconPixelSize = IconPixelSize(w.coerceIn(1, MAX_SIDE), h.coerceIn(1, MAX_SIDE))
 
-    companion object {
-        const val MAX_SIDE = 260
+    public companion object {
+        public const val MAX_SIDE: Int = 260
     }
 }
 
-sealed interface SourceUpdate {
-    data class Data(val envelope: SourceEnvelope) : SourceUpdate
-    data class Error(val code: String, val message: String) : SourceUpdate
+public sealed interface SourceUpdate {
+    public data class Data internal constructor(val envelope: SourceEnvelope) : SourceUpdate
+    public data class Error(val code: String, val message: String) : SourceUpdate
 }
 
 @Serializable
-data class SourceEnvelope(
+public data class SourceEnvelope(
     val pluginUuid: String,
     val validUntilMs: Long? = null,
     val instances: List<SourceInstance>,
 )
 
 @Serializable
-data class SourceInstance(
+public data class SourceInstance(
     /** Stable, plugin-defined identifier (used by user-preference pinning). */
     val instanceId: String,
     /**
@@ -122,27 +122,27 @@ data class SourceInstance(
      */
     val properties: Map<String, Map<String, JsonElement>>,
 ) {
-    companion object {
-        const val PROPERTY_NAME = "name"
+    public companion object {
+        public const val PROPERTY_NAME: String = "name"
 
         /** The Android package an instance's data came from, which per-package permissions are scoped by. */
-        const val PROPERTY_PACKAGE = "package"
+        public const val PROPERTY_PACKAGE: String = "package"
     }
 }
 
 /** Typed shape names. String-based at the wire so the set is extensible. */
-object SourceShapeNames {
-    const val SHORT_TEXT = "shortText"
-    const val LONG_TEXT = "longText"
-    const val NUMERIC_VALUE = "numericValue"
-    const val TIMESTAMP = "timestamp"
-    const val BOOLEAN = "boolean"
-    const val ICON = "icon"
-    const val IMAGE = "image"
-    const val SERIES = "series"
+public object SourceShapeNames {
+    public const val SHORT_TEXT: String = "shortText"
+    public const val LONG_TEXT: String = "longText"
+    public const val NUMERIC_VALUE: String = "numericValue"
+    public const val TIMESTAMP: String = "timestamp"
+    public const val BOOLEAN: String = "boolean"
+    public const val ICON: String = "icon"
+    public const val IMAGE: String = "image"
+    public const val SERIES: String = "series"
 
     /** How a source declares a property whose value is a series of [shape]. */
-    fun series(shape: String) = "$SERIES.$shape"
+    public fun series(shape: String): String = "$SERIES.$shape"
 }
 
 /**
@@ -152,7 +152,7 @@ object SourceShapeNames {
  * without them a value's position is all it has.
  */
 @Serializable
-data class SeriesShape(
+public data class SeriesShape(
     val start: Long? = null,
     val stepSec: Long? = null,
     val numericValue: NumericSeries? = null,
@@ -164,7 +164,7 @@ data class SeriesShape(
 )
 
 @Serializable
-data class NumericSeries(
+public data class NumericSeries(
     val values: List<Double?>,
     val unit: String? = null,
     val min: Double? = null,
@@ -172,18 +172,18 @@ data class NumericSeries(
 )
 
 @Serializable
-data class TextSeries(
+public data class TextSeries(
     val values: List<String?>,
 )
 
 /** Epoch seconds UTC, as [TimestampShape]. */
 @Serializable
-data class TimestampSeries(
+public data class TimestampSeries(
     val values: List<Long?>,
 )
 
 @Serializable
-data class BitmapSeries<T>(
+public data class BitmapSeries<T>(
     val values: List<T?>,
 )
 
@@ -193,7 +193,7 @@ data class BitmapSeries<T>(
  * share price can honestly offer.
  */
 @Serializable
-data class NumericValueShape(
+public data class NumericValueShape(
     val value: Double,
     val unit: String? = null,
     val min: Double? = null,
@@ -205,17 +205,17 @@ data class NumericValueShape(
  * clock format, and it is the only side that can keep "in 5 minutes" honest as time passes.
  */
 @Serializable
-data class TimestampShape(
+public data class TimestampShape(
     val value: Long,
 )
 
 @Serializable
-data class ShortTextShape(
+public data class ShortTextShape(
     val text: String,
 )
 
 @Serializable
-data class LongTextShape(
+public data class LongTextShape(
     val text: String,
 )
 
@@ -226,7 +226,7 @@ data class LongTextShape(
  * it as an [ImageShape] beside this. Only produced when the subscriber sets `iconPixelSize`.
  */
 @Serializable
-data class IconShape(
+public data class IconShape(
     val pixels: String,
     val palette: String,
     val width: Int,
@@ -241,7 +241,7 @@ data class IconShape(
  * Sized to the `iconPixelSize` the subscriber asked for.
  */
 @Serializable
-data class ImageShape(
+public data class ImageShape(
     val pixels: String,
     val palette: String,
     val width: Int,
@@ -250,12 +250,12 @@ data class ImageShape(
 
 /** Just the state: a plugin with words worth showing offers a `shortText` beside this. */
 @Serializable
-data class BooleanShape(
+public data class BooleanShape(
     val value: Boolean,
 )
 
 /** A native plugin operation that failed with one of the [PluginErrors] codes. */
-class PluginNativeException(
-    val code: String,
+public class PluginNativeException(
+    public val code: String,
     message: String,
 ) : Exception(message)

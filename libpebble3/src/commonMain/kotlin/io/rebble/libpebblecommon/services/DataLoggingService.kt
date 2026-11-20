@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlin.uuid.Uuid
 
-class DataLoggingService(
+internal class DataLoggingService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
     private val datalogging: Datalogging,
@@ -110,7 +110,7 @@ class DataLoggingService(
     }
 }
 
-data class DataLoggingSession(
+internal data class DataLoggingSession(
     val id: UByte,
     val tag: UInt,
     val uuid: Uuid,

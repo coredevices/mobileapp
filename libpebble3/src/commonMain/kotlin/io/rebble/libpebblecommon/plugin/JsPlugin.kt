@@ -57,7 +57,7 @@ import kotlin.uuid.Uuid
  * re-run when anything they subscribed to changes; actions are one-shot. Sessions are
  * cold-started per request and torn down immediately.
  */
-class JsPlugin(
+internal class JsPlugin(
     override val pluginUuid: Uuid,
     override val name: String,
     private val manifest: PluginManifest,
@@ -364,17 +364,17 @@ class JsPlugin(
     private val configLock = Mutex()
     private var configSession: Session? = null
 
-    override suspend fun openConfigSession() = configLock.withLock {
+    override suspend fun openConfigSession(): Unit = configLock.withLock {
         closeConfigSessionLocked()
         openConfigSessionLocked()
         Unit
     }
 
-    override suspend fun closeConfigSession() = configLock.withLock { closeConfigSessionLocked() }
+    override suspend fun closeConfigSession(): Unit = configLock.withLock { closeConfigSessionLocked() }
 
     @Volatile private var retired = false
 
-    suspend fun retire() = configLock.withLock {
+    suspend fun retire(): Unit = configLock.withLock {
         retired = true
         upstreams.close()
         closeConfigSessionLocked()

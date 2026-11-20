@@ -14,7 +14,7 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
-class PebbleKitProvider : ContentProvider(), LibPebbleKoinComponent {
+internal class PebbleKitProvider : ContentProvider(), LibPebbleKoinComponent {
     private var initialized = false
     private lateinit var watches: Watches
     private lateinit var libPebbleCoroutineScope: LibPebbleCoroutineScope

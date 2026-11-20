@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.js.JSLocalStorageInterface
 import kotlinx.serialization.json.Json
 
-class WebViewJSLocalStorageInterface(
+public class WebViewJSLocalStorageInterface(
     scopedSettingsUuid: String,
     appContext: AppContext,
     private val evaluateJavascript: (String) -> Unit
@@ -17,37 +17,37 @@ class WebViewJSLocalStorageInterface(
     }
 
     @JavascriptInterface
-    fun clear() {
+    public fun clear() {
         iface.clear()
     }
 
     @JavascriptInterface
-    fun getItem(key: String?): String {
+    public fun getItem(key: String?): String {
         return Json.encodeToString<String?>(iface.getItem(key)?.toString())
     }
 
     @JavascriptInterface
-    fun key(index: Double): String? {
+    public fun key(index: Double): String? {
         return iface.key(index)
     }
 
     @JavascriptInterface
-    fun removeItem(key: String?) {
+    public fun removeItem(key: String?) {
         iface.removeItem(key)
     }
 
     @JavascriptInterface
-    fun setItem(key: String?, value: String?) {
+    public fun setItem(key: String?, value: String?) {
         iface.setItem(key, value)
     }
 
     @JavascriptInterface
-    fun saveState(data: String) {
+    public fun saveState(data: String) {
         iface.saveState(data)
     }
 
     @JavascriptInterface
-    fun restoreState(): String {
+    public fun restoreState(): String {
         return iface.restoreState()
     }
 }

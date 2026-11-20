@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.callbackFlow
 
 private val logger = Logger.withTag("AndroidClassicScanner")
 
-class AndroidClassicScanner(
+internal class AndroidClassicScanner(
     private val appContext: AppContext,
 ) : ClassicScanner {
     @SuppressLint("MissingPermission")

@@ -23,7 +23,7 @@ package io.rebble.libpebblecommon.util
  *  - U+202F (narrow no-break space) -- used by Android's ICU/CLDR time formatter before AM/PM
  *    in en_US. Stripping would join "10:30AM" instead of preserving "10:30 AM".
  */
-fun stripBidiIsolates(text: CharSequence?): String? {
+internal fun stripBidiIsolates(text: CharSequence?): String? {
     if (text == null) return null
 
     // Allocate a StringBuilder only if we actually encounter a sanitized char, so the common case

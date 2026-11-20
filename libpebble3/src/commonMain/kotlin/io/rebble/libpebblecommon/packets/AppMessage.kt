@@ -19,7 +19,7 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlin.uuid.Uuid
 
 
-class AppMessageTuple() : StructMappable() {
+internal class AppMessageTuple() : StructMappable() {
     enum class Type(val value: UByte) {
         ByteArray(0u),
         CString(1u),
@@ -33,10 +33,10 @@ class AppMessageTuple() : StructMappable() {
         }
     }
 
-    val key = SUInt(m, endianness = Endian.Little)
-    val type = SUByte(m)
-    val dataLength = SUShort(m, endianness = Endian.Little)
-    val data = SBytes(m, 0)
+    val key: SUInt = SUInt(m, endianness = Endian.Little)
+    val type: SUByte = SUByte(m)
+    val dataLength: SUShort = SUShort(m, endianness = Endian.Little)
+    val data: SBytes = SBytes(m, 0)
 
     init {
         data.linkWithSize(dataLength)
@@ -209,9 +209,9 @@ class AppMessageTuple() : StructMappable() {
     }
 }
 
-sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(endpoint) {
-    val command = SUByte(m, message.value)
-    val transactionId = SUByte(m, transactionId)
+internal sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(endpoint) {
+    val command: SUByte = SUByte(m, message.value)
+    val transactionId: SUByte = SUByte(m, transactionId)
 
     init {
         type = command.get()
@@ -229,9 +229,9 @@ sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(e
         tuples: List<AppMessageTuple> = emptyList()
     ) :
         AppMessage(Message.AppMessagePush, transactionId) {
-        val uuid = SUUID(m, uuid)
-        val count = SUByte(m, tuples.size.toUByte())
-        val dictionary = SFixedList(m, tuples.size, tuples, ::AppMessageTuple)
+        val uuid: SUUID = SUUID(m, uuid)
+        val count: SUByte = SUByte(m, tuples.size.toUByte())
+        val dictionary: SFixedList<AppMessageTuple> = SFixedList(m, tuples.size, tuples, ::AppMessageTuple)
 
         init {
             dictionary.linkWithCount(count)
@@ -274,7 +274,7 @@ sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(e
 
 
     companion object {
-        val endpoint = ProtocolEndpoint.APP_MESSAGE
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.APP_MESSAGE
     }
 
     override fun equals(other: Any?): Boolean {
@@ -296,7 +296,7 @@ sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(e
     }
 }
 
-fun appmessagePacketsRegister() {
+internal fun appmessagePacketsRegister() {
     PacketRegistry.register(
         AppMessage.endpoint,
         AppMessage.Message.AppMessagePush.value

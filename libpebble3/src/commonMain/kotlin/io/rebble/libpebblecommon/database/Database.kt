@@ -154,7 +154,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
 )
 @ConstructedBy(DatabaseConstructor::class)
 @TypeConverters(RoomTypeConverters::class)
-abstract class Database : RoomDatabase() {
+internal abstract class Database : RoomDatabase() {
     abstract fun knownWatchDao(): KnownWatchDao
     abstract fun lockerEntryDao(): LockerEntryRealDao
     abstract fun notificationAppDao(): NotificationAppRealDao
@@ -179,14 +179,14 @@ abstract class Database : RoomDatabase() {
 
 @DeleteTable(tableName = "WatchSettingsEntity")
 @DeleteTable(tableName = "WatchSettingsSyncEntity")
-class AutoMigration30 : AutoMigrationSpec
+internal class AutoMigration30 : AutoMigrationSpec
 
 @DeleteTable(tableName = "LockerAppPermission")
-class AutoMigration48 : AutoMigrationSpec
+internal class AutoMigration48 : AutoMigrationSpec
 
 
 /** Rows from before askedAtMs prompted whenever undecided, as if asked when recorded. */
-class AutoMigration51 : AutoMigrationSpec {
+internal class AutoMigration51 : AutoMigrationSpec {
     override fun onPostMigrate(connection: SQLiteConnection) {
         connection.execSQL("UPDATE AppPermission SET askedAtMs = requestedAtMs")
     }
@@ -194,21 +194,21 @@ class AutoMigration51 : AutoMigrationSpec {
 
 /** Microphone is bit 0, so its old 0/1 values carry over. */
 @RenameColumn(tableName = "LockerEntryEntity", fromColumnName = "microphoneGranted", toColumnName = "watchPermissions")
-class AutoMigration54 : AutoMigrationSpec
+internal class AutoMigration54 : AutoMigrationSpec
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
-expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
+internal expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
     override fun initialize(): Database
 }
 
 // Force re-sync of all app metadata after fixing SDK version selection
-val MIGRATION_39_40 = object : Migration(39, 40) {
+internal val MIGRATION_39_40: Migration = object : Migration(39, 40) {
     override fun migrate(connection: SQLiteConnection) {
         connection.execSQL("UPDATE LockerEntrySyncEntity SET watchSynchHashcode = watchSynchHashcode + 1")
     }
 }
 
-fun getRoomDatabase(ctx: AppContext): Database {
+internal fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
         .addMigrations(MIGRATION_39_40)
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)

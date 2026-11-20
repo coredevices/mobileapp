@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.connection.devconnection
 
-enum class ServerMessageType(val value: Byte) {
+internal enum class ServerMessageType(val value: Byte) {
     RelayFromWatch(0x00),
     RelayToWatch(0x01),
     PhoneAppLog(0x02),

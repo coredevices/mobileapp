@@ -7,7 +7,7 @@ import kotlin.uuid.Uuid
 
 /** An action an app had a plugin run. */
 @Entity(tableName = "PluginActionLog", indices = [Index("atMs")])
-data class PluginActionLogEntity(
+public data class PluginActionLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val atMs: Long,
     val appUuid: Uuid,

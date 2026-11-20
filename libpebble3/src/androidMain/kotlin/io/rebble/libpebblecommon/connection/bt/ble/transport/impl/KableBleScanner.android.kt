@@ -9,7 +9,7 @@ import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.flow.Flow
 
-actual fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner = KableBleScanner(bleConfigFlow)
+internal actual fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner = KableBleScanner(bleConfigFlow)
 
 internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Advertisement> = Scanner {
     preConflate = true
@@ -20,9 +20,9 @@ internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Ad
     }
 }.advertisements
 
-actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier =
+public actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier =
     PebbleBleIdentifier(macAddress = toString())
 
-actual fun configureKableCentral(stateRestoration: Boolean) {
+internal actual fun configureKableCentral(stateRestoration: Boolean) {
     // No-op: CoreBluetooth state restoration is iOS-only.
 }

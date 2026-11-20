@@ -30,12 +30,12 @@ import kotlin.uuid.Uuid
  * Built-in calendar plugin. One instance per upcoming event across the user's enabled calendars,
  * soonest first, so a watchface binding `instanceId` "0" always has the next event.
  */
-class CalendarPlugin(
+internal class CalendarPlugin(
     private val systemCalendar: SystemCalendar,
     private val calendarDao: CalendarDao,
     private val timeProvider: TimeProvider,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_CALENDAR_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.CALENDAR
     override val name: String = "Calendar"
     override val description: String = "Upcoming events from the phone's calendars, soonest first."
 
@@ -173,14 +173,14 @@ class CalendarPlugin(
     private inline fun <reified T> encode(value: T): JsonElement = Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "calendar"
-        const val ITEM_EVENT = "event"
-        const val PROPERTY_LOCATION = "location"
-        const val PROPERTY_DESCRIPTION = "description"
-        const val PROPERTY_STARTS_AT = "starts_at"
-        const val PROPERTY_ENDS_AT = "ends_at"
-        const val PROPERTY_ALL_DAY = "all_day"
-        const val PROPERTY_CALENDAR = "calendar"
+        const val CATEGORY: String = "calendar"
+        const val ITEM_EVENT: String = "event"
+        const val PROPERTY_LOCATION: String = "location"
+        const val PROPERTY_DESCRIPTION: String = "description"
+        const val PROPERTY_STARTS_AT: String = "starts_at"
+        const val PROPERTY_ENDS_AT: String = "ends_at"
+        const val PROPERTY_ALL_DAY: String = "all_day"
+        const val PROPERTY_CALENDAR: String = "calendar"
 
         private const val ALL_DAY_LABEL = "All day"
         private const val MAX_EVENTS = 10
@@ -189,9 +189,6 @@ class CalendarPlugin(
         private val CHANGE_DEBOUNCE = 5.seconds
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_CALENDAR_UUID: Uuid = Uuid.parse("00000000-0000-0000-0001-000000000004")
     }
 }
 

@@ -44,6 +44,7 @@ import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.launchIn
@@ -53,7 +54,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class NotificationHandler(
+internal class NotificationHandler(
     private val notificationProcessors: Set<NotificationProcessor>,
     private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -71,11 +72,11 @@ class NotificationHandler(
 
     private val verboseLogging: Boolean = true
     private val inflightNotifications = ConcurrentHashMap<String, LibPebbleNotification>()
-    val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
-    val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
+    val notificationSendQueue: Channel<LibPebbleNotification> = Channel<LibPebbleNotification>(Channel.BUFFERED)
+    val notificationDeleteQueue: Channel<Uuid> = Channel<Uuid>(Channel.BUFFERED)
     private val notificationsToProcess = Channel<NotificationToProcess>(Channel.BUFFERED)
     private val _notificationServiceBound = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val notificationServiceBound = _notificationServiceBound.asSharedFlow()
+    val notificationServiceBound: SharedFlow<Unit> = _notificationServiceBound.asSharedFlow()
     private var activeNotifications: () -> List<StatusBarNotification>? = { null }
 
     private data class NotificationToProcess(
@@ -110,7 +111,7 @@ class NotificationHandler(
     }
 
     private val _channelChanged = MutableSharedFlow<String>()
-    val channelChanged = _channelChanged.asSharedFlow()
+    val channelChanged: SharedFlow<String> = _channelChanged.asSharedFlow()
 
     fun onChannelChanged(packageName: String) {
         libPebbleCoroutineScope.launch {
@@ -550,26 +551,26 @@ internal fun summaryStillNeeded(
     return active.none { it.groupKey == summaryGroupKey && !it.isGroupSummary }
 }
 
-fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
-fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
-fun RemoteInput.dumpDataOnly(): Boolean? {
+internal fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
+internal fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
+internal fun RemoteInput.dumpDataOnly(): Boolean? {
     return isDataOnly
 }
 
-fun Person.dump(privateLogger: PrivateLogger): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+internal fun Person.dump(privateLogger: PrivateLogger): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
     "[Person: ${privateLogger.obfuscate(name)} / ${privateLogger.obfuscate(uri)} / $key]"
 } else ""
 
-fun Notification.people(): List<Person> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+internal fun Notification.people(): List<Person> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
     extras.getParcelableArrayList<Person>("android.people.list")?.toList() ?: emptyList()
 } else emptyList()
 
-fun Notification.vibrationPattern(): List<UInt>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+internal fun Notification.vibrationPattern(): List<UInt>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
     extras.getIntArray("android.vibrationPattern.list")?.toList()?.map(Int::toUInt)
 } else null
 
-fun Notification.messagingUser(): Person? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+internal fun Notification.messagingUser(): Person? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
     extras.getParcelable("android.messagingUser")
 } else null
 
-fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)
+internal fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)

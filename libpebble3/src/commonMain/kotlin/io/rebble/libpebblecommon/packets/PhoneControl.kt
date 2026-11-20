@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 
 
-sealed class PhoneControl(message: Message, cookie: UInt) : PebblePacket(endpoint) {
+internal sealed class PhoneControl(message: Message, cookie: UInt) : PebblePacket(endpoint) {
     enum class Message(val value: UByte) {
         Unknown(0u),
         Answer(0x01u),
@@ -20,19 +20,19 @@ sealed class PhoneControl(message: Message, cookie: UInt) : PebblePacket(endpoin
         End(0x09u)
     }
     companion object {
-        val endpoint = ProtocolEndpoint.PHONE_CONTROL
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.PHONE_CONTROL
     }
 
-    val command = SUByte(m, message.value)
-    val cookie = SUInt(m, cookie)
+    val command: SUByte = SUByte(m, message.value)
+    val cookie: SUInt = SUInt(m, cookie)
 
     class IncomingCall(cookie: UInt = 0u, callerNumber: String = "", callerName: String = "") : PhoneControl(Message.IncomingCall, cookie) {
-        val callerNumber = SString(m, callerNumber)
-        val callerName = SString(m, callerName)
+        val callerNumber: SString = SString(m, callerNumber)
+        val callerName: SString = SString(m, callerName)
     }
     class MissedCall(cookie: UInt = 0u, callerNumber: String = "", callerName: String = "") : PhoneControl(Message.MissedCall, cookie) {
-        val callerNumber = SString(m, callerNumber)
-        val callerName = SString(m, callerName)
+        val callerNumber: SString = SString(m, callerNumber)
+        val callerName: SString = SString(m, callerName)
     }
     class Ring(cookie: UInt = 0u) : PhoneControl(Message.Ring, cookie)
     class Start(cookie: UInt = 0u) : PhoneControl(Message.Start, cookie)
@@ -42,7 +42,7 @@ sealed class PhoneControl(message: Message, cookie: UInt) : PebblePacket(endpoin
     class Hangup(cookie: UInt = 0u) : PhoneControl(Message.Hangup, cookie)
 }
 
-fun phoneControlPacketsRegister() {
+internal fun phoneControlPacketsRegister() {
     PacketRegistry.register(
         PhoneControl.endpoint,
         PhoneControl.Message.Answer.value,

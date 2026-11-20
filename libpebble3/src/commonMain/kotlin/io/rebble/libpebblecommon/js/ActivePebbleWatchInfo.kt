@@ -4,7 +4,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ActivePebbleWatchInfo(
+internal data class ActivePebbleWatchInfo(
         val platform: String,
         val model: String,
         val language: String,
@@ -19,7 +19,7 @@ data class ActivePebbleWatchInfo(
     )
 }
 
-fun ActivePebbleWatchInfo.Companion.fromWatchInfo(watchInfo: WatchInfo): ActivePebbleWatchInfo {
+internal fun ActivePebbleWatchInfo.Companion.fromWatchInfo(watchInfo: WatchInfo): ActivePebbleWatchInfo {
     val fwVersion = watchInfo.runningFwVersion
     return ActivePebbleWatchInfo(
             platform = watchInfo.platform.watchType.codename,

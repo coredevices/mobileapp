@@ -35,10 +35,10 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import kotlin.uuid.Uuid
 
-class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKoinComponent {
-    companion object {
+public class LibPebbleNotificationListener internal constructor() : NotificationListenerService(), LibPebbleKoinComponent {
+    public companion object {
         private val logger = Logger.withTag("LibPebbleNotificationListener")
-        fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
+        public fun componentName(context: Context): ComponentName = ComponentName(context, LibPebbleNotificationListener::class.java)
     }
 
     private var warnedAboutNotificationchannelsPermission = false
@@ -60,7 +60,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     private val privateLogger: PrivateLogger by inject()
 
-    fun cancelNotification(itemId: Uuid) {
+    internal fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return
         cancelNotification(sbn.key)
     }
@@ -128,7 +128,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         val channels: MutableList<ChannelItem>,
     )
 
-    fun getChannelsForApp(packageName: String): List<ChannelGroup> {
+    internal fun getChannelsForApp(packageName: String): List<ChannelGroup> {
         try {
             val user = Process.myUserHandle()
             val groups = getNotificationChannelGroups(packageName, user)
@@ -180,7 +180,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     /** Whether Android found something like a one-time code in [key]'s notification. */
-    fun hasSensitiveContent(key: String): Boolean {
+    internal fun hasSensitiveContent(key: String): Boolean {
         val method = hasSensitiveContentMethod ?: return false
         val ranking = Ranking()
         return runCatching { currentRanking?.getRanking(key, ranking) == true && method.invoke(ranking) == true }
@@ -249,7 +249,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         }
     }
 
-    fun isNotificationFilteredByDoNotDisturb(statusBarNotification: StatusBarNotification): Boolean {
+    internal fun isNotificationFilteredByDoNotDisturb(statusBarNotification: StatusBarNotification): Boolean {
         val rankingMap = getCurrentRanking() ?: return false
 
         val ranking = Ranking()
@@ -257,7 +257,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
                 !ranking.matchesInterruptionFilter()
     }
 
-    fun isBindingAlive(): Boolean = try {
+    internal fun isBindingAlive(): Boolean = try {
         getActiveNotifications()
         true
     } catch (e: SecurityException) {

@@ -4,8 +4,8 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.services.WatchInfo
 
-class CompanionAppDevice(
-    val identifier: PebbleIdentifier,
-    val watchInfo: WatchInfo,
+public class CompanionAppDevice internal constructor(
+    internal val identifier: PebbleIdentifier,
+    public val watchInfo: WatchInfo,
     appMessages: ConnectedPebble.AppMessages,
 ): ConnectedPebble.AppMessages by appMessages

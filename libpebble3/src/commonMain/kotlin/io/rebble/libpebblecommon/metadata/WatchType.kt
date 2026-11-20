@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.metadata
 
-enum class WatchType(val codename: String) {
+public enum class WatchType(public val codename: String) {
     APLITE("aplite"),
     BASALT("basalt"),
     CHALK("chalk"),
@@ -10,7 +10,7 @@ enum class WatchType(val codename: String) {
     GABBRO("gabbro"),
     ;
 
-    fun getCompatibleAppVariants(): List<WatchType> {
+    public fun getCompatibleAppVariants(): List<WatchType> {
         return when (this) {
             APLITE -> listOf(APLITE)
             BASALT -> listOf(BASALT, APLITE)
@@ -31,7 +31,7 @@ enum class WatchType(val codename: String) {
      * Get the most compatible variant for this WatchType
      * @param availableAppVariants List of variants, from [io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo.targetPlatforms]
      */
-    fun getBestVariant(availableAppVariants: List<String>): WatchType? {
+    public fun getBestVariant(availableAppVariants: List<String>): WatchType? {
         val compatibleVariants = getCompatibleAppVariants()
 
         return compatibleVariants.firstOrNull() { variant ->
@@ -39,14 +39,14 @@ enum class WatchType(val codename: String) {
         }
     }
 
-    companion object {
-        fun fromCodename(codename: String): WatchType? {
+    public companion object {
+        public fun fromCodename(codename: String): WatchType? {
             return entries.firstOrNull { it.codename == codename }
         }
     }
 }
 
-fun WatchType.isColor(): Boolean = when (this) {
+internal fun WatchType.isColor(): Boolean = when (this) {
     WatchType.APLITE -> false
     WatchType.BASALT -> true
     WatchType.CHALK -> true
@@ -56,7 +56,7 @@ fun WatchType.isColor(): Boolean = when (this) {
     WatchType.GABBRO -> true
 }
 
-fun WatchType.supportsBtClassic(): Boolean = when (this) {
+internal fun WatchType.supportsBtClassic(): Boolean = when (this) {
     WatchType.APLITE -> true
     WatchType.BASALT -> true
     WatchType.CHALK -> true

@@ -56,7 +56,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-data class BlobDbDaos(
+internal data class BlobDbDaos(
     private val lockerEntryDao: LockerEntryRealDao,
     private val notificationsDao: TimelineNotificationRealDao,
     private val timelinePinDao: TimelinePinRealDao,
@@ -91,19 +91,19 @@ data class BlobDbDaos(
     fun getNotificationRuleDao(): io.rebble.libpebblecommon.database.dao.NotificationRuleDao = notificationRuleDao
 }
 
-interface TimeProvider {
+internal interface TimeProvider {
     fun now(): Instant
 }
 
-class RealTimeProvider : TimeProvider {
+internal class RealTimeProvider : TimeProvider {
     override fun now(): Instant = Clock.System.now()
 }
 
 @Serializable
-data class DevicesWhichHaveSyncedSettings(val identifiers: Set<String>)
+internal data class DevicesWhichHaveSyncedSettings(val identifiers: Set<String>)
 
 @OptIn(ExperimentalSettingsApi::class)
-class BlobDB(
+internal class BlobDB(
     private val watchScope: ConnectionCoroutineScope,
     private val blobDBService: BlobDBService,
     private val identifier: PebbleIdentifier,

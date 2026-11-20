@@ -17,7 +17,7 @@ import kotlin.uuid.Uuid
 
 /** What a plugin passes to `Pebble.readSource` / `Pebble.subscribeSource`. */
 @Serializable
-data class SourceRequest(
+internal data class SourceRequest(
     val category: String,
     val item: String,
     val plugin: String? = null,
@@ -36,7 +36,7 @@ data class SourceRequest(
  * their callers as the plugin itself holds: `Notifications/<package>` if that's all it declared.
  * That holds along a chain (A reads B reads C), so nothing has to be passed through at runtime.
  */
-class PluginSources(
+internal class PluginSources(
     private val registry: PluginRegistry,
     private val subjectOf: suspend (Uuid) -> PermissionSubject?,
     /** What a plugin declared under a permission (`Notifications/<package>`), else the permission itself. */

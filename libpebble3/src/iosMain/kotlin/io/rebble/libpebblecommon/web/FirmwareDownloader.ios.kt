@@ -8,7 +8,7 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 
-actual fun getFirmwareDownloadDirectory(context: AppContext): Path {
+internal actual fun getFirmwareDownloadDirectory(context: AppContext): Path {
     val fileManager = NSFileManager.defaultManager
     val cachesDirectory = fileManager.URLsForDirectory(NSCachesDirectory, inDomains = NSUserDomainMask).firstOrNull()
             as? NSURL

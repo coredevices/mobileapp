@@ -10,18 +10,18 @@ import kotlinx.coroutines.flow.Flow
  *
  * Payloads are opaque JSON; only the script and its own page need to agree on them.
  */
-interface ConfigMessageTarget {
+public interface ConfigMessageTarget {
     /** Messages the script pushes at the page, unprompted. */
-    val configMessages: Flow<String>
+    public val configMessages: Flow<String>
 
     /**
      * A config dialogue is stateful across messages, so a script that is otherwise started per
      * request stays up between [openConfigSession] and [closeConfigSession].
      */
-    suspend fun openConfigSession() {}
+    public suspend fun openConfigSession() {}
 
-    suspend fun closeConfigSession() {}
+    public suspend fun closeConfigSession() {}
 
     /** Deliver a message from the page. Returns the script's reply, or null if it didn't answer. */
-    suspend fun onConfigMessage(json: String): String?
+    public suspend fun onConfigMessage(json: String): String?
 }

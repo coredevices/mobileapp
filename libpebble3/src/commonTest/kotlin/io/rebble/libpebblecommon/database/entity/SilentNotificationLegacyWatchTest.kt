@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
@@ -43,7 +43,7 @@ class SilentNotificationLegacyWatchTest {
         timestamp = Instant.fromEpochSeconds(1757376000),
     ) {
         itemID = Uuid.random()
-        layout = TimelineItem.Layout.GenericNotification
+        layout = TimelineItemLayout.GenericNotification
         if (silent) flags { silent() }
         attributes { title { "Hi" } }
     }

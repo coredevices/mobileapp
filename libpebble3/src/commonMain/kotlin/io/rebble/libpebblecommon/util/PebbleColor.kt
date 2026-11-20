@@ -7,14 +7,14 @@ import kotlinx.serialization.Serializable
  * Represents an ARGB8888 color, which is converted to an ARGB2222 color for the Pebble
  */
 @Serializable
-data class PebbleColor(
+public data class PebbleColor internal constructor(
     val alpha: UByte,
     val red: UByte,
     val green: UByte,
     val blue: UByte
 )
 
-fun PebbleColor.toProtocolNumber() =
+internal fun PebbleColor.toProtocolNumber(): UByte =
     (((alpha / 85u) shl 6) or
     ((red / 85u) shl 4) or
     ((green / 85u) shl 2) or
@@ -23,7 +23,7 @@ fun PebbleColor.toProtocolNumber() =
 /**
  * Converts a 32-bit ARGB8888 integer color to a PebbleColor
  */
-fun Int.toPebbleColor(): PebbleColor {
+internal fun Int.toPebbleColor(): PebbleColor {
     val a = (this shr 24) and 0xFF
     val r = (this shr 16) and 0xFF
     val g = (this shr 8) and 0xFF
@@ -37,7 +37,7 @@ fun Int.toPebbleColor(): PebbleColor {
     )
 }
 
-fun UByte.toPebbleColor(): PebbleColor {
+internal fun UByte.toPebbleColor(): PebbleColor {
     val a = (this.toUInt() shr 6) and 3u
     val r = (this.toUInt() shr 4) and 3u
     val g = (this.toUInt() shr 2) and 3u
@@ -51,7 +51,7 @@ fun UByte.toPebbleColor(): PebbleColor {
     )
 }
 
-fun PebbleColor.asTimelineColor(): TimelineColor {
+internal fun PebbleColor.asTimelineColor(): TimelineColor {
     val r = (red / 85u) * 85u
     val g = (green / 85u) * 85u
     val b = (blue / 85u) * 85u

@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
-class LibPebbleConfigHolder(
+internal class LibPebbleConfigHolder(
     private val defaultValue: LibPebbleConfig,
     private val settings: Settings,
     private val json: Json,
@@ -49,18 +49,18 @@ class LibPebbleConfigHolder(
 private const val SETTINGS_KEY = "libpebble.settings"
 
 @Serializable
-data class LibPebbleConfig(
+public data class LibPebbleConfig(
     val bleConfig: BleConfig = BleConfig(),
     val watchConfig: WatchConfig = WatchConfig(),
     val notificationConfig: NotificationConfig = NotificationConfig(),
 )
 
-class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
-    val value get() = flow.value
+public class LibPebbleConfigFlow internal constructor(public val flow: StateFlow<LibPebbleConfig>) {
+    public val value: LibPebbleConfig get() = flow.value
 }
 
 @Serializable
-data class WatchConfig(
+public data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimitV2: Int = 50,
     val proactivelyDownloadAppUpdates: Boolean = true,
@@ -111,15 +111,15 @@ data class WatchConfig(
     val notificationWindowState: Boolean = false,
 )
 
-class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+internal class WatchConfigFlow internal constructor(val flow: StateFlow<LibPebbleConfig>) {
     val value: WatchConfig get() = flow.value.watchConfig
 }
 
 @VisibleForTesting
-fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watchConfig = this)))
+internal fun WatchConfig.asFlow(): WatchConfigFlow = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watchConfig = this)))
 
 @Serializable
-data class BleConfig(
+public data class BleConfig(
     @SerialName("reversedPpog")
     val legacyReversedPPoG: Boolean = false,
     /**
@@ -151,15 +151,15 @@ data class BleConfig(
     val filterScanResultsByUuid: Boolean = true,
 )
 
-class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+internal class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
     val value: BleConfig get() = flow.value.bleConfig
 }
 
 @VisibleForTesting
-fun BleConfig.asFlow() = BleConfigFlow(MutableStateFlow(LibPebbleConfig(bleConfig = this)))
+internal fun BleConfig.asFlow(): BleConfigFlow = BleConfigFlow(MutableStateFlow(LibPebbleConfig(bleConfig = this)))
 
 @Serializable
-data class NotificationConfig(
+public data class NotificationConfig(
     val dumpNotificationContent: Boolean = true,
     val obfuscateContent: Boolean = true,
     val sendLocalOnlyNotifications: Boolean = false,
@@ -195,9 +195,9 @@ data class NotificationConfig(
     val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
 )
 
-class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+internal class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
     val value: NotificationConfig get() = flow.value.notificationConfig
 }
 
 @VisibleForTesting
-fun NotificationConfig.asFlow() = NotificationConfigFlow(MutableStateFlow(LibPebbleConfig(notificationConfig = this)))
+internal fun NotificationConfig.asFlow(): NotificationConfigFlow = NotificationConfigFlow(MutableStateFlow(LibPebbleConfig(notificationConfig = this)))

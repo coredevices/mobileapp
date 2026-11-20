@@ -8,92 +8,92 @@ import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
 
-sealed class IncomingVoicePacket() : PebblePacket(ProtocolEndpoint.VOICE_CONTROL) {
+internal sealed class IncomingVoicePacket() : PebblePacket(ProtocolEndpoint.VOICE_CONTROL) {
     /**
      * Voice command. See [VoiceCommand].
      */
-    val command = SUByte(m)
-    val flags = SUInt(m, endianness = Endian.Little)
+    val command: SUByte = SUByte(m)
+    val flags: SUInt = SUInt(m, endianness = Endian.Little)
 }
-sealed class OutgoingVoicePacket(command: VoiceCommand) :
+internal sealed class OutgoingVoicePacket(command: VoiceCommand) :
     PebblePacket(ProtocolEndpoint.VOICE_CONTROL) {
     /**
      * Voice command. See [VoiceCommand].
      */
-    val command = SUByte(m, command.value)
-    val flags = SUInt(m, endianness = Endian.Little)
+    val command: SUByte = SUByte(m, command.value)
+    val flags: SUInt = SUInt(m, endianness = Endian.Little)
 }
 
-enum class VoiceCommand(val value: UByte) {
+internal enum class VoiceCommand(val value: UByte) {
     SessionSetup(0x01u),
     DictationResult(0x02u),
 }
 
-class Word(confidence: UByte = 0u, data: String = "") : StructMappable() {
+internal class Word internal constructor(confidence: UByte = 0u, data: String = "") : StructMappable() {
     private val utf8Size = data.encodeToByteArray().size.coerceAtMost(UShort.MAX_VALUE.toInt())
-    val confidence = SUByte(m, confidence)
-    val length = SUShort(m, utf8Size.toUShort(), endianness = Endian.Little)
-    val data = SFixedString(m, utf8Size, data)
+    internal val confidence: SUByte = SUByte(m, confidence)
+    internal val length: SUShort = SUShort(m, utf8Size.toUShort(), endianness = Endian.Little)
+    internal val data: SFixedString = SFixedString(m, utf8Size, data)
     init {
         this.data.linkWithSize(length)
     }
 }
 
-class Sentence(words: List<Word> = emptyList()) : StructMappable() {
-    val wordCount = SUShort(m, words.size.toUShort(), endianness = Endian.Little)
-    val words = SFixedList(m, words.size, words) { Word() }
+internal class Sentence internal constructor(words: List<Word> = emptyList()) : StructMappable() {
+    internal val wordCount: SUShort = SUShort(m, words.size.toUShort(), endianness = Endian.Little)
+    internal val words: SFixedList<Word> = SFixedList(m, words.size, words) { Word() }
     init {
         this.words.linkWithCount(wordCount)
     }
 }
 
-enum class VoiceAttributeType(val value: UByte) {
+internal enum class VoiceAttributeType(val value: UByte) {
     SpeexEncoderInfo(0x01u),
     Transcription(0x02u),
     AppUuid(0x03u),
 }
 
-open class VoiceAttribute(id: UByte = 0u, content: StructMappable? = null) : StructMappable() {
-    val id = SUByte(m, id)
-    val length = SUShort(m, content?.size?.toUShort() ?: 0u, endianness = Endian.Little)
-    val content = SBytes(m, content?.size ?: 0, content?.toBytes() ?: ubyteArrayOf())
+public open class VoiceAttribute internal constructor(id: UByte = 0u, content: StructMappable? = null) : StructMappable() {
+    internal val id: SUByte = SUByte(m, id)
+    internal val length: SUShort = SUShort(m, content?.size?.toUShort() ?: 0u, endianness = Endian.Little)
+    internal val content: SBytes = SBytes(m, content?.size ?: 0, content?.toBytes() ?: ubyteArrayOf())
     init {
         this.content.linkWithSize(length)
     }
 
-    class SpeexEncoderInfo : StructMappable() {
-        val version = SFixedString(m, 20)
-        val sampleRate = SUInt(m, endianness = Endian.Little)
-        val bitRate = SUShort(m, endianness = Endian.Little)
-        val bitstreamVersion = SUByte(m)
-        val frameSize = SUShort(m, endianness = Endian.Little)
+    internal class SpeexEncoderInfo internal constructor() : StructMappable() {
+        internal val version: SFixedString = SFixedString(m, 20)
+        val sampleRate: SUInt = SUInt(m, endianness = Endian.Little)
+        internal val bitRate: SUShort = SUShort(m, endianness = Endian.Little)
+        internal val bitstreamVersion: SUByte = SUByte(m)
+        internal val frameSize: SUShort = SUShort(m, endianness = Endian.Little)
     }
 
-    class Transcription(
+    internal class Transcription internal constructor(
         type: UByte = 0x1u,
         sentences: List<Sentence> = emptyList()
     ) : StructMappable() {
-        val type = SUByte(m, type) // always 0x1? (sentence list)
-        val count = SUByte(m, sentences.size.toUByte())
-        val sentences = SFixedList(m, sentences.size, sentences) { Sentence() }
+        internal val type: SUByte = SUByte(m, type) // always 0x1? (sentence list)
+        internal val count: SUByte = SUByte(m, sentences.size.toUByte())
+        internal val sentences: SFixedList<Sentence> = SFixedList(m, sentences.size, sentences) { Sentence() }
         init {
             this.sentences.linkWithCount(count)
         }
     }
 
-    class AppUuid : StructMappable() {
-        val uuid = SUUID(m)
+    internal class AppUuid internal constructor() : StructMappable() {
+        internal val uuid: SUUID = SUUID(m)
     }
 }
 
 /**
  * Voice session setup command. Little endian.
  */
-class SessionSetupCommand : IncomingVoicePacket() {
-    val sessionType = SUByte(m)
-    val sessionId = SUShort(m, endianness = Endian.Little)
-    val attributeCount = SUByte(m)
-    val attributes = SFixedList(m, 0) {
+internal class SessionSetupCommand : IncomingVoicePacket() {
+    val sessionType: SUByte = SUByte(m)
+    val sessionId: SUShort = SUShort(m, endianness = Endian.Little)
+    val attributeCount: SUByte = SUByte(m)
+    val attributes: SFixedList<VoiceAttribute> = SFixedList(m, 0) {
         VoiceAttribute()
     }
     init {
@@ -101,14 +101,14 @@ class SessionSetupCommand : IncomingVoicePacket() {
     }
 }
 
-enum class SessionType(val value: UByte) {
+internal enum class SessionType(val value: UByte) {
     Dictation(0x01u),
     Command(0x02u),
     /** Live audio for an app's companion; no transcription, no result. */
     AudioStream(0x04u),
 }
 
-enum class Result(val value: UByte) {
+internal enum class Result(val value: UByte) {
     Success(0x0u),
     FailServiceUnavailable(0x1u),
     FailTimeout(0x2u),
@@ -118,29 +118,29 @@ enum class Result(val value: UByte) {
     FailInvalidMessage(0x6u),
 }
 
-class SessionSetupResult(sessionType: SessionType, result: Result) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
-    val sessionType = SUByte(m, sessionType.value)
-    val result = SUByte(m, result.value)
+internal class SessionSetupResult(sessionType: SessionType, result: Result) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
+    val sessionType: SUByte = SUByte(m, sessionType.value)
+    val result: SUByte = SUByte(m, result.value)
 }
 
 /**
  * [SessionSetupResult] for [SessionType.AudioStream]. Carries the audio endpoint session it
  * answers, so the watch can drop a late answer for a stream it already tore down.
  */
-class AudioStreamSetupResult(result: Result, sessionId: UShort) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
-    val sessionType = SUByte(m, SessionType.AudioStream.value)
-    val result = SUByte(m, result.value)
-    val sessionId = SUShort(m, sessionId, endianness = Endian.Little)
+internal class AudioStreamSetupResult(result: Result, sessionId: UShort) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
+    val sessionType: SUByte = SUByte(m, SessionType.AudioStream.value)
+    val result: SUByte = SUByte(m, result.value)
+    val sessionId: SUShort = SUShort(m, sessionId, endianness = Endian.Little)
 }
 
-class DictationResult(sessionId: UShort, result: Result, attributes: List<StructMappable>) : OutgoingVoicePacket(VoiceCommand.DictationResult) {
-    val sessionId = SUShort(m, sessionId, endianness = Endian.Little)
-    val result = SUByte(m, result.value)
-    val attributeCount = SUByte(m, attributes.size.toUByte())
-    val attributes = SFixedList(m, attributes.size, attributes) { VoiceAttribute() }
+internal class DictationResult(sessionId: UShort, result: Result, attributes: List<StructMappable>) : OutgoingVoicePacket(VoiceCommand.DictationResult) {
+    val sessionId: SUShort = SUShort(m, sessionId, endianness = Endian.Little)
+    val result: SUByte = SUByte(m, result.value)
+    val attributeCount: SUByte = SUByte(m, attributes.size.toUByte())
+    val attributes: SFixedList<StructMappable> = SFixedList(m, attributes.size, attributes) { VoiceAttribute() }
 }
 
-fun voicePacketsRegister() {
+internal fun voicePacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.VOICE_CONTROL, VoiceCommand.SessionSetup.value) {
         SessionSetupCommand()
     }

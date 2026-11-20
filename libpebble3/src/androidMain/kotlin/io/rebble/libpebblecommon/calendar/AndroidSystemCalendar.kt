@@ -317,7 +317,7 @@ private fun resolveReminders(eventId: Long, contentResolver: ContentResolver): L
 
 private val logger = Logger.withTag("AndroidSystemCalendar")
 
-class AndroidSystemCalendar(
+internal class AndroidSystemCalendar(
     private val contentResolver: ContentResolver,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,

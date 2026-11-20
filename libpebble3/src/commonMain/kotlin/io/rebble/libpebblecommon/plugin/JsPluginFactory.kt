@@ -13,7 +13,7 @@ import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
 import kotlin.uuid.Uuid
 
-class JsPluginFactory(
+internal class JsPluginFactory(
     private val appContext: AppContext,
     private val scope: LibPebbleCoroutineScope,
     private val httpClient: HttpClient,

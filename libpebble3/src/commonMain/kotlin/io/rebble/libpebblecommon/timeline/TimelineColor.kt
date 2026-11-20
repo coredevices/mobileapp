@@ -1,11 +1,12 @@
 package io.rebble.libpebblecommon.timeline
 
+import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.toPebbleColor
 
-enum class TimelineColor(
-    val color: Int,
-    val identifier: String,
-    val displayName: String,
+public enum class TimelineColor(
+    internal val color: Int,
+    public val identifier: String,
+    public val displayName: String,
 ) {
     MintGreen(0xAAFFAA, "MintGreen", "Mint Green"),
     Melon(0xFFAAAA, "Melon", "Melon"),
@@ -73,11 +74,11 @@ enum class TimelineColor(
     MediumSpringGreen(0x00FFAA, "MediumSpringGreen", "Medium Spring Green"),
     ;
 
-    companion object {
-        fun findByName(name: String?): TimelineColor? = entries.find { it.name.equals(name, ignoreCase = true) }
+    public companion object {
+        public fun findByName(name: String?): TimelineColor? = entries.find { it.name.equals(name, ignoreCase = true) }
     }
 }
 
-fun TimelineColor.argbColor() = color or 0xFF000000.toInt()
+public fun TimelineColor.argbColor(): Int = color or 0xFF000000.toInt()
 
-fun TimelineColor.toPebbleColor() = argbColor().toPebbleColor()
+public fun TimelineColor.toPebbleColor(): PebbleColor = argbColor().toPebbleColor()

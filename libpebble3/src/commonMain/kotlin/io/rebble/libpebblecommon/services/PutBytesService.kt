@@ -19,12 +19,12 @@ import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-class PutBytesService(
+internal class PutBytesService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
-    val receivedMessages = Channel<PutBytesResponse>(Channel.BUFFERED)
-    val progressUpdates = Channel<PutBytesProgress>(Channel.BUFFERED)
+    val receivedMessages: Channel<PutBytesResponse> = Channel<PutBytesResponse>(Channel.BUFFERED)
+    val progressUpdates: Channel<PutBytesService.PutBytesProgress> = Channel<PutBytesProgress>(Channel.BUFFERED)
 
     private val logger = Logger.withTag("PutBytesService")
 

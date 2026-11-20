@@ -2,16 +2,16 @@ package io.rebble.libpebblecommon.voice
 
 import io.rebble.libpebblecommon.packets.Result
 
-sealed class TranscriptionResult {
-    data class Success(
+public sealed class TranscriptionResult {
+    public data class Success(
         val words: List<TranscriptionWord>,
     ) : TranscriptionResult()
 
-    data object Failed : TranscriptionResult()
+    public data object Failed : TranscriptionResult()
 
-    data class ConnectionError(val message: String) : TranscriptionResult()
-    data class Error(val message: String) : TranscriptionResult()
-    data object Disabled : TranscriptionResult()
+    public data class ConnectionError(val message: String) : TranscriptionResult()
+    public data class Error(val message: String) : TranscriptionResult()
+    public data object Disabled : TranscriptionResult()
 }
 
 internal fun TranscriptionResult.toProtocol(): Result {

@@ -24,21 +24,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-data class BleScanResult(
+public data class BleScanResult(
     val identifier: PebbleBleIdentifier,
     val name: String,
     val rssi: Int,
     val manufacturerData: ManufacturerData,
 )
 
-data class PebbleScanResult(
+internal data class PebbleScanResult(
     val identifier: PebbleIdentifier,
     val name: String,
     val rssi: Int,
     val leScanRecord: PebbleLeScanRecord?,
 )
 
-class RealScanning(
+internal class RealScanning(
     private val watchConnector: WatchConnector,
     private val bleScanner: BleScanner,
     private val classicScanner: ClassicScanner,
@@ -173,9 +173,9 @@ class RealScanning(
     }
 
     companion object {
-        val PEBBLE_VENDOR_ID = byteArrayOf(0x54, 0x01).getShortAt(0).toInt()
-        val CORE_VENDOR_ID = byteArrayOf(0xEA.toByte(), 0x0E).getShortAt(0).toInt()
-        val VENDOR_IDS = listOf(PEBBLE_VENDOR_ID, CORE_VENDOR_ID)
+        val PEBBLE_VENDOR_ID: Int = byteArrayOf(0x54, 0x01).getShortAt(0).toInt()
+        val CORE_VENDOR_ID: Int = byteArrayOf(0xEA.toByte(), 0x0E).getShortAt(0).toInt()
+        val VENDOR_IDS: List<Int> = listOf(PEBBLE_VENDOR_ID, CORE_VENDOR_ID)
         private val BLE_SCANNING_TIMEOUT = 30.seconds
         private val CLASSIC_SCANNING_TIMEOUT = 30.seconds
     }

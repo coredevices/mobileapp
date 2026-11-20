@@ -4,7 +4,7 @@ import io.ktor.http.Url
 import io.rebble.libpebblecommon.permissions.internetKey
 
 /** Maps a URL to the permission needed to reach it: `LocalNetwork` for the LAN, else `Internet/<domain>`. */
-object PluginNetworkPolicy {
+internal object PluginNetworkPolicy {
     /** Null if [url] can't be requested at all. */
     fun permissionFor(url: String): String? {
         val host = hostOf(url) ?: return null
@@ -102,7 +102,7 @@ object PluginNetworkPolicy {
 
 private enum class Reach { LocalNetwork, Internet }
 
-sealed interface PluginNetworkVerdict {
+internal sealed interface PluginNetworkVerdict {
     object Allowed : PluginNetworkVerdict
     data class Denied(val reason: String) : PluginNetworkVerdict
 }

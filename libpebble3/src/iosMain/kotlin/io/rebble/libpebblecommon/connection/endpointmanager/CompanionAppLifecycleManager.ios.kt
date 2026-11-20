@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 
-actual fun createPlatformSpecificCompanionAppControl(
+internal actual fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
     appInfo: PbwAppInfo,
     pkjsRunning: Boolean,

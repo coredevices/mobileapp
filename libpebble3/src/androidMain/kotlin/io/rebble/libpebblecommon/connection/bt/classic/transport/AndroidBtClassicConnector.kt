@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.UUID
 
-class AndroidBtClassicConnector(
+internal class AndroidBtClassicConnector(
     private val identifier: PebbleBtClassicIdentifier,
     private val pairing: PebblePairing,
     private val pebbleProtocolStreams: PebbleProtocolStreams,

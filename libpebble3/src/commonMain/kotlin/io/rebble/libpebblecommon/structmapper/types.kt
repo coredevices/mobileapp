@@ -10,27 +10,27 @@ import kotlin.uuid.Uuid
 /**
  * Represents anything mappable to a struct via a StructMapper
  */
-abstract class Mappable(val endianness: Endian = Endian.Unspecified) {
+public abstract class Mappable internal constructor(public val endianness: Endian = Endian.Unspecified) {
     /**
      * Serializes/packs the mappable to its raw equivalent
      * @return The serialized mappable
      */
-    abstract fun toBytes(): UByteArray
+    public abstract fun toBytes(): UByteArray
 
     /**
      * Deserializes/unpacks raw data into the mappable
      * This will increment the seek position on the DataBuffer
      * @param bytes the data to read, seek position is incremented
      */
-    abstract fun fromBytes(bytes: DataBuffer)
+    public abstract fun fromBytes(bytes: DataBuffer)
 
     /**
      * The projected size in bytes of the raw data returned by [toBytes]
      */
-    abstract val size: Int
+    public abstract val size: Int
 }
 
-interface NumberStructElement {
+internal interface NumberStructElement {
     val valueNumber: Long
 }
 
@@ -38,7 +38,7 @@ interface NumberStructElement {
  * Represents a property mappable to a struct via a StructMapper
  * @param endianness represents endianness on serialization
  */
-open class StructElement<T>(
+internal open class StructElement<T> internal constructor(
     private val putType: (DataBuffer, StructElement<T>) -> Unit,
     private val getType: (DataBuffer, StructElement<T>) -> Unit,
     mapper: StructMapper,
@@ -47,7 +47,7 @@ open class StructElement<T>(
     endianness: Endian = Endian.Unspecified
 ) : Mappable(endianness) {
 
-    override var size = size
+    override var size: Int = size
         get() {
             return linkedSize?.valueNumber?.toInt() ?: field
         }
@@ -113,7 +113,7 @@ open class StructElement<T>(
     }
 }
 
-class SUByte(mapper: StructMapper, default: UByte = 0u) :
+internal class SUByte internal constructor(mapper: StructMapper, default: UByte = 0u) :
     StructElement<UByte>(
         { buf, el -> buf.putUByte(el.get()) },
         { buf, el -> el.set(buf.getUByte()) },
@@ -125,7 +125,7 @@ class SUByte(mapper: StructMapper, default: UByte = 0u) :
         get() = get().toLong()
 }
 
-class SByte(mapper: StructMapper, default: Byte = 0) :
+internal class SByte(mapper: StructMapper, default: Byte = 0) :
     StructElement<Byte>(
         { buf, el -> buf.putByte(el.get()) },
         { buf, el -> el.set(buf.getByte()) },
@@ -137,7 +137,7 @@ class SByte(mapper: StructMapper, default: Byte = 0) :
         get() = get().toLong()
 }
 
-class SUInt(mapper: StructMapper, default: UInt = 0u, endianness: Endian = Endian.Unspecified) :
+internal class SUInt internal constructor(mapper: StructMapper, default: UInt = 0u, endianness: Endian = Endian.Unspecified) :
     StructElement<UInt>(
         { buf, el -> buf.putUInt(el.get()) },
         { buf, el -> el.set(buf.getUInt()) },
@@ -150,7 +150,7 @@ class SUInt(mapper: StructMapper, default: UInt = 0u, endianness: Endian = Endia
         get() = get().toLong()
 }
 
-class SInt(mapper: StructMapper, default: Int = 0, endianness: Endian = Endian.Unspecified) :
+internal class SInt(mapper: StructMapper, default: Int = 0, endianness: Endian = Endian.Unspecified) :
     StructElement<Int>(
         { buf, el -> buf.putInt(el.get()) },
         { buf, el -> el.set(buf.getInt()) },
@@ -163,7 +163,7 @@ class SInt(mapper: StructMapper, default: Int = 0, endianness: Endian = Endian.U
         get() = get().toLong()
 }
 
-class SULong(mapper: StructMapper, default: ULong = 0u) :
+internal class SULong(mapper: StructMapper, default: ULong = 0u) :
     StructElement<ULong>(
         { buf, el -> buf.putULong(el.get()) },
         { buf, el -> el.set(buf.getULong()) },
@@ -175,7 +175,7 @@ class SULong(mapper: StructMapper, default: ULong = 0u) :
         get() = get().toLong()
 }
 
-class SUShort(mapper: StructMapper, default: UShort = 0u, endianness: Endian = Endian.Unspecified) :
+internal class SUShort internal constructor(mapper: StructMapper, default: UShort = 0u, endianness: Endian = Endian.Unspecified) :
     StructElement<UShort>(
         { buf, el -> buf.putUShort(el.get()) },
         { buf, el -> el.set(buf.getUShort()) },
@@ -188,7 +188,7 @@ class SUShort(mapper: StructMapper, default: UShort = 0u, endianness: Endian = E
         get() = get().toLong()
 }
 
-class SShort(mapper: StructMapper, default: Short = 0, endianness: Endian = Endian.Unspecified) :
+internal class SShort(mapper: StructMapper, default: Short = 0, endianness: Endian = Endian.Unspecified) :
     StructElement<Short>(
         { buf, el -> buf.putShort(el.get()) },
         { buf, el -> el.set(buf.getShort()) },
@@ -201,7 +201,7 @@ class SShort(mapper: StructMapper, default: Short = 0, endianness: Endian = Endi
         get() = get().toLong()
 }
 
-class SBoolean(mapper: StructMapper, default: Boolean = false) :
+internal class SBoolean(mapper: StructMapper, default: Boolean = false) :
     StructElement<Boolean>(
         { buf, el -> buf.putUByte(if (el.get()) 1u else 0u) },
         { buf, el -> el.set(buf.getUByte() != 0u.toUByte()) },
@@ -210,7 +210,7 @@ class SBoolean(mapper: StructMapper, default: Boolean = false) :
         default
     )
 
-class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
+internal class SUUID internal constructor(mapper: StructMapper, default: Uuid = Uuid.NIL) :
     StructElement<Uuid>(
         { buf, el -> buf.putBytes(el.get().toByteArray().asUByteArray()) },
         { buf, el -> el.set(Uuid.fromByteArray(buf.getBytes(2 * ULong.SIZE_BYTES).toByteArray())) },
@@ -219,7 +219,7 @@ class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
         default
     )
 
-class SUUIDList(mapper: StructMapper, default: List<Uuid> = emptyList()) :
+internal class SUUIDList(mapper: StructMapper, default: List<Uuid> = emptyList()) :
     StructElement<List<Uuid>>(
         { buf, el ->
             el.get().forEach { uuidEntry ->
@@ -237,7 +237,7 @@ class SUUIDList(mapper: StructMapper, default: List<Uuid> = emptyList()) :
 /**
  * Represents a string (UTF-8) in a struct, includes framing for length
  */
-class SString(mapper: StructMapper, default: String = "") :
+internal class SString internal constructor(mapper: StructMapper, default: String = "") :
     StructElement<String>(
         { buf, el ->
             val bytes = el.get().encodeToByteArray()
@@ -252,7 +252,7 @@ class SString(mapper: StructMapper, default: String = "") :
         }, mapper, default.encodeToByteArray().size + 1, default
     )
 
-class SLongString(mapper: StructMapper, default: String = "", endianness: Endian = Endian.Unspecified) :
+internal class SLongString(mapper: StructMapper, default: String = "", endianness: Endian = Endian.Unspecified) :
     StructElement<String>(
         { buf, el ->
             val bytes = el.get().encodeToByteArray()
@@ -270,7 +270,7 @@ class SLongString(mapper: StructMapper, default: String = "", endianness: Endian
 /**
  * Represents a string (UTF-8) in a struct with a fixed length
  */
-class SFixedString(mapper: StructMapper, initialSize: Int, default: String = "") :
+internal class SFixedString internal constructor(mapper: StructMapper, initialSize: Int, default: String = "") :
     StructElement<String>(
         { buf, el ->
             var bytes = el.get().encodeToByteArray()
@@ -299,7 +299,7 @@ class SFixedString(mapper: StructMapper, initialSize: Int, default: String = "")
 /**
  * Upload-only type that writes String as unbound null-terminated byte array.
  */
-class SNullTerminatedString(mapper: StructMapper, default: String = "") :
+internal class SNullTerminatedString(mapper: StructMapper, default: String = "") :
     StructElement<String>(
         putType = { buf, el ->
             val bytes = el.get().encodeToByteArray()
@@ -318,7 +318,7 @@ class SNullTerminatedString(mapper: StructMapper, default: String = "") :
  * Represents arbitrary bytes in a struct
  * @param length the number of bytes, when serializing this is used to pad/truncate the provided value to ensure it's 'length' bytes long (-1 to disable this)
  */
-class SBytes(
+internal class SBytes internal constructor(
     mapper: StructMapper,
     length: Int = -1,
     default: UByteArray = ubyteArrayOf(),
@@ -370,7 +370,7 @@ class SBytes(
  *
  * Only for reading from watch.
  */
-class SUnboundBytes(
+internal class SUnboundBytes(
     mapper: StructMapper,
     endianness: Endian = Endian.Unspecified
 ) : StructElement<UByteArray>(
@@ -405,7 +405,7 @@ class SUnboundBytes(
  * Represents a fixed size list of T
  * @param T the type (must inherit Mappable)
  */
-class SFixedList<T : Mappable>(
+internal class SFixedList<T : Mappable> internal constructor(
     mapper: StructMapper,
     count: Int,
     default: List<T> = emptyList(),
@@ -424,7 +424,7 @@ class SFixedList<T : Mappable>(
     override fun subList(fromIndex: Int, toIndex: Int): List<T> = list.subList(fromIndex, toIndex)
     override fun get(index: Int): T = list[index]
 
-    var count = count
+    var count: Int = count
         set(value) {
             field = value
             linkedCount = null
@@ -435,7 +435,7 @@ class SFixedList<T : Mappable>(
 
 
     private val mapIndex = mapper.register(this)
-    var list = default
+    var list: List<T> = default
 
     init {
         if (count != default.size) throw PacketEncodeException("Fixed list count does not match default value count")
@@ -485,7 +485,7 @@ class SFixedList<T : Mappable>(
     }
 }
 
-class SOptional<T>(
+internal class SOptional<T> internal constructor(
     mapper: StructMapper,
     val value: StructElement<T>,
     var present: Boolean,

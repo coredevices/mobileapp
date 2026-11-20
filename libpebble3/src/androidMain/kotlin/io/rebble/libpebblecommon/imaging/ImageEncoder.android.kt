@@ -6,7 +6,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 
 /** Centre-crops and scales this bitmap to [width] x [height], then encodes it for the watch. */
-fun Bitmap.encodeForWatch(width: Int, height: Int): EncodedImage {
+internal fun Bitmap.encodeForWatch(width: Int, height: Int): EncodedImage {
     val scaled = centerCropScale(this, width, height)
     val argb = IntArray(width * height)
     scaled.getPixels(argb, 0, width, 0, 0, width, height)

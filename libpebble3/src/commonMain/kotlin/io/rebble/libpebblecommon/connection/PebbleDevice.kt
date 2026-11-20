@@ -28,31 +28,31 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 
-interface ActiveDevice {
-    fun disconnect()
-    val usingBtClassic: Boolean
-    val reversePpogVersion: ReversePpogVersion?
+public interface ActiveDevice {
+    public fun disconnect()
+    public val usingBtClassic: Boolean
+    public val reversePpogVersion: ReversePpogVersion?
 }
 
-data class ConnectionFailureInfo(
+public data class ConnectionFailureInfo internal constructor(
     val reason: ConnectionFailureReason,
     val times: Int,
 )
 
 // <T : Transport> ?
 @Stable
-sealed interface PebbleDevice {
-    val identifier: PebbleIdentifier
-    val name: String
-    val nickname: String?
+public sealed interface PebbleDevice {
+    public val identifier: PebbleIdentifier
+    public val name: String
+    public val nickname: String?
 
     /**
      * Information about previous connection failures (until successfully connected).
      */
-    val connectionFailureInfo: ConnectionFailureInfo?
+    public val connectionFailureInfo: ConnectionFailureInfo?
 
-    fun connect()
-    fun displayName(): String {
+    public fun connect()
+    public fun displayName(): String {
         val actualNickname = nickname
         if (actualNickname != null && actualNickname.isNotEmpty()) {
             return actualNickname
@@ -62,44 +62,44 @@ sealed interface PebbleDevice {
     }
 }
 
-interface DiscoveredPebbleDevice : PebbleDevice
+public interface DiscoveredPebbleDevice : PebbleDevice
 
 // We know a few more things about these, after a BLE scan but before connection
-interface BleDiscoveredPebbleDevice : DiscoveredPebbleDevice {
-    val pebbleScanRecord: PebbleLeScanRecord
-    val rssi: Int
+public interface BleDiscoveredPebbleDevice : DiscoveredPebbleDevice {
+    public val pebbleScanRecord: PebbleLeScanRecord
+    public val rssi: Int
 }
 
 // e.g. we have previously connected to it, and got all it's info (stored in the db)
-interface KnownPebbleDevice : PebbleDevice {
-    val runningFwVersion: String
-    val serial: String
-    val lastConnected: Instant
-    val watchType: WatchHardwarePlatform
-    val color: WatchColor?
-    val capabilities: Set<ProtocolCapsFlag>
-    fun forget()
-    fun setNickname(nickname: String?)
+public interface KnownPebbleDevice : PebbleDevice {
+    public val runningFwVersion: String
+    public val serial: String
+    public val lastConnected: Instant
+    public val watchType: WatchHardwarePlatform
+    public val color: WatchColor?
+    public val capabilities: Set<ProtocolCapsFlag>
+    public fun forget()
+    public fun setNickname(nickname: String?)
 }
 
-interface DisconnectingPebbleDevice : PebbleDevice {
-    val color: WatchColor?
+public interface DisconnectingPebbleDevice : PebbleDevice {
+    public val color: WatchColor?
 }
-interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbleDevice
+internal interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbleDevice
 
-interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
-    val color: WatchColor?
-    val negotiating: Boolean
+public interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
+    public val color: WatchColor?
+    public val negotiating: Boolean
     /** Set while reconnecting after the watch rebooted for a firmware update. */
-    val rebootingForFirmwareUpdate: FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot?
+    public val rebootingForFirmwareUpdate: FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot?
 }
-interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevice
+internal interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevice
 
-interface ConnectedWatchInfo {
-    val watchInfo: WatchInfo
+public interface ConnectedWatchInfo {
+    public val watchInfo: WatchInfo
 }
 
-interface CommonConnectedDevice : KnownPebbleDevice,
+public interface CommonConnectedDevice : KnownPebbleDevice,
     ActiveDevice,
     ConnectedPebble.Firmware,
     ConnectedWatchInfo,
@@ -108,9 +108,9 @@ interface CommonConnectedDevice : KnownPebbleDevice,
     ConnectedPebble.Battery,
     ConnectedPebble.DevConnection
 
-interface ConnectedPebbleDeviceInRecovery : CommonConnectedDevice
+public interface ConnectedPebbleDeviceInRecovery : CommonConnectedDevice
 
-sealed interface ConnectedPebbleDevice :
+public sealed interface ConnectedPebbleDevice :
     CommonConnectedDevice,
     KnownPebbleDevice,
     ConnectedPebble.Debug,
@@ -131,90 +131,90 @@ sealed interface ConnectedPebbleDevice :
  * Eventually, implementations of these interfaces should all be what we're currently calling
  * "Endpoint Managers". For now, "Services" are OK.
  */
-object ConnectedPebble {
-    interface AppMessages {
-        val transactionSequence: Iterator<UByte>
-        suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult
-        suspend fun sendAppMessageResult(appMessageResult: AppMessageResult)
-        fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData>
+public object ConnectedPebble {
+    public interface AppMessages {
+        public val transactionSequence: Iterator<UByte>
+        public suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult
+        public suspend fun sendAppMessageResult(appMessageResult: AppMessageResult)
+        public fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData>
     }
 
-    interface Debug {
-        suspend fun sendPing(cookie: UInt): UInt
-        fun resetIntoPrf()
-        fun createCoreDump()
-        fun factoryReset()
+    public interface Debug {
+        public suspend fun sendPing(cookie: UInt): UInt
+        public fun resetIntoPrf()
+        public fun createCoreDump()
+        public fun factoryReset()
     }
 
-    interface DevConnection {
+    public interface DevConnection {
         /** [forceLan] ignores the lanDevConnection config and always uses the LAN server. */
-        suspend fun startDevConnection(forceLan: Boolean = false)
-        suspend fun stopDevConnection()
-        val devConnectionActive: StateFlow<Boolean>
-        val devConnectionError: StateFlow<String?>
+        public suspend fun startDevConnection(forceLan: Boolean = false)
+        public suspend fun stopDevConnection()
+        public val devConnectionActive: StateFlow<Boolean>
+        public val devConnectionError: StateFlow<String?>
     }
 
-    interface Screenshot {
-        suspend fun takeScreenshot(): ImageBitmap?
+    public interface Screenshot {
+        public suspend fun takeScreenshot(): ImageBitmap?
     }
 
-    interface Logs {
-        suspend fun gatherLogs(): Path?
+    public interface Logs {
+        public suspend fun gatherLogs(): Path?
     }
 
-    interface Messages {
-        suspend fun sendPPMessage(bytes: ByteArray)
-        suspend fun sendPPMessage(ppMessage: PebblePacket)
-        val inboundMessages: Flow<PebblePacket>
-        val rawInboundMessages: Flow<ByteArray>
+    public interface Messages {
+        public suspend fun sendPPMessage(bytes: ByteArray)
+        public suspend fun sendPPMessage(ppMessage: PebblePacket)
+        public val inboundMessages: Flow<PebblePacket>
+        public val rawInboundMessages: Flow<ByteArray>
     }
 
-    interface FirmwareUpdate {
-        fun sideloadFirmware(path: Path, trigger: FirmwareUpdateTrigger)
-        fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate, trigger: FirmwareUpdateTrigger)
-        fun checkforFirmwareUpdate(force: Boolean)
+    public interface FirmwareUpdate {
+        public fun sideloadFirmware(path: Path, trigger: FirmwareUpdateTrigger)
+        public fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate, trigger: FirmwareUpdateTrigger)
+        public fun checkforFirmwareUpdate(force: Boolean)
     }
 
-    interface FirmwareStatus {
-        val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus
-        val firmwareUpdateAvailable: FirmwareUpdateCheckState
+    public interface FirmwareStatus {
+        public val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus
+        public val firmwareUpdateAvailable: FirmwareUpdateCheckState
     }
 
-    interface Firmware : FirmwareUpdate, FirmwareStatus
+    public interface Firmware : FirmwareUpdate, FirmwareStatus
 
-    interface Battery {
-        val batteryLevel: Int?
+    public interface Battery {
+        public val batteryLevel: Int?
     }
 
-    interface AppRunState {
-        suspend fun launchApp(uuid: Uuid)
-        suspend fun stopApp(uuid: Uuid)
-        val runningApp: StateFlow<Uuid?>
+    public interface AppRunState {
+        public suspend fun launchApp(uuid: Uuid)
+        public suspend fun stopApp(uuid: Uuid)
+        public val runningApp: StateFlow<Uuid?>
         /** The app that ran before the one running now (or last), since connecting. */
-        val previousApp: StateFlow<Uuid?>
+        public val previousApp: StateFlow<Uuid?>
     }
 
-    interface PKJS {
+    public interface PKJS {
         @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
-        val currentPKJSSession: StateFlow<PKJSApp?>
+        public val currentPKJSSession: StateFlow<PKJSApp?>
     }
 
-    interface CompanionAppControl {
-        val currentCompanionAppSessions: StateFlow<List<CompanionApp>>
+    public interface CompanionAppControl {
+        public val currentCompanionAppSessions: StateFlow<List<CompanionApp>>
     }
 
-    interface Time {
-        suspend fun updateTime()
-        suspend fun updateTimeIfNeeded()
+    public interface Time {
+        public suspend fun updateTime()
+        public suspend fun updateTimeIfNeeded()
     }
 
-    interface CoreDump {
-        suspend fun getCoreDump(unread: Boolean): Path?
+    public interface CoreDump {
+        public suspend fun getCoreDump(unread: Boolean): Path?
     }
 
-    interface Music {
-        suspend fun updateTrack(track: MusicTrack)
-        suspend fun updatePlaybackState(
+    public interface Music {
+        public suspend fun updateTrack(track: MusicTrack)
+        public suspend fun updatePlaybackState(
             state: PlaybackState,
             trackPosMs: UInt,
             playbackRatePct: UInt,
@@ -222,58 +222,58 @@ object ConnectedPebble {
             repeatType: RepeatType,
             skipSeeksWithinTrack: Boolean,
         )
-        suspend fun updatePlayerInfo(packageId: String, name: String)
-        suspend fun updateVolumeInfo(volumePercent: UByte)
-        val musicActions: Flow<MusicAction>
-        val updateRequestTrigger: Flow<Unit>
+        public suspend fun updatePlayerInfo(packageId: String, name: String)
+        public suspend fun updateVolumeInfo(volumePercent: UByte)
+        public val musicActions: Flow<MusicAction>
+        public val updateRequestTrigger: Flow<Unit>
     }
 
-    interface LanguageInstall {
-        suspend fun setActiveLanguage(pack: WatchLanguagePack?): Boolean
-        suspend fun listLanguagePacks(): List<WatchLanguagePack>
-        suspend fun removeLanguagePack(pack: WatchLanguagePack): Boolean
-        fun installLanguagePack(path: Path, name: String, activate: Boolean = true)
-        fun installLanguagePack(url: String, name: String, activate: Boolean = true)
+    public interface LanguageInstall {
+        public suspend fun setActiveLanguage(pack: WatchLanguagePack?): Boolean
+        public suspend fun listLanguagePacks(): List<WatchLanguagePack>
+        public suspend fun removeLanguagePack(pack: WatchLanguagePack): Boolean
+        public fun installLanguagePack(path: Path, name: String, activate: Boolean = true)
+        public fun installLanguagePack(url: String, name: String, activate: Boolean = true)
     }
 
-    interface LanguageState {
-        val languagePackInstallState: LanguagePackInstallState
-        val installedLanguagePack: InstalledLanguagePack?
+    public interface LanguageState {
+        public val languagePackInstallState: LanguagePackInstallState
+        public val installedLanguagePack: InstalledLanguagePack?
     }
 
-    interface Language : LanguageInstall, LanguageState
+    public interface Language : LanguageInstall, LanguageState
 
-    interface Health {
-        suspend fun requestHealthData(fullSync: Boolean): Boolean
+    public interface Health {
+        public suspend fun requestHealthData(fullSync: Boolean): Boolean
     }
 
-    class Services(
-        val debug: Debug,
-        val appRunState: AppRunState,
-        val firmware: FirmwareUpdater,
-        val messages: Messages,
-        val time: Time,
-        val appMessages: AppMessages,
-        val logs: Logs,
-        val coreDump: CoreDump,
-        val music: Music,
-        val pkjs: PKJS,
-        val companionAppControl: CompanionAppControl,
-        val devConnection: DevConnection,
-        val screenshot: Screenshot,
-        val language: LanguageInstall,
-        val health: Health,
+    internal class Services internal constructor(
+        internal val debug: Debug,
+        internal val appRunState: AppRunState,
+        internal val firmware: FirmwareUpdater,
+        internal val messages: Messages,
+        internal val time: Time,
+        internal val appMessages: AppMessages,
+        internal val logs: Logs,
+        internal val coreDump: CoreDump,
+        internal val music: Music,
+        internal val pkjs: PKJS,
+        internal val companionAppControl: CompanionAppControl,
+        internal val devConnection: DevConnection,
+        internal val screenshot: Screenshot,
+        internal val language: LanguageInstall,
+        internal val health: Health,
     )
 
-    class PrfServices(
-        val firmware: FirmwareUpdater,
-        val logs: Logs,
-        val coreDump: CoreDump,
-        val devConnection: DevConnection
+    internal class PrfServices internal constructor(
+        internal val firmware: FirmwareUpdater,
+        internal val logs: Logs,
+        internal val coreDump: CoreDump,
+        internal val devConnection: DevConnection
     )
 }
 
-fun PebbleDevice.color() = when (this) {
+public fun PebbleDevice.color(): WatchColor? = when (this) {
     is KnownPebbleDevice -> color
     is ConnectingPebbleDevice -> color
     is DisconnectingPebbleDevice -> color

@@ -10,22 +10,22 @@ import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSManagedValue
 import platform.JavaScriptCore.JSValue
 
-class JSCJSLocalStorageInterface(
+internal class JSCJSLocalStorageInterface(
     private val jsContext: JSContext,
     scopedSettingsUuid: String,
     appContext: AppContext,
     private val evalRaw: (String) -> JSValue?
 ): JSLocalStorageInterface(scopedSettingsUuid, appContext), RegisterableJsInterface {
-    override val interf = mapOf(
+    override val interf: Map<String, *> = mapOf(
         "getItem" to this::getItem,
         "setItem" to this::setItem,
         "removeItem" to this::removeItem,
         "clear" to this::clear,
         "key" to this::key
     )
-    override val name = "localStorage"
+    override val name: String = "localStorage"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+    override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
         "getItem" -> getItem(args.getOrNull(0))
         "setItem" -> { setItem(args.getOrNull(0), args.getOrNull(1)); null }
         "removeItem" -> { removeItem(args.getOrNull(0)); null }

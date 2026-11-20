@@ -6,6 +6,8 @@ import io.rebble.libpebblecommon.connection.HealthApi
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.connection.WatchManager
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
@@ -43,7 +45,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock.System
 
-class Health(
+internal class Health(
     private val healthSettingsDao: HealthSettingsEntryDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
@@ -201,16 +203,16 @@ class Health(
     override suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity> =
         healthDao.getHealthDataForRange(start, end)
 
-    override suspend fun getDailyAggregates(start: Long, end: Long) =
+    override suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate> =
         healthDao.getDailyMovementAggregates(start, end)
 
-    override suspend fun getTotalHealthData(start: Long, end: Long) =
+    override suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates? =
         healthDao.getAggregatedHealthData(start, end)
 
-    override suspend fun getAverageHeartRate(start: Long, end: Long) =
+    override suspend fun getAverageHeartRate(start: Long, end: Long): Double? =
         healthDao.getAverageHeartRate(start, end)
 
-    override suspend fun getSleepEntries(start: Long, end: Long) =
+    override suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity> =
         healthDao.getOverlayEntries(start, end, HealthConstants.SLEEP_TYPES)
 
     override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? =
@@ -444,7 +446,7 @@ class Health(
     }
 }
 
-data class HealthSettings(
+public data class HealthSettings internal constructor(
     val heightMm: Short,
     val weightDag: Short,
     val trackingEnabled: Boolean,
@@ -468,35 +470,35 @@ data class HealthSettings(
 )
 
 /** Time range for displaying health data */
-enum class HealthTimeRange {
+public enum class HealthTimeRange {
     Daily,
     Weekly,
     Monthly
 }
 
 /** Data structure for stacked sleep charts (weekly/monthly views). */
-data class StackedSleepData(
+internal data class StackedSleepData(
     val label: String,
     val lightSleepHours: Float,
     val deepSleepHours: Float
 )
 
 /** Data structure for weekly aggregated data (for monthly charts broken into weeks). */
-data class WeeklyAggregatedData(
+internal data class WeeklyAggregatedData(
     val label: String, // e.g., "Mar 27 - Apr 4"
     val value: Float?, // null when there's no data for this week
     val weekIndex: Int // Position in the overall sequence
 )
 
 /** Represents a segment of sleep in the daily view. */
-data class SleepSegment(
+internal data class SleepSegment(
     val startHour: Float, // Hour of day (0-24)
     val durationHours: Float,
     val type: OverlayType // Sleep or DeepSleep
 )
 
 /** Daily sleep data with all segments and timing information. */
-data class DailySleepData(
+internal data class DailySleepData(
     val segments: List<SleepSegment>,
     val bedtime: Float, // Start hour
     val wakeTime: Float, // End hour

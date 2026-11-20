@@ -498,7 +498,7 @@ private val STEP_TYPICAL_KEYS = mapOf(
     DayOfWeek.SUNDAY to "sunday_steps",
 )
 
-data class WeekdaySleepTypicals(
+public data class WeekdaySleepTypicals internal constructor(
     val sleepDurationSeconds: Int,
     val deepSleepDurationSeconds: Int,
     val fallAsleepSecondsOfDay: Int,

@@ -8,9 +8,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable(StringOrBoolean.Companion::class)
-data class StringOrBoolean(val value: Boolean) {
+public data class StringOrBoolean internal constructor(val value: Boolean) {
     @Serializer(forClass = StringOrBoolean::class)
-    companion object : KSerializer<StringOrBoolean> {
+    public companion object : KSerializer<StringOrBoolean> {
         override fun serialize(encoder: Encoder, value: StringOrBoolean) {
             encoder.encodeString(if (value.value) "true" else "false")
         }

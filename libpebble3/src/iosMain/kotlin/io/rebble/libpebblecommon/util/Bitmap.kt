@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.util
 
-actual class Bitmap {
+internal actual class Bitmap {
     actual val width: Int
         get() = throw UnsupportedOperationException("Not supported on iOS yet")
     actual val height: Int

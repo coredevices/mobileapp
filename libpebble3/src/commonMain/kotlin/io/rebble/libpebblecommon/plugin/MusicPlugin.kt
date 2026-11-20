@@ -22,10 +22,10 @@ import kotlin.uuid.Uuid
  * Android platform module, because [SystemMusicControl] is the only thing that can see another
  * app's media session there, and iOS has no equivalent.
  */
-class MusicPlugin(
+internal class MusicPlugin(
     private val music: SystemMusicControl,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_MUSIC_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.MUSIC
     override val name: String = "Music"
     override val description: String = "What is playing on the phone, with play/pause and track skipping."
 
@@ -198,16 +198,16 @@ class MusicPlugin(
     private inline fun <reified T> encode(value: T): JsonElement = Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "music"
-        const val ITEM_TRACK = "track"
-        const val PROPERTY_TITLE = "title"
-        const val PROPERTY_ARTIST = "artist"
-        const val PROPERTY_ALBUM = "album"
-        const val PROPERTY_PLAYING = "playing"
-        const val PROPERTY_ARTWORK = "artwork"
-        const val ACTION_SET_PLAYING = "set_playing"
-        const val ACTION_NEXT = "next_track"
-        const val ACTION_PREVIOUS = "previous_track"
+        const val CATEGORY: String = "music"
+        const val ITEM_TRACK: String = "track"
+        const val PROPERTY_TITLE: String = "title"
+        const val PROPERTY_ARTIST: String = "artist"
+        const val PROPERTY_ALBUM: String = "album"
+        const val PROPERTY_PLAYING: String = "playing"
+        const val PROPERTY_ARTWORK: String = "artwork"
+        const val ACTION_SET_PLAYING: String = "set_playing"
+        const val ACTION_NEXT: String = "next_track"
+        const val ACTION_PREVIOUS: String = "previous_track"
 
         private const val TRACK = "$CATEGORY/$ITEM_TRACK"
         private const val INSTANCE_ID = "track"
@@ -215,8 +215,5 @@ class MusicPlugin(
         private val CONTROL = listOf(PluginPermission(PluginPermissions.CONTROL_MUSIC))
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_MUSIC_UUID: Uuid = Uuid.parse("00000000-0000-0000-0001-000000000003")
     }
 }

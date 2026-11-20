@@ -10,6 +10,6 @@ import kotlinx.coroutines.flow.Flow
  * immediately on collection and again whenever the OS reports a change. Emits `null`
  * when the value is unknown (e.g. simulator, JVM target).
  */
-expect class PhoneBatteryMonitor {
+internal expect class PhoneBatteryMonitor {
     val batteryLevel: Flow<Int?>
 }

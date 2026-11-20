@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-actual class PhoneBatteryMonitor(
+internal actual class PhoneBatteryMonitor(
     private val appContext: AppContext,
 ) {
     actual val batteryLevel: Flow<Int?> = callbackFlow {

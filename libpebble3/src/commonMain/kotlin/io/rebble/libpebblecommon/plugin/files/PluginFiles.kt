@@ -7,13 +7,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class FileAccessMode {
+public enum class FileAccessMode {
     @SerialName("read") Read,
     @SerialName("readwrite") ReadWrite,
 }
 
 @Serializable
-enum class FileEntryKind {
+public enum class FileEntryKind {
     @SerialName("file") File,
     @SerialName("directory") Directory,
 }
@@ -24,7 +24,7 @@ enum class FileEntryKind {
  * and `WriteFiles/<scope>` are granted on.
  */
 @Serializable
-data class FileHandleInfo(
+public data class FileHandleInfo(
     val id: String,
     val kind: FileEntryKind,
     val name: String,
@@ -32,7 +32,7 @@ data class FileHandleInfo(
 )
 
 @Serializable
-data class FileEntryInfo(
+internal data class FileEntryInfo(
     val name: String,
     val kind: FileEntryKind,
     val size: Long = 0,
@@ -43,10 +43,10 @@ data class FileEntryInfo(
 )
 
 /** Error codes raised by file operations; the JS side maps them onto DOMException names. */
-object PluginFileErrors {
-    const val NOT_FOUND = "NOT_FOUND"
-    const val TYPE_MISMATCH = "TYPE_MISMATCH"
-    const val INVALID_MODIFICATION = "INVALID_MODIFICATION"
+internal object PluginFileErrors {
+    const val NOT_FOUND: String = "NOT_FOUND"
+    const val TYPE_MISMATCH: String = "TYPE_MISMATCH"
+    const val INVALID_MODIFICATION: String = "INVALID_MODIFICATION"
 }
 
 /**
@@ -54,7 +54,7 @@ object PluginFileErrors {
  * validated by [PluginFilePath], and empty for the entry itself. Failures are
  * [PluginNativeException]s carrying a [PluginFileErrors] or `PluginErrors` code.
  */
-interface PluginFileSystem {
+internal interface PluginFileSystem {
     /** Keep whatever the platform needs to reach [scope] later: on iOS, the picker's bookmark. */
     suspend fun retain(scope: String, handle: String)
 
@@ -82,10 +82,10 @@ interface PluginFileSystem {
 
 internal expect fun platformPluginFileSystem(appContext: AppContext, settings: Settings): PluginFileSystem
 
-object PluginFilePath {
+internal object PluginFilePath {
     private val illegal = charArrayOf('/', '\\', '\u0000')
 
-    fun isValidName(name: String) =
+    fun isValidName(name: String): Boolean =
         name.isNotEmpty() && name != "." && name != ".." && name.none { it in illegal }
 
     /** Checks every segment, so a plugin cannot climb out of the entry it was handed. */

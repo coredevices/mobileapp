@@ -13,28 +13,28 @@ import io.rebble.libpebblecommon.notification.uIntPattern
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface VibePatternDao {
+public interface VibePatternDao {
     @Query("""
         SELECT *
         FROM VibePatternEntity
     """)
-    fun getVibePatterns(): Flow<List<VibePatternEntity>>
+    public fun getVibePatterns(): Flow<List<VibePatternEntity>>
 
     @Query("""
         SELECT *
         FROM VibePatternEntity
         WHERE name = :name
     """)
-    suspend fun getVibePattern(name: String): VibePatternEntity?
+    public suspend fun getVibePattern(name: String): VibePatternEntity?
 
     @Insert(onConflict = IGNORE)
-    suspend fun insertOrIgnore(pattern: VibePatternEntity)
+    public suspend fun insertOrIgnore(pattern: VibePatternEntity)
 
     @Upsert
-    suspend fun insertOrUpdate(pattern: VibePatternEntity)
+    public suspend fun insertOrUpdate(pattern: VibePatternEntity)
 
     @Transaction
-    suspend fun ensureAllDefaultsInserted() {
+    public suspend fun ensureAllDefaultsInserted() {
         DefaultVibePattern.entries.forEach { pattern ->
             insertOrUpdate(VibePatternEntity(
                 name = pattern.displayName,
@@ -45,5 +45,5 @@ interface VibePatternDao {
     }
 
     @Query("DELETE FROM VibePatternEntity WHERE name = :name AND bundled = 0")
-    suspend fun deleteCustomPattern(name: String)
+    public suspend fun deleteCustomPattern(name: String)
 }

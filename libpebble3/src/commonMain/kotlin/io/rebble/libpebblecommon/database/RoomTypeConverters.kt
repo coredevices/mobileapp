@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemFlag
 import io.rebble.libpebblecommon.weather.WeatherDailyForecast
 import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import kotlinx.serialization.SerializationException
@@ -24,106 +24,106 @@ private val json = Json { ignoreUnknownKeys = true }
 private val logger = Logger.withTag("RoomTypeConverters")
 
 // Hashcode on Duration can vary (because nanoseconds) before/after serialization (which is only milliseconds)
-data class MillisecondDuration(val duration: Duration) {
+public data class MillisecondDuration internal constructor(val duration: Duration) {
     override fun hashCode(): Int = duration.inWholeMilliseconds.hashCode()
     override fun equals(other: Any?): Boolean = (other as? MillisecondDuration)?.duration?.inWholeMilliseconds == duration.inWholeMilliseconds
 }
 
-fun Duration.asMillisecond(): MillisecondDuration = MillisecondDuration(this)
+internal fun Duration.asMillisecond(): MillisecondDuration = MillisecondDuration(this)
 
 // Hashcode on Instant can vary (because nanoseconds) before/after serialization (which is only milliseconds)
-data class MillisecondInstant(val instant: Instant) {
+public data class MillisecondInstant internal constructor(val instant: Instant) {
     override fun hashCode(): Int = instant.toEpochMilliseconds().hashCode()
     override fun equals(other: Any?): Boolean = (other as? MillisecondInstant)?.instant?.toEpochMilliseconds() == instant.toEpochMilliseconds()
 }
 
-fun Instant.asMillisecond(): MillisecondInstant = MillisecondInstant(this)
+internal fun Instant.asMillisecond(): MillisecondInstant = MillisecondInstant(this)
 
 /**
  * Compare this MillisecondInstant with an Instant to check if this is after the given instant.
  * Useful for checking if a mute expiration has passed.
  */
-fun MillisecondInstant.isAfter(other: Instant): Boolean = instant > other
+public fun MillisecondInstant.isAfter(other: Instant): Boolean = instant > other
 
 /**
  * Get the epoch milliseconds from a MillisecondInstant.
  * Useful for comparisons when the instant property is not accessible from other modules.
  */
-fun MillisecondInstant.toEpochMilliseconds(): Long = instant.toEpochMilliseconds()
+internal fun MillisecondInstant.toEpochMilliseconds(): Long = instant.toEpochMilliseconds()
 
-class RoomTypeConverters {
+public class RoomTypeConverters {
     @TypeConverter
-    fun ListUIntToString(value: List<UInt>): String = value.joinToString(",");
-
-    @TypeConverter
-    fun StringToListUInt(value: String): List<UInt> = value.split(",").mapNotNull { it.toUIntOrNull() };
+    internal fun ListUIntToString(value: List<UInt>): String = value.joinToString(",");
 
     @TypeConverter
-    fun StringToUuid(string: String?): Uuid? = string?.let { Uuid.parse(it) }
+    internal fun StringToListUInt(value: String): List<UInt> = value.split(",").mapNotNull { it.toUIntOrNull() };
 
     @TypeConverter
-    fun UuidToString(uuid: Uuid?): String? = uuid?.toString()
+    public fun StringToUuid(string: String?): Uuid? = string?.let { Uuid.parse(it) }
 
     @TypeConverter
-    fun StringToChannelGroupList(value: String): List<ChannelGroup> {
+    public fun UuidToString(uuid: Uuid?): String? = uuid?.toString()
+
+    @TypeConverter
+    internal fun StringToChannelGroupList(value: String): List<ChannelGroup> {
         return json.decodeFromString(value)
     }
 
     @TypeConverter
-    fun ChannelGroupListToString(list: List<ChannelGroup>): String {
+    internal fun ChannelGroupListToString(list: List<ChannelGroup>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun StringToWeatherDailyForecastList(value: String?): List<WeatherDailyForecast>? =
+    internal fun StringToWeatherDailyForecastList(value: String?): List<WeatherDailyForecast>? =
         value?.let { json.decodeFromString(it) }
 
     @TypeConverter
-    fun WeatherDailyForecastListToString(list: List<WeatherDailyForecast>?): String? =
+    internal fun WeatherDailyForecastListToString(list: List<WeatherDailyForecast>?): String? =
         list?.let { json.encodeToString(it) }
 
     @TypeConverter
-    fun StringToWeatherHourlyForecastList(value: String?): List<WeatherHourlyForecast>? =
+    internal fun StringToWeatherHourlyForecastList(value: String?): List<WeatherHourlyForecast>? =
         value?.let { json.decodeFromString(it) }
 
     @TypeConverter
-    fun WeatherHourlyForecastListToString(list: List<WeatherHourlyForecast>?): String? =
+    internal fun WeatherHourlyForecastListToString(list: List<WeatherHourlyForecast>?): String? =
         list?.let { json.encodeToString(it) }
 
     @TypeConverter
-    fun LongToMillisecondInstant(value: Long): MillisecondInstant = MillisecondInstant(Instant.fromEpochMilliseconds(value))
+    internal fun LongToMillisecondInstant(value: Long): MillisecondInstant = MillisecondInstant(Instant.fromEpochMilliseconds(value))
 
     @TypeConverter
-    fun MillisecondInstantToLong(instant: MillisecondInstant): Long = instant.instant.toEpochMilliseconds()
+    internal fun MillisecondInstantToLong(instant: MillisecondInstant): Long = instant.instant.toEpochMilliseconds()
 
     @TypeConverter
-    fun LongToMillisecondDuration(value: Long): MillisecondDuration = MillisecondDuration(value.milliseconds)
+    internal fun LongToMillisecondDuration(value: Long): MillisecondDuration = MillisecondDuration(value.milliseconds)
 
     @TypeConverter
-    fun MillisecondDurationToLong(duration: MillisecondDuration): Long = duration.duration.inWholeMilliseconds
+    internal fun MillisecondDurationToLong(duration: MillisecondDuration): Long = duration.duration.inWholeMilliseconds
 
     @TypeConverter
-    fun StringToLockerPlatformList(value: String): List<LockerEntryPlatform> {
+    internal fun StringToLockerPlatformList(value: String): List<LockerEntryPlatform> {
         return json.decodeFromString(value)
     }
 
     @TypeConverter
-    fun LockerPlatformListToString(list: List<LockerEntryPlatform>): String {
+    internal fun LockerPlatformListToString(list: List<LockerEntryPlatform>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun StringToLockerCompanion(value: String?): CompanionApp? {
+    internal fun StringToLockerCompanion(value: String?): CompanionApp? {
         return value?.let { json.decodeFromString(it) }
     }
 
     @TypeConverter
-    fun LockerCompanionListToString(app: CompanionApp?): String? {
+    internal fun LockerCompanionListToString(app: CompanionApp?): String? {
         return app?.let { json.encodeToString(it) }
     }
 
     @TypeConverter
-    fun StringToTimelineAttributeList(value: String): List<BaseAttribute> {
+    internal fun StringToTimelineAttributeList(value: String): List<BaseAttribute> {
         return try {
             json.decodeFromString(value)
         } catch (e: SerializationException) {
@@ -133,12 +133,12 @@ class RoomTypeConverters {
     }
 
     @TypeConverter
-    fun TimelineAttributeListToString(list: List<BaseAttribute>): String {
+    internal fun TimelineAttributeListToString(list: List<BaseAttribute>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun StringToTimelineActionList(value: String): List<BaseAction> {
+    internal fun StringToTimelineActionList(value: String): List<BaseAction> {
         return try {
             json.decodeFromString(value)
         } catch (e: SerializationException) {
@@ -148,40 +148,40 @@ class RoomTypeConverters {
     }
 
     @TypeConverter
-    fun TimelineActionListToString(list: List<BaseAction>): String {
+    internal fun TimelineActionListToString(list: List<BaseAction>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun StringToTimelineFlagList(value: String): List<TimelineItem.Flag> {
+    internal fun StringToTimelineFlagList(value: String): List<TimelineItemFlag> {
         return json.decodeFromString(value)
     }
 
     @TypeConverter
-    fun TimelineFlagListToString(list: List<TimelineItem.Flag>): String {
+    internal fun TimelineFlagListToString(list: List<TimelineItemFlag>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun IntToWatchColor(code: Int?): WatchColor? = fromProtocolNumber(code)
+    internal fun IntToWatchColor(code: Int?): WatchColor? = fromProtocolNumber(code)
 
     @TypeConverter
-    fun WatchColorToInt(color: WatchColor): Int? = color.protocolNumber
+    internal fun WatchColorToInt(color: WatchColor): Int? = color.protocolNumber
 
     @TypeConverter
-    fun StringToStringList(value: String?): List<String> {
+    internal fun StringToStringList(value: String?): List<String> {
         return value?.let {
             json.decodeFromString(it)
         } ?: emptyList()
     }
 
     @TypeConverter
-    fun StringListToString(list: List<String>): String {
+    internal fun StringListToString(list: List<String>): String {
         return json.encodeToString(list)
     }
 
     @TypeConverter
-    fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
+    internal fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
         // Names stored by a newer build are dropped, so going back to an older one doesn't crash.
         return json.decodeFromString<List<String>>(value)
             .mapNotNull { name -> ProtocolCapsFlag.entries.firstOrNull { it.name == name } }
@@ -189,7 +189,7 @@ class RoomTypeConverters {
     }
 
     @TypeConverter
-    fun CapabilitySetToString(list: Set<ProtocolCapsFlag>): String {
+    internal fun CapabilitySetToString(list: Set<ProtocolCapsFlag>): String {
         return json.encodeToString(list)
     }
 }

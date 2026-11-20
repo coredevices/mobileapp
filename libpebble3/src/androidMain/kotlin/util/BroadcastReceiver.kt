@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.callbackFlow
  * @param exported Whether the receiver should be exported or not.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-fun IntentFilter.asFlow(context: Context, exported: Boolean): Flow<Intent> = callbackFlow {
+public fun IntentFilter.asFlow(context: Context, exported: Boolean): Flow<Intent> = callbackFlow {
     val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             trySend(intent).isSuccess

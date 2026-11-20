@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.services.appmessage
 
 import kotlinx.atomicfu.atomic
 
-class AppMessageTransactionSequence: Sequence<UByte> {
+internal class AppMessageTransactionSequence: Sequence<UByte> {
     private val sequence = atomic(0)
 
     override fun iterator(): Iterator<UByte> {

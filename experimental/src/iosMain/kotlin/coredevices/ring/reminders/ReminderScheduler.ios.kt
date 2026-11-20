@@ -4,8 +4,8 @@ import coredevices.util.setWatchNotificationActionHandler
 import coredevices.util.sha256
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.datetime.toNSDate
 import objcnames.classes.CLRegion
@@ -153,11 +153,11 @@ actual class ReminderScheduler(
                     tinyIcon { TimelineIcon.NotificationReminder }
                 }
                 actions {
-                    action(TimelineItem.Action.Type.Generic, internalType = WATCH_ACTION_DONE) {
+                    action(TimelineActionType.Generic, internalType = WATCH_ACTION_DONE) {
                         attributes { title { "Done" } }
                         internalData = itemId
                     }
-                    action(TimelineItem.Action.Type.Dismiss) {
+                    action(TimelineActionType.Dismiss) {
                         attributes { title { "Dismiss" } }
                     }
                 }

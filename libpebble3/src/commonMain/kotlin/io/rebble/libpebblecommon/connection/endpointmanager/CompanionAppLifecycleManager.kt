@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlin.coroutines.cancellation.CancellationException
 
-class CompanionAppLifecycleManager(
+internal class CompanionAppLifecycleManager(
     private val lockerPBWCache: LockerPBWCache,
     private val lockerEntryDao: LockerEntryRealDao,
     private val appRunStateService: AppRunStateService,
@@ -177,7 +177,7 @@ class CompanionAppLifecycleManager(
  * exposes PKJSApp instances
  */
 @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
-class PKJSStateFlow(private val runningAppStateFlow: StateFlow<List<CompanionApp>>): StateFlow<PKJSApp?> {
+internal class PKJSStateFlow(private val runningAppStateFlow: StateFlow<List<CompanionApp>>): StateFlow<PKJSApp?> {
     override val value: PKJSApp?
         get() = runningAppStateFlow.value.filterIsInstance<PKJSApp>().firstOrNull()
     override val replayCache: List<PKJSApp?>
@@ -189,7 +189,7 @@ class PKJSStateFlow(private val runningAppStateFlow: StateFlow<List<CompanionApp
     }
 }
 
-expect fun createPlatformSpecificCompanionAppControl(
+internal expect fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
     appInfo: PbwAppInfo,
     pkjsRunning: Boolean,

@@ -10,18 +10,18 @@ import io.rebble.libpebblecommon.util.DataBuffer
 /**
  * Represents a pebble protocol packet
  */
-open class PebblePacket{
-    val endpoint: ProtocolEndpoint
-    val m = StructMapper()
-    var type: UByte? = null
-    val importedLength: UShort?
+public open class PebblePacket{
+    public val endpoint: ProtocolEndpoint
+    public val m: StructMapper = StructMapper()
+    public var type: UByte? = null
+    public val importedLength: UShort?
 
-    constructor(endpoint: ProtocolEndpoint) { //TODO: Packet-level endianness?
+    internal constructor(endpoint: ProtocolEndpoint) { //TODO: Packet-level endianness?
         this.endpoint = endpoint
         importedLength = null
     }
 
-    constructor(packet: UByteArray) {
+    internal constructor(packet: UByteArray) {
         val meta = StructMapper()
         val length = SUShort(meta)
         val ep = SUShort(meta)
@@ -40,7 +40,7 @@ open class PebblePacket{
      * Serializes a framed pebble protocol packet into a byte array
      * @return The serialized packet
      */
-    fun serialize(): UByteArray {
+    public fun serialize(): UByteArray {
         val content = m.toBytes()
         if (content.isEmpty()) throw PacketEncodeException("Malformed packet: contents empty")
         val meta = StructMapper()
@@ -50,13 +50,13 @@ open class PebblePacket{
         return meta.toBytes() + content // Whole packet (meta + content)
     }
 
-    companion object {
+    public companion object {
         /**
          * Deserializes a framed pebble protocol packet into a PebblePacket class
          * @param packet the packet to deserialize
          * @return The deserialized packet
          */
-        fun deserialize(packet: UByteArray): PebblePacket {
+        public fun deserialize(packet: UByteArray): PebblePacket {
             val buf = DataBuffer(packet)
 
             val meta = StructMapper()
@@ -76,7 +76,7 @@ open class PebblePacket{
             return ret
         }
 
-        fun deserialize(data: UByteArray, packet: PebblePacket) {
+        public fun deserialize(data: UByteArray, packet: PebblePacket) {
             return deserialize(DataBuffer(data), packet)
         }
 

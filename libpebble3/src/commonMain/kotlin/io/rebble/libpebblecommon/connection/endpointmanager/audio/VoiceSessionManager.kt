@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.VoiceService
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.TranscriptionWord
@@ -28,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flow
@@ -40,7 +42,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class VoiceSessionManager(
+internal class VoiceSessionManager(
     private val voiceService: VoiceService,
     private val audioStreamService: AudioStreamService,
     private val watchScope: ConnectionCoroutineScope,
@@ -53,7 +55,7 @@ class VoiceSessionManager(
         private val logger = Logger.withTag("VoiceSession")
     }
     private val _currentSession = MutableStateFlow<CurrentSession?>(null)
-    val currentSession = _currentSession.asStateFlow()
+    val currentSession: StateFlow<VoiceSessionManager.CurrentSession?> = _currentSession.asStateFlow()
 
     data class CurrentSession (
         val request: VoiceService.SessionSetupRequest,

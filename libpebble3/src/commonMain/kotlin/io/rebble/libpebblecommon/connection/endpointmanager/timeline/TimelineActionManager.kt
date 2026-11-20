@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -28,10 +29,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
 
-class ActionOverrides {
-    val actionHandlerOverrides =
+internal class ActionOverrides {
+    val actionHandlerOverrides: MutableMap<Uuid, Map<UByte, (List<TimelineItem.Attribute>) -> TimelineActionResult>> =
         mutableMapOf<Uuid, Map<UByte, CustomTimelineActionHandler>>()
-    val internalActionHandlers = mutableMapOf<String, InternalActionHandler>()
+    val internalActionHandlers: MutableMap<String, suspend (String?, List<TimelineItem.Attribute>) -> TimelineActionResult> = mutableMapOf<String, InternalActionHandler>()
 
     suspend fun invokeInternal(action: BaseAction, attributes: List<TimelineItem.Attribute>): TimelineActionResult? =
         action.internalType?.let { internalActionHandlers[it] }?.invoke(action.internalData, attributes)
@@ -41,7 +42,7 @@ class ActionOverrides {
     }
 }
 
-class TimelineActionManager(
+internal class TimelineActionManager(
     private val timelineService: TimelineService,
     private val notifActionHandler: PlatformNotificationActionHandler,
     private val calendarActionHandler: PlatformCalendarActionHandler,
@@ -82,7 +83,7 @@ class TimelineActionManager(
                 return failedResult()
             }
         return when {
-            action.type == TimelineItem.Action.Type.Remove -> {
+            action.type == TimelineActionType.Remove -> {
                 pinDao.markForDeletion(invocation.itemId)
                 TimelineActionResult(
                     success = true,
@@ -111,7 +112,7 @@ class TimelineActionManager(
             // The reminder popup's Dismiss (and the dismiss the firmware fires by
             // itself after a snooze) is remote: the watch dismisses the popup on a
             // successful response and there is nothing else for the phone to do.
-            TimelineItem.Action.Type.Dismiss -> TimelineActionResult(
+            TimelineActionType.Dismiss -> TimelineActionResult(
                 success = true,
                 icon = TimelineIcon.ResultDismissed,
                 title = "Dismissed",
@@ -204,7 +205,7 @@ internal fun PluginActionRef.argsWithReply(attributes: List<TimelineItem.Attribu
     return JsonObject(args + (arg to JsonPrimitive(reply)))
 }
 
-typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult
+internal typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult
 
 /** Gets the action's `internalData`. */
-typealias InternalActionHandler = suspend (data: String?, attributes: List<TimelineItem.Attribute>) -> TimelineActionResult
+internal typealias InternalActionHandler = suspend (data: String?, attributes: List<TimelineItem.Attribute>) -> TimelineActionResult

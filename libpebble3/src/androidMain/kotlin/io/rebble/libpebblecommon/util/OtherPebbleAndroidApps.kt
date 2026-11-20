@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-class OtherPebbleAndroidApps(
+internal class OtherPebbleAndroidApps(
     private val notificationAppDao: NotificationAppRealDao,
     private val application: Application,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,

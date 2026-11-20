@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.plugin.files
 import io.rebble.libpebblecommon.plugin.PluginNativeException
 
 /** An in-memory tree per scope, with the platform implementations' error behaviour. */
-class FakePluginFileSystem : PluginFileSystem {
+internal class FakePluginFileSystem : PluginFileSystem {
     sealed interface Node
     class File(var bytes: ByteArray) : Node
     class Dir(val children: MutableMap<String, Node> = mutableMapOf()) : Node
@@ -86,8 +86,8 @@ class FakePluginFileSystem : PluginFileSystem {
     }
 }
 
-fun FakePluginFileSystem.Dir.file(name: String, content: String = "") =
+internal fun FakePluginFileSystem.Dir.file(name: String, content: String = "") =
     FakePluginFileSystem.File(content.encodeToByteArray()).also { children[name] = it }
 
-fun FakePluginFileSystem.Dir.dir(name: String, build: FakePluginFileSystem.Dir.() -> Unit = {}) =
+internal fun FakePluginFileSystem.Dir.dir(name: String, build: FakePluginFileSystem.Dir.() -> Unit = {}) =
     FakePluginFileSystem.Dir().apply(build).also { children[name] = it }

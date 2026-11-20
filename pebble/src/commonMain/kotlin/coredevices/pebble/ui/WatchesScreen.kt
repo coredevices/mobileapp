@@ -188,8 +188,9 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
@@ -1931,7 +1932,7 @@ private fun NotificationDialog(
                         timestamp = Clock.System.now(),
                         parentId = Uuid.NIL,
                     ) {
-                        layout = TimelineItem.Layout.GenericNotification
+                        layout = TimelineItemLayout.GenericNotification
                         attributes {
                             title { content.title }
                             body { content.body }
@@ -1939,7 +1940,7 @@ private fun NotificationDialog(
                             content.color?.let { backgroundColor { it.toPebbleColor() } }
                         }
                         actions {
-                            action(TimelineItem.Action.Type.Generic) {
+                            action(TimelineActionType.Generic) {
                                 attributes {
                                     title { "Test" }
                                 }

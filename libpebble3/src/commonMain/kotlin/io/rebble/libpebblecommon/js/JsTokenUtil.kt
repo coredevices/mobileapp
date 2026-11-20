@@ -12,7 +12,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import okio.Buffer
 import kotlin.uuid.Uuid
 
-class JsTokenUtil(
+internal class JsTokenUtil(
     private val tokenProvider: TokenProvider,
     private val lockerEntryDao: LockerEntryDao,
     private val watchConfigFlow: WatchConfigFlow,

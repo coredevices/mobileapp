@@ -9,7 +9,7 @@ import platform.Foundation.NSNotificationCenter
 import platform.UIKit.UIDevice
 import platform.UIKit.UIDeviceBatteryLevelDidChangeNotification
 
-actual class PhoneBatteryMonitor {
+internal actual class PhoneBatteryMonitor {
     actual val batteryLevel: Flow<Int?> = callbackFlow {
         val device = UIDevice.currentDevice
         val previouslyMonitoring = device.batteryMonitoringEnabled

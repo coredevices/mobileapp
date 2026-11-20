@@ -33,6 +33,7 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.permissions.AppPermissions
@@ -63,7 +64,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 
-class WebViewJsRunner(
+internal class WebViewJsRunner(
     appContext: AppContext,
     private val libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
@@ -85,9 +86,9 @@ class WebViewJsRunner(
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
-        const val API_NAMESPACE = "Pebble"
-        const val PRIVATE_API_NAMESPACE = "_$API_NAMESPACE"
-        const val STARTUP_URL = "file:///android_asset/webview_startup.html"
+        const val API_NAMESPACE: String = "Pebble"
+        const val PRIVATE_API_NAMESPACE: String = "_$API_NAMESPACE"
+        const val STARTUP_URL: String = "file:///android_asset/webview_startup.html"
         private val PAGE_LOAD_TIMEOUT = 15.seconds
         private val LOCAL_STORAGE_PERSIST_TIMEOUT = 5.seconds
         private val logger = Logger.withTag(WebViewJsRunner::class.simpleName!!)
@@ -99,7 +100,7 @@ class WebViewJsRunner(
     private val pageLoaded = CompletableDeferred<Boolean>()
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
-    override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
+    override val networkAccess: NetworkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, remoteTimelineEmulator, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {

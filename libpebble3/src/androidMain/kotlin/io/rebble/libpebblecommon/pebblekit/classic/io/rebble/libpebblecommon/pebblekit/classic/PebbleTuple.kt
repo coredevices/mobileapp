@@ -10,7 +10,7 @@ import java.util.Locale
  *
  * @author zulak@getpebble.com
  */
-class PebbleTuple private constructor(
+internal class PebbleTuple private constructor(
     /**
      * The integer key identifying the tuple.
      */

@@ -5,8 +5,8 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
-sealed class GeolocationPositionResult {
-    data class Success(
+public sealed class GeolocationPositionResult {
+    public data class Success(
         val timestamp: Instant,
         val latitude: Double,
         val longitude: Double,
@@ -15,30 +15,30 @@ sealed class GeolocationPositionResult {
         val heading: Double?,
         val speed: Double?
     ) : GeolocationPositionResult()
-    data class Error(val message: String) : GeolocationPositionResult()
+    public data class Error(val message: String) : GeolocationPositionResult()
 }
 
-interface SystemGeolocation {
-    companion object {
+public interface SystemGeolocation {
+    public companion object {
         /**
          * Default cache freshness window when the caller doesn't specify a `maximumAge`. Spec
          * default is zero: an unspecified `maximumAge` means the caller wants a fresh fix.
          */
-        val DEFAULT_MAX_AGE = Duration.ZERO
+        public val DEFAULT_MAX_AGE: Duration = Duration.ZERO
 
         /**
          * Default upper bound on how long to wait for an active fix when the caller doesn't
          * specify a `timeout`. Spec default is `Infinity`; we cap to keep JS callers from
          * hanging indefinitely.
          */
-        val DEFAULT_TIMEOUT = 15.seconds
+        public val DEFAULT_TIMEOUT: Duration = 15.seconds
     }
-    suspend fun getCurrentPosition(
+    public suspend fun getCurrentPosition(
         maximumAge: Duration? = null,
         timeout: Duration? = null,
         highAccuracy: Boolean = false,
     ): GeolocationPositionResult
-    suspend fun watchPosition(
+    public suspend fun watchPosition(
         interval: Duration,
         highAccuracy: Boolean = false,
     ): Flow<GeolocationPositionResult>

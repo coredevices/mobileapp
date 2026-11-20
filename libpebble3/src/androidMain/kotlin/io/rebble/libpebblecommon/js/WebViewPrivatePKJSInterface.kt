@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
-class WebViewPrivatePKJSInterface(
+internal class WebViewPrivatePKJSInterface(
     jsRunner: WebViewJsRunner,
     device: CompanionAppDevice,
     scope: CoroutineScope,

@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val logger = Logger.withTag("nativeBluetoothStateFlow")
 
-actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState> = callbackFlow {
+internal actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState> = callbackFlow {
     val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
 
     fun currentState(): BluetoothState =
@@ -41,7 +41,7 @@ actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState
     }
 }.distinctUntilChanged()
 
-actual fun locationServicesBlockScanning(appContext: AppContext): Boolean {
+internal actual fun locationServicesBlockScanning(appContext: AppContext): Boolean {
     if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) return false
     val locationManager = ContextCompat.getSystemService(appContext.context, LocationManager::class.java) ?: return false
     return !LocationManagerCompat.isLocationEnabled(locationManager)

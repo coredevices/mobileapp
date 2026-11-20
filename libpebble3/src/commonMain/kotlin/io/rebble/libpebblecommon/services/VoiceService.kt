@@ -8,13 +8,14 @@ import io.rebble.libpebblecommon.packets.VoiceAttribute
 import io.rebble.libpebblecommon.packets.VoiceAttributeType
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
 
-class VoiceService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+internal class VoiceService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
 
-    val sessionSetupRequests = protocolHandler.inboundMessages
+    val sessionSetupRequests: Flow<VoiceService.SessionSetupRequest> = protocolHandler.inboundMessages
         .filterIsInstance<SessionSetupCommand>()
         .map {
             val uuidData = it.attributes.firstOrNull { attr ->

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
-interface LockerAppPermissionDao {
+internal interface LockerAppPermissionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplace(permission: LockerAppPermission)
 

@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 
 @Entity
-data class ContactEntity(
+public data class ContactEntity internal constructor(
     @PrimaryKey val lookupKey: String,
     val name: String,
     val muteState: MuteState,

@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
-class TimelineApi(
+internal class TimelineApi(
     private val timelinePinRealDao: TimelinePinRealDao,
     private val timelineReminderRealDao: TimelineReminderRealDao,
     private val actionOverrides: ActionOverrides,

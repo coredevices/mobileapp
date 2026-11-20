@@ -5,7 +5,7 @@ package io.rebble.libpebblecommon.util
  *
  * Only supported for [android.graphics.Bitmap.Config.ARGB_8888] formats
  */
-actual class Bitmap(private val androidBitmap: android.graphics.Bitmap) {
+internal actual class Bitmap(private val androidBitmap: android.graphics.Bitmap) {
     init {
         if (androidBitmap.config != android.graphics.Bitmap.Config.ARGB_8888) {
             throw IllegalArgumentException("Only ARGB_8888 bitmaps are supported")

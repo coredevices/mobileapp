@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 
-class AppFetchProvider(
+internal class AppFetchProvider(
     private val pbwCache: LockerPBWCache,
     private val appFetchService: AppFetchService,
     private val putBytesSession: PutBytesSession,

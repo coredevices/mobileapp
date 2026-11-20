@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface CalendarDao {
+internal interface CalendarDao {
 //    @Insert(onConflict = OnConflictStrategy.REPLACE)
 //    suspend fun insertOrReplaceCalendars(calendars: List<CalendarEntity>)
 //

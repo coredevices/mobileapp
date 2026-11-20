@@ -5,8 +5,9 @@ import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
+import io.rebble.libpebblecommon.plugin.WatchSettingsActions
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.uuid.Uuid
@@ -25,13 +26,13 @@ class ActionDescriberTest {
         PluginActionLogEntity(atMs = 0, appUuid = APP, pluginUuid = pluginUuid, action = action, args = args, error = null)
 
     private fun setting(action: String, args: String) =
-        describer.describe(entry(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID, action, args))
+        describer.describe(entry(BuiltInPlugins.WATCH_SETTINGS, action, args))
 
     @Test
     fun aSwitchNamesTheSetting() {
         assertEquals(
             "Turned watch setting Standby Mode off",
-            setting(WatchSettingsPlugin.ACTION_SET_ON, """{"instanceId":"stationaryMode","on":false}"""),
+            setting(WatchSettingsActions.SET_ON, """{"instanceId":"stationaryMode","on":false}"""),
         )
     }
 
@@ -39,11 +40,11 @@ class ActionDescriberTest {
     fun aQuickLaunchButtonNamesTheApp() {
         assertEquals(
             "Set watch setting Quick Launch: Hold Up to Weather",
-            setting(WatchSettingsPlugin.ACTION_SET_VALUE, """{"instanceId":"qlUp","value":"$APP"}"""),
+            setting(WatchSettingsActions.SET_VALUE, """{"instanceId":"qlUp","value":"$APP"}"""),
         )
         assertEquals(
             "Set watch setting Quick Launch: Hold Up to nothing",
-            setting(WatchSettingsPlugin.ACTION_SET_VALUE, """{"instanceId":"qlUp","value":""}"""),
+            setting(WatchSettingsActions.SET_VALUE, """{"instanceId":"qlUp","value":""}"""),
         )
     }
 

@@ -7,7 +7,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
-class FakeLockerEntryDao: LockerEntryDao {
+internal class FakeLockerEntryDao: LockerEntryDao {
     override fun dirtyRecordsForWatchInsert(
         identifier: String,
         timestampMs: Long,

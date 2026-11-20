@@ -9,17 +9,17 @@ import io.rebble.libpebblecommon.util.Endian
 /**
  * Audio streaming packet. Little endian.
  */
-sealed class AudioStream(command: Command, sessionId: UShort = 0u) : PebblePacket(ProtocolEndpoint.AUDIO_STREAMING) {
-    val command = SUByte(m, command.value)
-    val sessionId = SUShort(m, sessionId, endianness = Endian.Little)
+internal sealed class AudioStream(command: Command, sessionId: UShort = 0u) : PebblePacket(ProtocolEndpoint.AUDIO_STREAMING) {
+    val command: SUByte = SUByte(m, command.value)
+    val sessionId: SUShort = SUShort(m, sessionId, endianness = Endian.Little)
 
     class EncoderFrame : StructMappable() {
-        val data = SUnboundBytes(m)
+        val data: SUnboundBytes = SUnboundBytes(m)
     }
 
     class DataTransfer : AudioStream(AudioStream.Command.DataTransfer) {
-        val frameCount = SUByte(m)
-        val frames = SFixedList(m, 0) {
+        val frameCount: SUByte = SUByte(m)
+        val frames: SFixedList<AudioStream.EncoderFrame> = SFixedList(m, 0) {
             EncoderFrame()
         }
         init {
@@ -35,7 +35,7 @@ sealed class AudioStream(command: Command, sessionId: UShort = 0u) : PebblePacke
     }
 }
 
-fun audioStreamPacketsRegister() {
+internal fun audioStreamPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.AUDIO_STREAMING, AudioStream.Command.DataTransfer.value) {
         AudioStream.DataTransfer()
     }

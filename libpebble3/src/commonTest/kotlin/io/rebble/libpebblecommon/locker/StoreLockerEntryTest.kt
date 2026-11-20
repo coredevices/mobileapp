@@ -82,6 +82,13 @@ class StoreLockerEntryTest {
     }
 
     @Test
+    fun aTintableStoreIconIsTintableOnEveryPlatform() {
+        val platform = """{"sdk_version":"5.86","pebble_process_info_flags":0,"name":"diorite",
+            "description":"","images":{"icon":"","list":"","screenshot":""}}"""
+        assertTrue(entry(""","icon_tintable":true""", platform).asEntity(0).platforms.single().listImageTintable)
+    }
+
+    @Test
     fun otherStoresLeaveItToThePbw() {
         assertNull(entry("").requestedPermissions())
     }

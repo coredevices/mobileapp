@@ -27,7 +27,7 @@ import kotlin.uuid.Uuid
 private const val APPMESSAGE_BUFFER_SIZE = 16
 private val APPMESSAGE_TIMEOUT = 10.seconds
 
-class AppMessageService(
+internal class AppMessageService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope
 ) : ProtocolService, ConnectedPebble.AppMessages {
@@ -121,17 +121,17 @@ private fun Map<Int, Any>.toAppMessageTuples(): List<AppMessageTuple> {
         }
     }
 }
-typealias AppMessageDictionary = Map<Int, Any>
+internal typealias AppMessageDictionary = Map<Int, Any>
 
-data class AppMessageData(
+public data class AppMessageData internal constructor(
     val transactionId: UByte,
     val uuid: Uuid,
     val data: AppMessageDictionary
 )
 
-sealed class AppMessageResult(val transactionId: UByte) {
-    class ACK(transactionId: UByte) : AppMessageResult(transactionId)
-    class NACK(transactionId: UByte) : AppMessageResult(transactionId)
+public sealed class AppMessageResult(public val transactionId: UByte) {
+    public class ACK internal constructor(transactionId: UByte) : AppMessageResult(transactionId)
+    public class NACK internal constructor(transactionId: UByte) : AppMessageResult(transactionId)
 }
 
 private fun AppMessage.AppMessagePush.appMessageData(): AppMessageData {

@@ -35,7 +35,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.permissions.byApp
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -805,7 +805,7 @@ class BugReportProcessor(
     }
 
     private suspend fun watchSettingsChangesByApps(): String = buildString {
-        val changes = libPebble.pluginActionLog(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID).first()
+        val changes = libPebble.pluginActionLog(BuiltInPlugins.WATCH_SETTINGS).first()
         val titles = libPebble.getAllLockerBasicInfo().first().associate { it.id to it.title }
         appendLine("Watch settings changed by apps (newest first):")
         if (changes.isEmpty()) appendLine("  none")

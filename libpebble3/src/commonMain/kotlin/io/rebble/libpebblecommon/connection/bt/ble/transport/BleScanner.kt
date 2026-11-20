@@ -9,10 +9,10 @@ import kotlinx.coroutines.flow.Flow
 
 //expect fun libpebbleBleScanner(): BleScanner
 
-fun bleScanner(bleConfigFlow: BleConfigFlow): BleScanner
+internal fun bleScanner(bleConfigFlow: BleConfigFlow): BleScanner
  = kableBleScanner(bleConfigFlow)
 // = libpebbleBleScanner()
 
-interface BleScanner {
+internal interface BleScanner {
     fun scan(): Flow<BleScanResult>
 }

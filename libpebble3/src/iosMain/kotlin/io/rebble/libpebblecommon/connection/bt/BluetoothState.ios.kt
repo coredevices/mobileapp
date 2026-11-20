@@ -31,11 +31,11 @@ private class CentralStateObserver : NSObject(), CBCentralManagerDelegateProtoco
 // Top-level so the manager (which only weakly holds its delegate) lives for the whole process.
 private val centralStateObserver by lazy { CentralStateObserver() }
 
-actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState> {
+internal actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState> {
     // Building a Scanner creates Kable's shared CentralManager now. Peripheral lookups return nothing
     // until it has powered on, and WatchManager forgets a known watch whose lookup fails.
     Scanner { filters { match { services = listOf(PAIRING_SERVICE_UUID) } } }
     return centralStateObserver.state
 }
 
-actual fun locationServicesBlockScanning(appContext: AppContext): Boolean = false
+internal actual fun locationServicesBlockScanning(appContext: AppContext): Boolean = false

@@ -7,7 +7,7 @@ private val Silver = Color(0xFFC4C6C8)
 private val Gunmetal = Color(0xFF55585C)
 private val Gold = Color(0xFFD4B36A)
 
-enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescription: String, val platform: WatchType, val color: Color = Color.Black, val accentColor: Color? = null) {
+public enum class WatchColor(public val protocolNumber: Int, public val jsName: String, public val uiDescription: String, public val platform: WatchType, public val color: Color = Color.Black, public val accentColor: Color? = null) {
     ClassicBlack(1, "pebble_black", "Pebble Classic - Black", WatchType.APLITE),
     ClassicWhite(2, "pebble_white", "Pebble Classic - White", WatchType.APLITE, color = Color.White),
     ClassicRed(3, "pebble_red", "Pebble Classic - Red", WatchType.APLITE, color = Color.Red),
@@ -57,14 +57,14 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     PebbleRound2Silver14(43, "pebble_round_2_silver_14", "Pebble Round 2 - Silver", WatchType.GABBRO, color = Silver),
     Unknown(-1, "unknown_unknown", "Unknown Watch!", WatchType.APLITE);
 
-    companion object {
-        fun fromProtocolNumber(protocolNumber: Int?): WatchColor {
+    public companion object {
+        public fun fromProtocolNumber(protocolNumber: Int?): WatchColor {
             return entries.firstOrNull { it.protocolNumber == protocolNumber } ?: Unknown
         }
     }
 }
 
-fun WatchColor.supportsHrm(): Boolean = when (this) {
+public fun WatchColor.supportsHrm(): Boolean = when (this) {
     WatchColor.Pebble2HRBlack,
     WatchColor.Pebble2HRLime,
     WatchColor.Pebble2HRFlame,

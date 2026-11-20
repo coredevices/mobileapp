@@ -14,7 +14,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlin.time.Instant
 
-class PebbleDeviceFactory {
+internal class PebbleDeviceFactory {
     internal fun create(
         identifier: PebbleIdentifier,
         name: String,

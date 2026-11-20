@@ -26,11 +26,11 @@ import kotlin.uuid.Uuid
  *
  * Either way the ring stops itself after [RING_TIMEOUT] if nothing stops it first.
  */
-class FindMyPhonePlugin(
+internal class FindMyPhonePlugin(
     private val soundPlayer: PhoneSoundPlayer,
     private val scope: LibPebbleCoroutineScope,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_FIND_MY_PHONE_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.FIND_MY_PHONE
     override val name: String = "Find My Phone"
     override val description: String = "Ring the phone from the watch to find it."
 
@@ -135,15 +135,12 @@ class FindMyPhonePlugin(
         Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "phone"
-        const val ITEM_FIND_MY_PHONE = "find_my_phone"
-        const val PROPERTY_RINGING = "ringing"
-        const val ACTION_RING = "ring"
-        const val ACTION_STOP = "stop"
+        const val CATEGORY: String = "phone"
+        const val ITEM_FIND_MY_PHONE: String = "find_my_phone"
+        const val PROPERTY_RINGING: String = "ringing"
+        const val ACTION_RING: String = "ring"
+        const val ACTION_STOP: String = "stop"
         private const val INSTANCE_ID = "phone"
         private val RING_TIMEOUT = 60.seconds
-
-        val BUILT_IN_FIND_MY_PHONE_UUID: Uuid =
-            Uuid.parse("00000000-0000-0000-0001-000000000008")
     }
 }

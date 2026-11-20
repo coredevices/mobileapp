@@ -1,42 +1,44 @@
 package io.rebble.libpebblecommon.database.entity
 
 import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemFlag
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import kotlin.time.Instant
 import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
-class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
+public class ActionBuilder internal constructor(public val actionId: UByte, public val type: TimelineActionType) {
     private var attributes = listOf<BaseAttribute>()
-    var internalType: String? = null
-    var pluginAction: PluginActionRef? = null
-    var internalData: String? = null
+    internal var internalType: String? = null
+    internal var pluginAction: PluginActionRef? = null
+    public var internalData: String? = null
 
-    fun attributes(block: AttributesListBuilder.() -> Unit) {
+    internal fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
         builder.block()
         attributes = builder.build()
     }
 
-    fun build(): BaseAction {
+    internal fun build(): BaseAction {
         return BaseAction(actionId, type, attributes, internalType, pluginAction, internalData)
     }
 }
 
-fun actions(block: ActionsListBuilder.() -> Unit): List<BaseAction> = ActionsListBuilder().apply {
+internal fun actions(block: ActionsListBuilder.() -> Unit): List<BaseAction> = ActionsListBuilder().apply {
     block()
 }.build()
 
-class ActionsListBuilder internal constructor() {
+public class ActionsListBuilder internal constructor() {
     private val actions = mutableListOf<BaseAction>()
     private var actionId: UByte = 0u
 
-    fun action(
-        type: TimelineItem.Action.Type,
+    public fun action(
+        type: TimelineActionType,
         internalType: String? = null,
         block: ActionBuilder.() -> Unit,
     ) {
@@ -50,119 +52,119 @@ class ActionsListBuilder internal constructor() {
     }
 }
 
-fun attributes(block: AttributesListBuilder.() -> Unit): List<BaseAttribute> =
+internal fun attributes(block: AttributesListBuilder.() -> Unit): List<BaseAttribute> =
     AttributesListBuilder().apply {
         block()
     }.build()
 
-class AttributesListBuilder internal constructor() {
+public class AttributesListBuilder internal constructor() {
     private val attributes = mutableListOf<BaseAttribute>()
 
-    fun string(attribute: TimelineAttribute, block: () -> String) {
+    internal fun string(attribute: TimelineAttribute, block: () -> String) {
         attributes.add(BaseAttribute.TextAttribute(attribute, block()))
     }
 
-    fun icon(attribute: TimelineAttribute, block: () -> TimelineIcon) {
+    internal fun icon(attribute: TimelineAttribute, block: () -> TimelineIcon) {
         attributes.add(BaseAttribute.IconAttribute(attribute, block()))
     }
 
-    fun stringList(attribute: TimelineAttribute, block: () -> List<String>) {
+    internal fun stringList(attribute: TimelineAttribute, block: () -> List<String>) {
         attributes.add(BaseAttribute.TextListAttribute(attribute, block()))
     }
 
-    fun uIntList(attribute: TimelineAttribute, block: () -> List<UInt>) {
+    internal fun uIntList(attribute: TimelineAttribute, block: () -> List<UInt>) {
         attributes.add(BaseAttribute.UIntListAttribute(attribute, block()))
     }
 
-    fun uByte(attribute: TimelineAttribute, block: () -> UByte) {
+    public fun uByte(attribute: TimelineAttribute, block: () -> UByte) {
         attributes.add(BaseAttribute.UByteAttribute(attribute, block()))
     }
 
-    fun title(block: () -> String) {
+    public fun title(block: () -> String) {
         string(TimelineAttribute.Title, block)
     }
 
-    fun subtitle(block: () -> String) {
+    public fun subtitle(block: () -> String) {
         string(TimelineAttribute.Subtitle, block)
     }
 
-    fun body(block: () -> String) {
+    public fun body(block: () -> String) {
         string(TimelineAttribute.Body, block)
     }
 
-    fun location(block: () -> String) {
+    public fun location(block: () -> String) {
         string(TimelineAttribute.LocationName, block)
     }
 
-    fun icon(block: () -> TimelineIcon) {
+    internal fun icon(block: () -> TimelineIcon) {
         icon(TimelineAttribute.Icon, block)
     }
 
-    fun tinyIcon(block: () -> TimelineIcon) {
+    public fun tinyIcon(block: () -> TimelineIcon) {
         icon(TimelineAttribute.TinyIcon, block)
     }
 
-    fun smallIcon(block: () -> TimelineIcon) {
+    internal fun smallIcon(block: () -> TimelineIcon) {
         icon(TimelineAttribute.SmallIcon, block)
     }
 
-    fun largeIcon(block: () -> TimelineIcon) {
+    public fun largeIcon(block: () -> TimelineIcon) {
         icon(TimelineAttribute.LargeIcon, block)
     }
 
-    fun cannedResponse(block: () -> List<String>) {
+    internal fun cannedResponse(block: () -> List<String>) {
         stringList(TimelineAttribute.CannedResponse) { trimCannedResponses(block()) }
     }
 
-    fun sender(block: () -> String) {
+    internal fun sender(block: () -> String) {
         string(TimelineAttribute.Sender, block)
     }
 
-    fun primaryColor(block: () -> PebbleColor) {
+    internal fun primaryColor(block: () -> PebbleColor) {
         attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.ForegroundColor, block()))
     }
 
-    fun secondaryColor(block: () -> PebbleColor) {
+    internal fun secondaryColor(block: () -> PebbleColor) {
         attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.SecondaryColor, block()))
     }
 
-    fun backgroundColor(block: () -> PebbleColor) {
+    public fun backgroundColor(block: () -> PebbleColor) {
         attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.BackgroundColor, block()))
     }
 
-    fun lastUpdated(block: () -> Instant) {
+    public fun lastUpdated(block: () -> Instant) {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
     }
 
-    fun launchCode(block: () -> UInt) {
+    internal fun launchCode(block: () -> UInt) {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LaunchCode, block()))
     }
 
-    fun appName(block: () -> String) {
+    public fun appName(block: () -> String) {
         string(TimelineAttribute.AppName, block)
     }
 
-    fun headings(block: () -> List<String>) {
+    public fun headings(block: () -> List<String>) {
         stringList(TimelineAttribute.Headings, block)
     }
 
-    fun paragraphs(block: () -> List<String>) {
+    public fun paragraphs(block: () -> List<String>) {
         stringList(TimelineAttribute.Paragraphs, block)
     }
 
-    fun muteDayOfWeek(block: () -> UByte) {
+    internal fun muteDayOfWeek(block: () -> UByte) {
         attributes.add(BaseAttribute.UByteAttribute(TimelineAttribute.MuteDayOfWeek, block()))
     }
 
-    fun muteExpiration(block: () -> Instant) {
+    internal fun muteExpiration(block: () -> Instant) {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.MuteExpiration, block().epochSeconds.toUInt()))
     }
 
-    fun vibrationPattern(block: () -> List<UInt>) {
+    public fun vibrationPattern(block: () -> List<UInt>) {
         uIntList(TimelineAttribute.VibrationPattern, block)
     }
 
-    fun notificationFilteringRules(block: () -> UByteArray) {
+    internal fun notificationFilteringRules(block: () -> UByteArray) {
         attributes.add(BaseAttribute.UByteArrayAttribute(TimelineAttribute.NotificationFilteringRules, block()))
     }
 
@@ -171,83 +173,83 @@ class AttributesListBuilder internal constructor() {
     }
 }
 
-class FlagsBuilder internal constructor() {
-    private val flags = mutableListOf<TimelineItem.Flag>()
+internal class FlagsBuilder internal constructor() {
+    private val flags = mutableListOf<TimelineItemFlag>()
 
-    fun isVisible() {
-        flags.add(TimelineItem.Flag.IS_VISIBLE)
+    internal fun isVisible() {
+        flags.add(TimelineItemFlag.IS_VISIBLE)
     }
 
-    fun isFloating() {
-        flags.add(TimelineItem.Flag.IS_FLOATING)
+    internal fun isFloating() {
+        flags.add(TimelineItemFlag.IS_FLOATING)
     }
 
-    fun isAllDay() {
-        flags.add(TimelineItem.Flag.IS_ALL_DAY)
+    internal fun isAllDay() {
+        flags.add(TimelineItemFlag.IS_ALL_DAY)
     }
 
-    fun fromWatch() {
-        flags.add(TimelineItem.Flag.FROM_WATCH)
+    internal fun fromWatch() {
+        flags.add(TimelineItemFlag.FROM_WATCH)
     }
 
-    fun fromANCS() {
-        flags.add(TimelineItem.Flag.FROM_ANCS)
+    internal fun fromANCS() {
+        flags.add(TimelineItemFlag.FROM_ANCS)
     }
 
-    fun persistQuickView() {
-        flags.add(TimelineItem.Flag.PERSIST_QUICK_VIEW)
+    internal fun persistQuickView() {
+        flags.add(TimelineItemFlag.PERSIST_QUICK_VIEW)
     }
 
-    fun silent() {
-        flags.add(TimelineItem.Flag.SILENT)
+    internal fun silent() {
+        flags.add(TimelineItemFlag.SILENT)
     }
 
-    internal fun build(): List<TimelineItem.Flag> {
+    internal fun build(): List<TimelineItemFlag> {
         return flags.toList()
     }
 }
 
-class TimelineNotificationBuilder(
+public class TimelineNotificationBuilder internal constructor(
     override val parentId: Uuid,
     override val timestamp: Instant,
 ) : TimelineItemContainerBuilder() {
     override val duration: Duration = Duration.ZERO
-    override var layout: TimelineItem.Layout = TimelineItem.Layout.GenericNotification
+    override var layout: TimelineItemLayout = TimelineItemLayout.GenericNotification
 
-    fun build(): TimelineNotification {
+    internal fun build(): TimelineNotification {
         val container = buildContainer()
         return TimelineNotification(itemID, container)
     }
 }
 
-class TimelinePinBuilder(
+public class TimelinePinBuilder internal constructor(
     override val parentId: Uuid,
     override val timestamp: Instant,
 ) : TimelineItemContainerBuilder() {
     override var duration: Duration = Duration.ZERO
-    override var layout: TimelineItem.Layout = TimelineItem.Layout.GenericPin
-    var backingId: String? = null
+    override var layout: TimelineItemLayout = TimelineItemLayout.GenericPin
+    internal var backingId: String? = null
 
-    fun build(): TimelinePin {
+    internal fun build(): TimelinePin {
         val container = buildContainer()
         return TimelinePin(itemID, container, backingId)
     }
 }
 
-class TimelineReminderBuilder(
+public class TimelineReminderBuilder internal constructor(
     override val parentId: Uuid,
     override val timestamp: Instant,
 ) : TimelineItemContainerBuilder() {
     override val duration: Duration = Duration.ZERO
-    override var layout: TimelineItem.Layout = TimelineItem.Layout.GenericReminder
+    override var layout: TimelineItemLayout = TimelineItemLayout.GenericReminder
 
-    fun build(): TimelineReminder {
+    internal fun build(): TimelineReminder {
         val container = buildContainer()
         return TimelineReminder(itemID, container)
     }
 }
 
-fun buildTimelineNotification(
+public fun buildTimelineNotification(
     parentId: Uuid,
     timestamp: Instant,
     block: TimelineNotificationBuilder.() -> Unit,
@@ -257,7 +259,7 @@ fun buildTimelineNotification(
     return builder.build()
 }
 
-fun buildTimelinePin(
+public fun buildTimelinePin(
     parentId: Uuid,
     timestamp: Instant,
     block: TimelinePinBuilder.() -> Unit,
@@ -267,7 +269,7 @@ fun buildTimelinePin(
     return builder.build()
 }
 
-fun buildTimelineReminder(
+public fun buildTimelineReminder(
     parentId: Uuid,
     timestamp: Instant,
     block: TimelineReminderBuilder.() -> Unit,
@@ -277,29 +279,29 @@ fun buildTimelineReminder(
     return builder.build()
 }
 
-sealed class TimelineItemContainerBuilder {
-    var itemID: Uuid = Uuid.random()
-    abstract val parentId: Uuid
-    abstract val timestamp: Instant
-    abstract val duration: Duration
-    private var flags: List<TimelineItem.Flag> = emptyList()
-    abstract var layout: TimelineItem.Layout
+public sealed class TimelineItemContainerBuilder {
+    public var itemID: Uuid = Uuid.random()
+    internal abstract val parentId: Uuid
+    internal abstract val timestamp: Instant
+    public abstract val duration: Duration
+    private var flags: List<TimelineItemFlag> = emptyList()
+    public abstract var layout: TimelineItemLayout
     private var attributes = listOf<BaseAttribute>()
     private var actions = listOf<BaseAction>()
 
-    fun attributes(block: AttributesListBuilder.() -> Unit) {
+    public fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
         builder.block()
         attributes = builder.build()
     }
 
-    fun actions(block: ActionsListBuilder.() -> Unit) {
+    public fun actions(block: ActionsListBuilder.() -> Unit) {
         val builder = ActionsListBuilder()
         builder.block()
         actions = builder.build()
     }
 
-    fun flags(block: FlagsBuilder.() -> Unit) {
+    internal fun flags(block: FlagsBuilder.() -> Unit) {
         val builder = FlagsBuilder()
         builder.block()
         flags = builder.build()

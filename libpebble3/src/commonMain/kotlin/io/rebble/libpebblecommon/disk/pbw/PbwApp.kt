@@ -23,32 +23,32 @@ import kotlinx.io.readByteArray
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-class PbwApp(private val path: Path) {
-    val info by lazy { requirePbwAppInfo(path) }
-    val hasPKJS by lazy { pkjsFileExists(path) }
-    fun getManifest(watchType: WatchType): PbwManifest? = getPbwManifest(path, watchType)
-    fun getBinaryFor(watchType: WatchType): Source? {
+public class PbwApp(private val path: Path) {
+    public val info: PbwAppInfo by lazy { requirePbwAppInfo(path) }
+    internal val hasPKJS: Boolean by lazy { pkjsFileExists(path) }
+    internal fun getManifest(watchType: WatchType): PbwManifest? = getPbwManifest(path, watchType)
+    internal fun getBinaryFor(watchType: WatchType): Source? {
         val filename = getManifest(watchType)?.application?.name ?: return null
         return requirePbwBinaryBlob(path, watchType, filename)
     }
-    fun getResourcesFor(watchType: WatchType): Source? {
+    internal fun getResourcesFor(watchType: WatchType): Source? {
         val resources = getManifest(watchType)?.resources ?: return null
         return requirePbwBinaryBlob(path, watchType, resources.name)
     }
-    fun getBinaryHeaderFor(watchType: WatchType): PbwBinHeader? {
+    internal fun getBinaryHeaderFor(watchType: WatchType): PbwBinHeader? {
         return getBinaryFor(watchType)?.use { source ->
             PbwBinHeader.parseFileHeader(source.readByteArray(PbwBinHeader.SIZE).asUByteArray())
         }
     }
-    fun getWorkerFor(watchType: WatchType): Source? {
+    internal fun getWorkerFor(watchType: WatchType): Source? {
         val filename = getManifest(watchType)?.worker ?: return null
         return requirePbwBinaryBlob(path, watchType, filename.name)
     }
-    fun getPKJSFile(): Source {
+    internal fun getPKJSFile(): Source {
         return requirePbwPKJSFile(path)
     }
-    fun getTextFile(name: String): String? = DiskUtil.getPbwTextFile(path, name)
-    fun source(fileSystem: FileSystem = SystemFileSystem): RawSource {
+    internal fun getTextFile(name: String): String? = DiskUtil.getPbwTextFile(path, name)
+    internal fun source(fileSystem: FileSystem = SystemFileSystem): RawSource {
         return fileSystem.source(path)
     }
 }
@@ -56,13 +56,13 @@ class PbwApp(private val path: Path) {
 /**
  * Pick best variant, ignoring appinfo targetPlatforms which can be wrong for old pbws
  */
-fun PbwApp.bestVariantFor(watchType: WatchType): WatchType? =
+internal fun PbwApp.bestVariantFor(watchType: WatchType): WatchType? =
     watchType.getCompatibleAppVariants().firstOrNull { getManifest(it) != null }
 
 /** False for a plugin-only pbw (a plugin, no watchapp binary for any platform). */
-fun PbwApp.hasWatchappBuild(): Boolean = WatchType.entries.any { getManifest(it) != null }
+internal fun PbwApp.hasWatchappBuild(): Boolean = WatchType.entries.any { getManifest(it) != null }
 
-fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
+internal fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
     // Built from the variants actually in the pbw; appinfo targetPlatforms can be wrong (see [bestVariantFor])
     val platforms = WatchType.entries.mapNotNull { watchType ->

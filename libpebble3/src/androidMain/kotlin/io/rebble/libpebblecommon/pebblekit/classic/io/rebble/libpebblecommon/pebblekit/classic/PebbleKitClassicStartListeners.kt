@@ -14,7 +14,7 @@ import kotlin.uuid.toKotlinUuid
 
 private val logger = Logger.withTag("PebbleKitClassicStartListeners")
 
-class PebbleKitClassicStartListeners(
+internal class PebbleKitClassicStartListeners(
     private val context: Context,
     private val libPebble: LibPebble,
     private val coroutineScope: LibPebbleCoroutineScope
@@ -39,7 +39,7 @@ class PebbleKitClassicStartListeners(
     }
 }
 
-fun Serializable.asUuid(): Uuid? = (this as? UUID)?.toKotlinUuid() ?: (this as? String)?.let {
+internal fun Serializable.asUuid(): Uuid? = (this as? UUID)?.toKotlinUuid() ?: (this as? String)?.let {
     try {
         Uuid.parse(it)
     } catch (e: IllegalArgumentException) {

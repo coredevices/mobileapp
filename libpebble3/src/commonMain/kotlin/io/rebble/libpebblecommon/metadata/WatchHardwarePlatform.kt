@@ -14,7 +14,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchType: WatchType, val revision: String) {
+public enum class WatchHardwarePlatform(public val protocolNumber: UByte, private val _watchType: WatchType, public val revision: String) {
     UNKNOWN(0u, WatchType.BASALT, "unknown"),
     PEBBLE_ONE_EV_1(1u, WatchType.APLITE, "ev1"),
     PEBBLE_ONE_EV_2(2u, WatchType.APLITE, "ev2"),
@@ -53,29 +53,29 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchTy
     CORE_QEMU_GABBRO(242u, WatchType.GABBRO, "qemu_gabbro"),
     ;
 
-    val watchType: WatchType
+    public val watchType: WatchType
         get() = when (this) {
             UNKNOWN -> unknownWatchTypePlatform
             else -> _watchType
         }
 
-    companion object {
+    public companion object {
         private var unknownWatchTypePlatform: WatchType = WatchType.EMERY
 
-        fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
+        public fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
             return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN.also {
                 Logger.d { "unknown hardware revision: $number" }
             }
         }
 
-        fun fromHWRevision(revision: String?): WatchHardwarePlatform {
+        internal fun fromHWRevision(revision: String?): WatchHardwarePlatform {
             if (revision == "unk") return UNKNOWN
             return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN.also {
                 Logger.d { "unknown hardware revision: $revision" }
             }
         }
 
-        fun init(
+        internal fun init(
             libPebbleCoroutineScope: LibPebbleCoroutineScope,
             libPebbleConfigFlow: StateFlow<LibPebbleConfig>,
         ) {
@@ -89,7 +89,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchTy
 }
 
 @Serializer(WatchHardwarePlatform::class)
-class WatchHardwarePlatformSerializer {
+internal class WatchHardwarePlatformSerializer {
     override val descriptor: SerialDescriptor
         get() = PrimitiveSerialDescriptor("WatchHardwarePlatform", PrimitiveKind.STRING)
 

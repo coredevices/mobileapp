@@ -45,7 +45,7 @@ import kotlin.time.Instant
 /**
  * Singleton to handle sending notifications cleanly, as well as TODO: receiving/acting on action events
  */
-class SystemService(
+internal class SystemService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
     private val phoneCapabilities: PhoneCapabilities,
@@ -264,7 +264,7 @@ private val FIRMWARE_UPDATE_STATUS_TIMEOUT = 15.seconds
 
 private val FIRMWARE_VERSION_REGEX = Regex("v?([0-9]+)\\.([0-9]+)(?:\\.([0-9]+))?(?:-(.*))?")
 
-data class FirmwareVersion(
+public data class FirmwareVersion(
     val stringVersion: String,
     val timestamp: Instant,
     val major: Int,
@@ -298,8 +298,8 @@ data class FirmwareVersion(
         return code() + timestamp.hashCode()
     }
 
-    companion object {
-        fun from(
+    public companion object {
+        public fun from(
             tag: String,
             isRecovery: Boolean,
             gitHash: String,
@@ -330,7 +330,7 @@ data class FirmwareVersion(
             )
         }
 
-        fun FirmwareVersion.slot(): Int? = when {
+        internal fun FirmwareVersion.slot(): Int? = when {
             isDualSlot && isSlot0 -> 0
             isDualSlot && !isSlot0 -> 1
             else -> null
@@ -338,7 +338,7 @@ data class FirmwareVersion(
     }
 }
 
-fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
+internal fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     val properties = FirmwareProperty.fromFlags(flags.get())
     Logger.d { "WatchFirmwareVersion flags = ${flags.get()}" }
     return FirmwareVersion.from(
@@ -351,7 +351,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     )
 }
 
-data class WatchInfo(
+public data class WatchInfo(
     val runningFwVersion: FirmwareVersion,
     val recoveryFwVersion: FirmwareVersion?,
     val platform: WatchHardwarePlatform,
@@ -383,7 +383,7 @@ private val FwVersionSupportsCustomVibePatterns = FirmwareVersion(
     isSlot0 = false,
 )
 
-fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
+internal fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
     val runningFwVersion = running.firmwareVersion()
     checkNotNull(runningFwVersion)
     val recoveryFwVersion = recovery.firmwareVersion()
@@ -431,7 +431,7 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
     )
 }
 
-fun ByteArray.toMacAddressString(): String {
+internal fun ByteArray.toMacAddressString(): String {
     require(size == 6) { "MAC address must be 6 bytes long" }
     return reversed().joinToString(":") { byte ->
         val intRepresentation = byte.toInt() and 0xFF

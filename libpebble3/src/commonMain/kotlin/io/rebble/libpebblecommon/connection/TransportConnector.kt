@@ -48,7 +48,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
-enum class ConnectionFailureReason {
+public enum class ConnectionFailureReason {
     RegisterGattServer,
     FailedToConnect,
     ConnectTimeout,
@@ -74,23 +74,23 @@ enum class ConnectionFailureReason {
 }
 
 /** After this many consecutive [ConnectionFailureReason.PeripheralNotFound] failures, stop auto-connecting. */
-const val PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS = 3
+public const val PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS: Int = 3
 
-sealed class PebbleConnectionResult {
+internal sealed class PebbleConnectionResult {
     data class Success(val reversePpogVersion: ReversePpogVersion?) : PebbleConnectionResult()
 
     data class Failed(val reason: ConnectionFailureReason) : PebbleConnectionResult()
 }
 
-interface TransportConnector {
+internal interface TransportConnector {
     suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?): PebbleConnectionResult
     suspend fun disconnect()
     val disconnected: Deferred<ConnectionFailureReason>
 }
 
-class WasDisconnected(val disconnected: Deferred<ConnectionFailureReason>)
+internal class WasDisconnected(val disconnected: Deferred<ConnectionFailureReason>)
 
-sealed class ConnectingPebbleState {
+internal sealed class ConnectingPebbleState {
     abstract val identifier: PebbleIdentifier
 
     data class Inactive(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
@@ -116,26 +116,26 @@ sealed class ConnectingPebbleState {
     }
 }
 
-fun ConnectingPebbleState?.reversePpogVersion(): ReversePpogVersion? = when (this) {
+internal fun ConnectingPebbleState?.reversePpogVersion(): ReversePpogVersion? = when (this) {
     is ConnectingPebbleState.Connected.ConnectedInPrf -> reversePpogVersion
     is ConnectingPebbleState.Connected.ConnectedNotInPrf -> reversePpogVersion
     is ConnectingPebbleState.Negotiating -> reversePpogVersion
     else -> null
 }
 
-fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
+internal fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
     is Connected.ConnectedInPrf, is Connected.ConnectedNotInPrf, is Connecting, is Negotiating -> true
     is Failed, is Inactive, null -> false
 }
 
-interface PebbleConnector {
+internal interface PebbleConnector {
     suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason? = null)
     fun disconnect()
     val disconnected: WasDisconnected
     val state: StateFlow<ConnectingPebbleState>
 }
 
-class RealPebbleConnector(
+internal class RealPebbleConnector(
     private val transportConnector: TransportConnector,
     private val identifier: PebbleIdentifier,
     private val scope: ConnectionCoroutineScope,
@@ -173,7 +173,7 @@ class RealPebbleConnector(
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
-    override val disconnected = WasDisconnected(transportConnector.disconnected)
+    override val disconnected: WasDisconnected = WasDisconnected(transportConnector.disconnected)
 
     override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
         _state.value = Connecting(identifier)

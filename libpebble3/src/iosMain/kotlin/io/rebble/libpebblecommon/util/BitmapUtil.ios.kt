@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 
-actual fun createImageBitmapFromPixelArray(
+internal actual fun createImageBitmapFromPixelArray(
     pixels: IntArray,
     width: Int,
     height: Int
@@ -38,7 +38,7 @@ actual fun createImageBitmapFromPixelArray(
     }
 }
 
-actual fun isScreenshotFinished(
+internal actual fun isScreenshotFinished(
     buffer: DataBuffer,
     expectedSize: Int
 ): Boolean {

@@ -11,7 +11,7 @@ import kotlin.uuid.Uuid
 /**
  * Data of the APP BlobDB Entry
  */
-class AppMetadata(
+internal class AppMetadata(
     uuid: Uuid = Uuid.NIL,
     flags: UInt = 0u,
     icon: UInt = 0u,
@@ -78,10 +78,10 @@ class AppMetadata(
     val watchPermissions: SUInt? = watchPermissions?.let { SUInt(m, it, endianness = Endian.Little) }
 }
 
-object WatchPermission {
-    const val MICROPHONE = 1 shl 0
+internal object WatchPermission {
+    const val MICROPHONE: Int = 1 shl 0
     /** Without it the watch allows health whatever [HEALTH_GRANTED] says, as it does for a phone that never sends it. */
-    const val HEALTH_ENFORCED = 1 shl 1
-    const val HEALTH_GRANTED = 1 shl 2
+    const val HEALTH_ENFORCED: Int = 1 shl 1
+    const val HEALTH_GRANTED: Int = 1 shl 2
 }
 

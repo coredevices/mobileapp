@@ -37,13 +37,13 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-expect fun peripheralFromIdentifier(
+internal expect fun peripheralFromIdentifier(
     identifier: PebbleBleIdentifier,
     name: String,
     autoConnect: Boolean,
 ): Peripheral?
 
-class KableGattConnector(
+internal class KableGattConnector(
     private val identifier: PebbleBleIdentifier,
     platformIdentifier: PlatformIdentifier.BlePlatformIdentifier,
     private val scope: ConnectionCoroutineScope,
@@ -150,7 +150,7 @@ private fun Status?.asFailureReason(): ConnectionFailureReason = when (this) {
     null -> ConnectionFailureReason.FailedToConnect
 }
 
-expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
+internal expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
 
 /**
  * Force a fresh GATT service rediscovery on the current connection. On Android
@@ -167,9 +167,9 @@ expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
  *
  * Returns false on platforms without an equivalent mechanism (iOS, JVM stub).
  */
-expect suspend fun Peripheral.refreshServicesNative(): Boolean
+internal expect suspend fun Peripheral.refreshServicesNative(): Boolean
 
-class KableConnectedGattClient(
+internal class KableConnectedGattClient(
     val identifier: PebbleBleIdentifier,
     val peripheral: Peripheral,
     private val blePlatformConfig: BlePlatformConfig,
@@ -204,7 +204,7 @@ class KableConnectedGattClient(
         return io.rebble.libpebblecommon.connection.bt.isBonded(identifier)
     }
 
-    fun GattWriteType.asKableWriteType() = when (this) {
+    fun GattWriteType.asKableWriteType(): WriteType = when (this) {
         GattWriteType.WithResponse -> WriteType.WithResponse
         GattWriteType.NoResponse -> WriteType.WithoutResponse
     }

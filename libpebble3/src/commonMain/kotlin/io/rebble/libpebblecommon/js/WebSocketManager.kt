@@ -38,7 +38,7 @@ private val USAGE_REPORT_INTERVAL = 1.minutes
 
 private val UPGRADE_HEADERS = setOf("host", "connection", "upgrade")
 
-class WebSocketManager(
+internal class WebSocketManager(
     private val scope: CoroutineScope,
     private val eval: (String) -> Unit,
     private val client: HttpClient,
@@ -52,8 +52,8 @@ class WebSocketManager(
     private val instances = mutableMapOf<Int, Instance>()
     private val logger = Logger.withTag("WebSocketManager")
 
-    override val name = "_WebSocketManager"
-    override val methods = listOf("createInstance", "send", "close")
+    override val name: String = "_WebSocketManager"
+    override val methods: List<String> = listOf("createInstance", "send", "close")
 
     override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
         "createInstance" -> createInstance(

@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 
 internal expect fun createJSSettings(appContext: AppContext, id: String): Settings
 
-abstract class JSLocalStorageInterface(
+internal abstract class JSLocalStorageInterface(
     scopedSettingsUuid: String,
     appContext: AppContext,
 ) {

@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(indices = [Index(value = ["platformId"], unique = true)])
-data class CalendarEntity(
+public data class CalendarEntity(
         @PrimaryKey(autoGenerate = true) val id: Int = 0,
         val platformId: String,
         val name: String,

@@ -38,7 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  * Uses [NotificationCallDetector] for contact info and answer/decline actions from
  * CATEGORY_CALL notifications.
  */
-class AndroidPhoneReceiver(
+internal class AndroidPhoneReceiver(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val context: Context,
     private val callDetector: NotificationCallDetector,

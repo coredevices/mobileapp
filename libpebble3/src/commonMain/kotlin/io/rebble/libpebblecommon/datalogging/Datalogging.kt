@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.uuid.Uuid
 
-class Datalogging(
+internal class Datalogging(
     private val webServices: WebServices,
     private val healthDataProcessor: HealthDataProcessor,
 ) {
@@ -129,7 +129,7 @@ class Datalogging(
     }
 }
 
-class MemfaultChunk : StructMappable() {
+internal class MemfaultChunk : StructMappable() {
     val chunkSize: SUInt = SUInt(m, 0u, Endian.Little)
     val bytes: SBytes = SBytes(m).apply { linkWithSize(chunkSize) }
 }
@@ -138,7 +138,7 @@ class MemfaultChunk : StructMappable() {
  * A data logging event of a third-party watchapp. [uuid], [tag] and [timestamp] identify the
  * session; all items of a session are [itemSize] bytes.
  */
-sealed interface ThirdPartyDatalogEvent {
+internal sealed interface ThirdPartyDatalogEvent {
     val uuid: Uuid
     val tag: UInt
     val timestamp: UInt

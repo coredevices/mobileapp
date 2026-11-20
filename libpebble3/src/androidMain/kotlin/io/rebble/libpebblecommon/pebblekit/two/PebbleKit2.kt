@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 
-class PebbleKit2(
+internal class PebbleKit2(
     private val device: CompanionAppDevice,
     private val appInfo: PbwAppInfo,
     private val pkjsRunning: Boolean,

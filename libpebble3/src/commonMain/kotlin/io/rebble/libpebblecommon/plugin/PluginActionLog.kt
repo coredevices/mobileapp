@@ -12,17 +12,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.uuid.Uuid
 
-fun interface PluginActionRecorder {
+internal fun interface PluginActionRecorder {
     /** Never blocks. */
     fun record(appUuid: Uuid, pluginUuid: Uuid, action: String, args: JsonObject, result: ActionResult)
 }
 
-interface PluginActionLogApi {
+public interface PluginActionLogApi {
     /** Actions apps had plugins run, newest first; only those run by [targetUuid] and asked for by [callerUuid] if set. */
-    fun pluginActionLog(targetUuid: Uuid? = null, callerUuid: Uuid? = null): Flow<List<PluginActionLogEntity>>
+    public fun pluginActionLog(targetUuid: Uuid? = null, callerUuid: Uuid? = null): Flow<List<PluginActionLogEntity>>
 }
 
-class PluginActionLog(
+internal class PluginActionLog(
     private val dao: PluginActionLogDao,
     private val scope: LibPebbleCoroutineScope,
     private val clock: Clock,
@@ -36,7 +36,7 @@ class PluginActionLog(
             pluginUuid = pluginUuid,
             action = action,
             // Only Watch Settings' are ever shown; others' can hold the user's own text.
-            args = if (pluginUuid == WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID) args.toString().take(MAX_ARGS_CHARS) else "",
+            args = if (pluginUuid == BuiltInPlugins.WATCH_SETTINGS) args.toString().take(MAX_ARGS_CHARS) else "",
             error = if (result.ok) null else listOfNotNull(result.code, result.message).joinToString(": "),
         )
         scope.launch {
@@ -53,10 +53,10 @@ class PluginActionLog(
     override fun pluginActionLog(targetUuid: Uuid?, callerUuid: Uuid?): Flow<List<PluginActionLogEntity>> =
         dao.flow(targetUuid, callerUuid)
 
-    suspend fun deleteOlderThan(days: Int) = dao.deleteBefore((clock.now() - days.days).toEpochMilliseconds())
+    suspend fun deleteOlderThan(days: Int): Unit = dao.deleteBefore((clock.now() - days.days).toEpochMilliseconds())
 
     companion object {
-        const val MAX_ARGS_CHARS = 1000
-        const val KEPT_PER_APP = 150
+        const val MAX_ARGS_CHARS: Int = 1000
+        const val KEPT_PER_APP: Int = 150
     }
 }

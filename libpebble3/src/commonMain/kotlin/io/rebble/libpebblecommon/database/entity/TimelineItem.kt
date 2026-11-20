@@ -11,7 +11,10 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Action.Type
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemFlag
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemType
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.PebbleColor
@@ -35,17 +38,17 @@ import kotlin.uuid.Uuid
     sendDeletions = false,
     manualSync = false,
 )
-data class TimelineNotification(
+public data class TimelineNotification internal constructor(
     override val itemId: Uuid,
     @Embedded
     override val content: TimelineItemFields,
 
     ) : DbTimelineItem {
-    override fun type() = TimelineItem.Type.Notification
+    override fun type(): TimelineItemType = TimelineItemType.Notification
 
     override fun skipForWatch(params: ValueParams): Boolean {
         val config = params.libPebbleConfigFlow.value
-        return TimelineItem.Flag.SILENT in content.flags &&
+        return TimelineItemFlag.SILENT in content.flags &&
             config.notificationConfig.respectDoNotDisturb &&
             !watchReceivesWatchPrefs(params.capabilities, config)
     }
@@ -60,13 +63,13 @@ data class TimelineNotification(
     sendDeletions = true,
     manualSync = false,
 )
-data class TimelinePin(
+public data class TimelinePin internal constructor(
     override val itemId: Uuid,
     @Embedded
     override val content: TimelineItemFields,
     val backingId: String?,
 ) : DbTimelineItem {
-    override fun type() = TimelineItem.Type.Pin
+    override fun type(): TimelineItemType = TimelineItemType.Pin
 }
 
 @GenerateRoomEntity(
@@ -78,22 +81,22 @@ data class TimelinePin(
     sendDeletions = true,
     manualSync = false,
 )
-data class TimelineReminder(
+public data class TimelineReminder internal constructor(
     override val itemId: Uuid,
     @Embedded
     override val content: TimelineItemFields,
 ) : DbTimelineItem {
-    override fun type() = TimelineItem.Type.Reminder
+    override fun type(): TimelineItemType = TimelineItemType.Reminder
 }
 
 @Serializable
-sealed class BaseAttribute {
-    abstract val attribute: TimelineAttribute
+public sealed class BaseAttribute {
+    internal abstract val attribute: TimelineAttribute
 
-    abstract fun asAttribute(): TimelineItem.Attribute
+    internal abstract fun asAttribute(): TimelineItem.Attribute
 
     @Serializable
-    data class TextAttribute(
+    internal data class TextAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val text: String,
     ) : BaseAttribute() {
@@ -101,7 +104,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class TextListAttribute(
+    internal data class TextListAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val text: List<String>,
     ) : BaseAttribute() {
@@ -110,7 +113,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class IconAttribute(
+    internal data class IconAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val icon: TimelineIcon,
     ) : BaseAttribute() {
@@ -118,7 +121,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class ColorAttribute(
+    internal data class ColorAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val color: PebbleColor,
     ) : BaseAttribute() {
@@ -127,7 +130,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class UIntListAttribute(
+    internal data class UIntListAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val list: List<UInt>,
     ) : BaseAttribute() {
@@ -136,7 +139,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class UIntAttribute(
+    internal data class UIntAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val value: UInt,
     ) : BaseAttribute() {
@@ -145,7 +148,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class UByteAttribute(
+    internal data class UByteAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val value: UByte,
     ) : BaseAttribute() {
@@ -154,7 +157,7 @@ sealed class BaseAttribute {
     }
 
     @Serializable
-    data class UByteArrayAttribute(
+    internal data class UByteArrayAttribute internal constructor(
         override val attribute: TimelineAttribute,
         val value: UByteArray,
     ) : BaseAttribute() {
@@ -164,34 +167,34 @@ sealed class BaseAttribute {
 }
 
 @Serializable
-data class BaseAction(
+public data class BaseAction internal constructor(
     val actionID: UByte,
-    val type: Type,
+    val type: TimelineActionType,
     val attributes: List<BaseAttribute>,
     val internalType: String? = null,
     val pluginAction: PluginActionRef? = null,
     /** Phone-only: passed to the handler registered for [internalType]. */
     val internalData: String? = null,
 ) {
-    fun asAction(): TimelineItem.Action =
+    internal fun asAction(): TimelineItem.Action =
         TimelineItem.Action(actionID, type, attributes.map { it.asAttribute() })
 }
 
 /** Phone-only: an action of the item's parent plugin, run when this one is invoked. */
 @Serializable
-data class PluginActionRef(
+public data class PluginActionRef internal constructor(
     val action: String,
     val args: JsonObject = JsonObject(emptyMap()),
     /** The arg the user's reply goes in, for an action that asks for one. */
     val inputArg: String? = null,
 )
 
-data class TimelineItemFields(
+public data class TimelineItemFields internal constructor(
     val parentId: Uuid,
     val timestamp: MillisecondInstant,
     val duration: MillisecondDuration,
-    val flags: List<TimelineItem.Flag>,
-    val layout: TimelineItem.Layout,
+    val flags: List<TimelineItemFlag>,
+    val layout: TimelineItemLayout,
     val attributes: List<BaseAttribute>,
     val actions: List<BaseAction>,
 )
@@ -207,10 +210,10 @@ private val TimelineAttribute.requiredCapability: ProtocolCapsFlag?
         else -> null
     }
 
-interface DbTimelineItem : BlobDbItem {
+internal interface DbTimelineItem : BlobDbItem {
     val itemId: Uuid
     val content: TimelineItemFields
-    fun type(): TimelineItem.Type
+    fun type(): TimelineItemType
 
     // LastUpdated is a display-only freshness stamp; excluding it avoids re-syncing an
     // otherwise-unchanged item (weather sets it to now on every fetch).
@@ -225,7 +228,7 @@ interface DbTimelineItem : BlobDbItem {
             timestampSecs = content.timestamp.instant.epochSeconds.toUInt(),
             duration = content.duration.duration.inWholeMinutes.toUShort(),
             type = type(),
-            flags = TimelineItem.Flag.makeFlags(content.flags),
+            flags = TimelineItemFlag.makeFlags(content.flags),
             layout = content.layout,
             attributes = content.attributes.filterNot { attr ->
                 attr.attribute.requiredCapability?.let { it !in params.capabilities } == true

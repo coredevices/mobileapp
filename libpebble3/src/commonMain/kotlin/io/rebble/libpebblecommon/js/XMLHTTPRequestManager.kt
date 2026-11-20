@@ -48,7 +48,7 @@ private const val HEADERS = 2
 private const val LOADING = 3
 private const val DONE = 4
 
-class XMLHTTPRequestManager(
+internal class XMLHTTPRequestManager(
     private val scope: CoroutineScope,
     private val eval: (String) -> Unit,
     private val httpInterceptorManager: HttpInterceptorManager,
@@ -71,7 +71,7 @@ class XMLHTTPRequestManager(
     private val noRedirectClientLazy = lazy { client.config { followRedirects = false } }
     private val noRedirectClient by noRedirectClientLazy
 
-    override val methods = listOf(
+    override val methods: List<String> = listOf(
         "getXHRInstanceID",
         "open",
         "setRequestHeader",
@@ -79,9 +79,9 @@ class XMLHTTPRequestManager(
         "abort",
     )
 
-    override val name = "_XMLHTTPRequestManager"
+    override val name: String = "_XMLHTTPRequestManager"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+    override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
         "getXHRInstanceID" -> getXHRInstanceID()
         "open" -> {
             open(
@@ -414,7 +414,7 @@ private fun Outcome.toSyncResult(): String = when (this) {
     Outcome.Timeout -> """{"type":"timeout"}"""
 }
 
-enum class XHREvent {
+internal enum class XHREvent {
     Abort,
     Error,
     Load,
@@ -435,7 +435,7 @@ enum class XHREvent {
 }
 
 @Serializable
-data class CompleteXHRResponse(
+internal data class CompleteXHRResponse(
     val responseHeaders: Map<String, String>,
     val responseData: String,
     val status: Int,

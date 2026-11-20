@@ -87,8 +87,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.LastFirmwareUpdateSt
 import io.rebble.libpebblecommon.connection.endpointmanager.PendingFirmwareInstalls
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFrameDecoder
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
+import io.rebble.libpebblecommon.voice.SpeexAudioFrameDecoder
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
@@ -206,18 +206,18 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
-data class ConnectionScopeProperties(
+internal data class ConnectionScopeProperties(
     val identifier: PebbleIdentifier,
     val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
     val color: WatchColor,
 )
 
-interface ConnectionAnalyticsLogger {
+internal interface ConnectionAnalyticsLogger {
     fun logEvent(name: String, props: Map<String, String>? = null)
 }
 
-class RealConnectionAnalyticsLogger(
+internal class RealConnectionAnalyticsLogger(
     private val connectionProps: ConnectionScopeProperties,
     private val analytics: LibPebbleAnalytics,
 ) : ConnectionAnalyticsLogger {
@@ -229,7 +229,7 @@ class RealConnectionAnalyticsLogger(
     }
 }
 
-fun LibPebbleAnalytics.logWatchEvent(
+internal fun LibPebbleAnalytics.logWatchEvent(
     color: WatchColor,
     name: String,
     props: Map<String, String>? = null,
@@ -243,7 +243,7 @@ fun LibPebbleAnalytics.logWatchEvent(
     )
 }
 
-interface ConnectionScope {
+internal interface ConnectionScope {
     val identifier: PebbleIdentifier
     val pebbleConnector: PebbleConnector
     fun close()
@@ -256,7 +256,7 @@ interface ConnectionScope {
     val languagePackInstaller: LanguagePackInstaller
 }
 
-class RealConnectionScope(
+internal class RealConnectionScope(
     private val koinScope: Scope,
     override val identifier: PebbleIdentifier,
     private val coroutineScope: ConnectionCoroutineScope,
@@ -278,15 +278,15 @@ class RealConnectionScope(
     }
 }
 
-data class PlatformConfig(
+internal data class PlatformConfig(
     val syncNotificationApps: Boolean,
 )
 
-interface ConnectionScopeFactory {
+internal interface ConnectionScopeFactory {
     fun createScope(props: ConnectionScopeProperties): ConnectionScope
 }
 
-class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
+internal class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
     override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
         val scope =
@@ -305,23 +305,23 @@ class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactor
 /**
  * Essentially, GlobalScope for libpebble. Use this everywhere that would otherwise use GlobalScope.
  */
-class LibPebbleCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+internal class LibPebbleCoroutineScope internal constructor(override val coroutineContext: CoroutineContext) : CoroutineScope
 
 /**
  * Per-connection coroutine scope, torn down when the connection ends.
  */
-class ConnectionCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+internal class ConnectionCoroutineScope internal constructor(override val coroutineContext: CoroutineContext) : CoroutineScope
 
 /**
  * Lazy/provider for when we need to get out of a circular dependency.
  */
-class HackyProvider<T>(val getter: () -> T) {
+internal class HackyProvider<T>(val getter: () -> T) {
     fun get(): T = getter()
 }
 
-expect val platformModule: Module
+internal expect val platformModule: Module
 
-val CommonPhoneCapabilities = setOf(
+internal val CommonPhoneCapabilities: Set<ProtocolCapsFlag> = setOf(
     ProtocolCapsFlag.SupportsAppRunStateProtocol,
     ProtocolCapsFlag.SupportsInfiniteLogDump,
 //    ProtocolCapsFlag.SupportsLocalization,
@@ -347,7 +347,7 @@ internal interface LibPebbleKoinComponent : KoinComponent {
     override fun getKoin(): Koin = LibPebbleKoinContext.koin
 }
 
-fun initKoin(
+internal fun initKoin(
     defaultConfig: LibPebbleConfig,
     webServices: WebServices,
     appContext: AppContext,

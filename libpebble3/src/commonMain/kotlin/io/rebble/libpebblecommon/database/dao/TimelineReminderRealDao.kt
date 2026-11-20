@@ -7,7 +7,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineReminderDao
 import kotlin.uuid.Uuid
 
 @Dao
-interface TimelineReminderRealDao : TimelineReminderDao {
+internal interface TimelineReminderRealDao : TimelineReminderDao {
     @Query("SELECT * FROM TimelineReminderEntity WHERE parentId = :parentId AND deleted = 0")
     suspend fun getRemindersForPin(parentId: Uuid): List<TimelineReminder>
 

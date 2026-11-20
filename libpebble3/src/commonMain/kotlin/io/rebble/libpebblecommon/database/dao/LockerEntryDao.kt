@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
-interface LockerEntryRealDao : LockerEntryDao {
+internal interface LockerEntryRealDao : LockerEntryDao {
     @Query("""
         SELECT * FROM LockerEntryEntity
         WHERE deleted = 0

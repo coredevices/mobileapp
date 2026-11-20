@@ -8,20 +8,20 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.util.Endian
 
-sealed class AppFetchIncomingPacket() : PebblePacket(ProtocolEndpoint.APP_FETCH) {
+internal sealed class AppFetchIncomingPacket() : PebblePacket(ProtocolEndpoint.APP_FETCH) {
     /**
      * Request command. See [AppFetchRequestCommand].
      */
-    val command = SUByte(m)
+    val command: SUByte = SUByte(m)
 
 }
 
-sealed class AppFetchOutgoingPacket(command: AppFetchRequestCommand) :
+internal sealed class AppFetchOutgoingPacket(command: AppFetchRequestCommand) :
     PebblePacket(ProtocolEndpoint.APP_FETCH) {
     /**
      * Request command. See [AppFetchRequestCommand].
      */
-    val command = SUByte(m, command.value)
+    val command: SUByte = SUByte(m, command.value)
 
 }
 
@@ -29,37 +29,37 @@ sealed class AppFetchOutgoingPacket(command: AppFetchRequestCommand) :
 /**
  * Packet sent from the watch when user opens an app that is not in the watch storage.
  */
-class AppFetchRequest : AppFetchIncomingPacket() {
+internal class AppFetchRequest : AppFetchIncomingPacket() {
 
     /**
      * UUID of the app to request
      */
-    val uuid = SUUID(m)
+    val uuid: SUUID = SUUID(m)
 
     /**
      * ID of the app bank. Use in the [PutBytesAppInit] packet to identify this app install.
      */
-    val appId = SUInt(m, endianness = Endian.Little)
+    val appId: SUInt = SUInt(m, endianness = Endian.Little)
 }
 
 /**
  * Packet sent from the watch when user opens an app that is not in the watch storage.
  */
-class AppFetchResponse(
+internal class AppFetchResponse(
     status: AppFetchResponseStatus
 ) : AppFetchOutgoingPacket(AppFetchRequestCommand.FETCH_APP) {
     /**
      * Response status
      */
-    val status = SUByte(m, status.value)
+    val status: SUByte = SUByte(m, status.value)
 
 }
 
-enum class AppFetchRequestCommand(val value: UByte) {
+internal enum class AppFetchRequestCommand(val value: UByte) {
     FETCH_APP(0x01u)
 }
 
-enum class AppFetchResponseStatus(val value: UByte) {
+internal enum class AppFetchResponseStatus(val value: UByte) {
     /**
      * Sent right before starting to send PutBytes data
      */
@@ -82,7 +82,7 @@ enum class AppFetchResponseStatus(val value: UByte) {
 }
 
 
-fun appFetchIncomingPacketsRegister() {
+internal fun appFetchIncomingPacketsRegister() {
     PacketRegistry.register(
         ProtocolEndpoint.APP_FETCH,
         AppFetchRequestCommand.FETCH_APP.value

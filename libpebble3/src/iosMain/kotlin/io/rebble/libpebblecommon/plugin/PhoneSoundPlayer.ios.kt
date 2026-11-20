@@ -32,7 +32,7 @@ private const val CRITICAL_NOTIFICATION_ID = "find_my_phone_critical"
 // for a critical alert instead. Heuristic threshold, tune against real devices.
 private const val MIN_AUDIBLE_VOLUME = 0.45f
 
-actual class PhoneSoundPlayer {
+internal actual class PhoneSoundPlayer {
     private val logger = Logger.withTag("PhoneSoundPlayer")
     private val _isRinging = MutableStateFlow(false)
     actual val isRinging: Flow<Boolean> = _isRinging.asStateFlow()

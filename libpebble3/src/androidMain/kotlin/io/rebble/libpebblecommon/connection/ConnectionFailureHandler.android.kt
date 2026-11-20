@@ -10,19 +10,19 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 
 private val logger = Logger.withTag("ConnectionFailureHandler.android")
 
-actual fun AppContext.handleMtuGattError(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
+internal actual fun AppContext.handleMtuGattError(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleMtuGattError" }
     analytics.logWatchEvent(color, "workaround.mtu-gatt-error.unpair")
 //    unpairDevice(identifier)
 }
 
-actual fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
+internal actual fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleGattInsufficientAuth" }
     analytics.logWatchEvent(color, "workaround.gatt-insuff-auth.unpair")
 //    unpairDevice(identifier)
 }
 
-actual fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
+internal actual fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleCreateBondFailed" }
     analytics.logWatchEvent(color, "workaround.create-bond-failed.unpair")
 //    unpairDevice(identifier)

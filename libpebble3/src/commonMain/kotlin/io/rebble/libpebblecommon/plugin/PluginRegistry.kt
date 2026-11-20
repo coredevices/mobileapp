@@ -15,7 +15,7 @@ import kotlin.uuid.Uuid
  * App-wide registry of available plugins. Built-ins are injected via the Koin `Set<NativePlugin>`
  * binding; JS plugins [register] themselves once their manifest has been loaded.
  */
-class PluginRegistry(
+public class PluginRegistry internal constructor(
     builtIns: Set<NativePlugin>,
     private val settings: Settings,
 ) {
@@ -25,7 +25,7 @@ class PluginRegistry(
         val stored = settings.getStringOrNull(DISABLED_BUILT_INS_KEY)
         MutableStateFlow(stored?.split(',')?.filter { it.isNotEmpty() }?.mapTo(HashSet(), Uuid::parse).orEmpty())
     }
-    val disabledBuiltIns: StateFlow<Set<Uuid>> get() = _disabledBuiltIns
+    internal val disabledBuiltIns: StateFlow<Set<Uuid>> get() = _disabledBuiltIns
 
     private val _preferredSources by lazy {
         val stored = settings.getStringOrNull(PREFERRED_SOURCES_KEY)?.let {
@@ -39,10 +39,10 @@ class PluginRegistry(
     }
 
     /** The user's choice of plugin for a source several plugins serve, keyed by [sourceKey]. */
-    val preferredSources: StateFlow<Map<String, Uuid>> get() = _preferredSources
+    internal val preferredSources: StateFlow<Map<String, Uuid>> get() = _preferredSources
 
     /** Null goes back to the default order. */
-    fun setPreferredSource(category: String, item: String, pluginUuid: Uuid?) {
+    internal fun setPreferredSource(category: String, item: String, pluginUuid: Uuid?) {
         val key = sourceKey(category, item)
         val preferred = _preferredSources.updateAndGet { if (pluginUuid == null) it - key else it + (key to pluginUuid) }
         settings.putString(PREFERRED_SOURCES_KEY, Json.encodeToString(preferred.mapValues { it.value.toString() }))
@@ -57,19 +57,19 @@ class PluginRegistry(
         get() = registered.value.values
 
     /** Every built-in, including disabled ones. */
-    fun nativePlugins(): Flow<List<PluginMetadata>> = natives.map { all -> all.values.map { it.metadata } }
+    internal fun nativePlugins(): Flow<List<PluginMetadata>> = natives.map { all -> all.values.map { it.metadata } }
 
-    fun setBuiltInEnabled(pluginUuid: Uuid, enabled: Boolean) {
+    internal fun setBuiltInEnabled(pluginUuid: Uuid, enabled: Boolean) {
         val plugin = natives.value[pluginUuid] ?: return
         val disabled = _disabledBuiltIns.updateAndGet { if (enabled) it - pluginUuid else it + pluginUuid }
         settings.putString(DISABLED_BUILT_INS_KEY, disabled.joinToString(","))
         registered.update { if (enabled) it + (pluginUuid to plugin) else it - pluginUuid }
     }
 
-    fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? =
+    internal fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? =
         findPlugin(pluginUuid) as? ConfigMessageTarget
 
-    fun registerPlugin(plugin: Plugin) {
+    internal fun registerPlugin(plugin: Plugin) {
         if (plugin is NativePlugin) {
             natives.update { it + (plugin.pluginUuid to plugin) }
             if (plugin.pluginUuid in _disabledBuiltIns.value) return
@@ -77,7 +77,7 @@ class PluginRegistry(
         registered.update { it + (plugin.pluginUuid to plugin) }
     }
 
-    fun unregisterPlugin(pluginUuid: Uuid): Plugin? {
+    internal fun unregisterPlugin(pluginUuid: Uuid): Plugin? {
         val plugin = registered.value[pluginUuid] ?: natives.value[pluginUuid]
         natives.update { it - pluginUuid }
         registered.update { it - pluginUuid }
@@ -89,7 +89,7 @@ class PluginRegistry(
      * if it serves it, else the user's [preferredSources] choice, else built-ins first, then by name.
      * Sources are fungible — actions are not, so action lookup uses [findPlugin] by uuid.
      */
-    fun findSourcePlugin(
+    internal fun findSourcePlugin(
         category: String,
         item: String,
         preferredPluginUuid: String? = null,
@@ -104,15 +104,15 @@ class PluginRegistry(
     }
 
     /** Exact lookup. Actions must never fall back to a different plugin. */
-    fun findPlugin(pluginUuid: String): Plugin? =
+    internal fun findPlugin(pluginUuid: String): Plugin? =
         plugins.firstOrNull { it.pluginUuid.toString() == pluginUuid }
 
-    fun getAllPlugins(): List<PluginMetadata> = plugins.map { it.metadata }
+    internal fun getAllPlugins(): List<PluginMetadata> = plugins.map { it.metadata }
 
-    companion object {
+    public companion object {
         private const val DISABLED_BUILT_INS_KEY = "disabled_built_in_plugins"
         private const val PREFERRED_SOURCES_KEY = "preferred_source_plugins"
 
-        fun sourceKey(category: String, item: String) = "$category/$item"
+        public fun sourceKey(category: String, item: String): String = "$category/$item"
     }
 }

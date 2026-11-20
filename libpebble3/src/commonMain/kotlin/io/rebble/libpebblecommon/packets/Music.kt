@@ -6,14 +6,14 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.Endian
 
-open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MUSIC_CONTROL) {
-    val command = SUByte(m, message.value)
+public open class MusicControl internal constructor(public val message: Message) : PebblePacket(ProtocolEndpoint.MUSIC_CONTROL) {
+    internal val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
     }
 
-    enum class Message(val value: UByte) {
+    public enum class Message(public val value: UByte) {
         PlayPause(0x01u),
         Pause(0x02u),
         Play(0x03u),
@@ -28,7 +28,7 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         UpdatePlayerInfo(0x13u),
     }
 
-    class UpdateCurrentTrack(
+    internal class UpdateCurrentTrack internal constructor(
         artist: String = "",
         album: String = "",
         title: String = "",
@@ -39,27 +39,27 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         trackCount: Int? = null,
         currentTrack: Int? = null
     ) : MusicControl(Message.UpdateCurrentTrack) {
-        val artist = SString(m, artist)
-        val album = SString(m, album)
-        val title = SString(m, title)
-        val trackLength = SOptional(
+        internal val artist: SString = SString(m, artist)
+        internal val album: SString = SString(m, album)
+        internal val title: SString = SString(m, title)
+        internal val trackLength: SOptional<UInt> = SOptional(
             m,
             SUInt(StructMapper(), trackLength?.toUInt() ?: 0u, Endian.Little),
             trackLength != null
         )
-        val trackCount = SOptional(
+        internal val trackCount: SOptional<UInt> = SOptional(
             m,
             SUInt(StructMapper(), trackCount?.toUInt() ?: 0u, Endian.Little),
             trackCount != null
         )
-        val currentTrack = SOptional(
+        internal val currentTrack: SOptional<UInt> = SOptional(
             m,
             SUInt(StructMapper(), currentTrack?.toUInt() ?: 0u, Endian.Little),
             currentTrack != null
         )
     }
 
-    class UpdatePlayStateInfo(
+    internal class UpdatePlayStateInfo internal constructor(
         playbackState: PlaybackState = PlaybackState.Unknown,
         /**
          * Current playback position in milliseconds
@@ -77,33 +77,33 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
          */
         skipSeeksWithinTrack: Boolean = false,
     ) : MusicControl(Message.UpdatePlayStateInfo) {
-        val state = SUByte(m, playbackState.value)
-        val trackPosition = SUInt(m, trackPosition, Endian.Little)
-        val playRate = SUInt(m, playRate, Endian.Little)
-        val shuffle = SUByte(m, shuffle.value)
-        val repeat = SUByte(m, repeat.value)
-        val skipSeeks = SUByte(m, if (skipSeeksWithinTrack) SKIP_SEEKS_WITHIN_TRACK else 0u)
+        internal val state: SUByte = SUByte(m, playbackState.value)
+        internal val trackPosition: SUInt = SUInt(m, trackPosition, Endian.Little)
+        internal val playRate: SUInt = SUInt(m, playRate, Endian.Little)
+        internal val shuffle: SUByte = SUByte(m, shuffle.value)
+        internal val repeat: SUByte = SUByte(m, repeat.value)
+        internal val skipSeeks: SUByte = SUByte(m, if (skipSeeksWithinTrack) SKIP_SEEKS_WITHIN_TRACK else 0u)
 
         companion object {
-            const val SKIP_SEEKS_WITHIN_TRACK: UByte = 1u
+            internal const val SKIP_SEEKS_WITHIN_TRACK: UByte = 1u
         }
     }
 
-    class UpdateVolumeInfo(
+    internal class UpdateVolumeInfo internal constructor(
         volumePercent: UByte = 0u,
     ) : MusicControl(Message.UpdateVolumeInfo) {
-        val volumePercent = SUByte(m, volumePercent)
+        internal val volumePercent: SUByte = SUByte(m, volumePercent)
     }
 
-    class UpdatePlayerInfo(
+    internal class UpdatePlayerInfo internal constructor(
         pkg: String = "",
         name: String = ""
     ) : MusicControl(Message.UpdatePlayerInfo) {
-        val pkg = SString(m, pkg)
-        val name = SString(m, name)
+        internal val pkg: SString = SString(m, pkg)
+        internal val name: SString = SString(m, name)
     }
 
-    enum class PlaybackState(val value: UByte) {
+    public enum class PlaybackState(public val value: UByte) {
         Paused(0x00u),
         Playing(0x01u),
         Rewinding(0x02u),
@@ -111,13 +111,13 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         Unknown(0x04u),
     }
 
-    enum class ShuffleState(val value: UByte) {
+    internal enum class ShuffleState(val value: UByte) {
         Unknown(0x00u),
         Off(0x01u),
         On(0x02u),
     }
 
-    enum class RepeatState(val value: UByte) {
+    public enum class RepeatState(public val value: UByte) {
         Unknown(0x00u),
         Off(0x01u),
         One(0x02u),
@@ -125,7 +125,7 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
     }
 }
 
-fun musicPacketsRegister() {
+internal fun musicPacketsRegister() {
     PacketRegistry.register(
         ProtocolEndpoint.MUSIC_CONTROL,
         MusicControl.Message.PlayPause.value

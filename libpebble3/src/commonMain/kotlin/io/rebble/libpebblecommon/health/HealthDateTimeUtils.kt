@@ -21,7 +21,7 @@ import kotlin.time.Duration.Companion.hours
 /**
  * Extension function to convert a LocalDate to epoch seconds at start of day.
  */
-fun LocalDate.startOfDayEpochSeconds(timeZone: TimeZone): Long =
+internal fun LocalDate.startOfDayEpochSeconds(timeZone: TimeZone): Long =
     this.atStartOfDayIn(timeZone).epochSeconds
 
 /**
@@ -31,7 +31,7 @@ fun LocalDate.startOfDayEpochSeconds(timeZone: TimeZone): Long =
  * @param dayStartEpochSeconds The start of the target day in epoch seconds
  * @return Pair of (searchStart, searchEnd) in epoch seconds
  */
-fun calculateSleepSearchWindow(dayStartEpochSeconds: Long): Pair<Long, Long> {
+internal fun calculateSleepSearchWindow(dayStartEpochSeconds: Long): Pair<Long, Long> {
     val searchStart = dayStartEpochSeconds - (HealthConstants.SLEEP_WINDOW_START_OFFSET_HOURS * 3600)
     val searchEnd = dayStartEpochSeconds + (HealthConstants.SLEEP_WINDOW_END_OFFSET_HOURS * 3600)
     return Pair(searchStart, searchEnd)
@@ -40,14 +40,14 @@ fun calculateSleepSearchWindow(dayStartEpochSeconds: Long): Pair<Long, Long> {
 /**
  * Checks if a year is a leap year.
  */
-fun isLeapYear(year: Int): Boolean {
+internal fun isLeapYear(year: Int): Boolean {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
 /**
  * Returns the number of days in a given month and year.
  */
-fun getDaysInMonth(month: Month, year: Int): Int {
+internal fun getDaysInMonth(month: Month, year: Int): Int {
     return when (month) {
         Month.JANUARY -> 31
         Month.FEBRUARY -> if (isLeapYear(year)) 29 else 28
@@ -68,7 +68,7 @@ fun getDaysInMonth(month: Month, year: Int): Int {
 /**
  * Gets the previous Sunday from a given date (or the same date if it's already Sunday).
  */
-fun getPreviousSunday(date: LocalDate): LocalDate {
+internal fun getPreviousSunday(date: LocalDate): LocalDate {
     val dayOfWeek = date.dayOfWeek
     val daysToSubtract = when (dayOfWeek) {
         DayOfWeek.SUNDAY -> 0
@@ -86,7 +86,7 @@ fun getPreviousSunday(date: LocalDate): LocalDate {
 /**
  * Formats a date range label (e.g., "Mar 27 - Apr 4" or "Mar 3-9").
  */
-fun formatDateRangeLabel(startDate: LocalDate, endDate: LocalDate): String {
+internal fun formatDateRangeLabel(startDate: LocalDate, endDate: LocalDate): String {
     val startMonth = startDate.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
     val endMonth = endDate.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
 
@@ -100,7 +100,7 @@ fun formatDateRangeLabel(startDate: LocalDate, endDate: LocalDate): String {
 /**
  * Rounds an instant to the nearest hour.
  */
-fun roundToNearestHour(instant: Instant, timeZone: TimeZone): Instant {
+internal fun roundToNearestHour(instant: Instant, timeZone: TimeZone): Instant {
     val localDateTime = instant.toLocalDateTime(timeZone)
     val secondsPastHour = localDateTime.minute * 60 + localDateTime.second
     val hourStart = localDateTime.date.atTime(localDateTime.hour, 0, 0)
@@ -118,7 +118,7 @@ fun roundToNearestHour(instant: Instant, timeZone: TimeZone): Instant {
  * @param offset Number of periods to go back from today (0 = current period)
  * @return A formatted string describing the date range
  */
-fun getDateRangeLabel(timeRange: HealthTimeRange, offset: Int, timeZone: TimeZone): String {
+internal fun getDateRangeLabel(timeRange: HealthTimeRange, offset: Int, timeZone: TimeZone): String {
     val today = kotlin.time.Clock.System.now().toLocalDateTime(timeZone).date
 
     return when (timeRange) {

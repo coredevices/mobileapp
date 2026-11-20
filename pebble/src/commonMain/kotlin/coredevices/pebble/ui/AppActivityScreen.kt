@@ -44,8 +44,9 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
 import io.rebble.libpebblecommon.plugin.ActionDeclaration.Companion.PARAM_INSTANCE_ID
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
+import io.rebble.libpebblecommon.plugin.WatchSettingsActions
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -324,7 +325,7 @@ internal class ActionDescriber(
         ?: if (appTitles == null) "" else appTitles[pluginUuid] ?: "Removed plugin"
 
     fun describe(entry: PluginActionLogEntity): String {
-        if (entry.pluginUuid == WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID) {
+        if (entry.pluginUuid == BuiltInPlugins.WATCH_SETTINGS) {
             watchSetting(entry.action, entry.args)?.let { return it }
         }
         val plugin = plugins.firstOrNull { it.pluginUuid == entry.pluginUuid }
@@ -343,10 +344,10 @@ internal class ActionDescriber(
         val pref = watchPrefs.firstOrNull { it.pref.id == id }?.pref
         val name = pref?.displayName ?: id
         return when (action) {
-            WatchSettingsPlugin.ACTION_SET_ON -> args["on"]?.jsonPrimitive?.booleanOrNull?.let {
+            WatchSettingsActions.SET_ON -> args["on"]?.jsonPrimitive?.booleanOrNull?.let {
                 "Turned watch setting $name ${if (it) "on" else "off"}"
             }
-            WatchSettingsPlugin.ACTION_SET_VALUE -> args["value"]?.jsonPrimitive?.contentOrNull?.let { value ->
+            WatchSettingsActions.SET_VALUE -> args["value"]?.jsonPrimitive?.contentOrNull?.let { value ->
                 val shown = if (pref is QuicklaunchWatchPref) quickLaunchApp(value) else value
                 "Set watch setting $name to $shown"
             }

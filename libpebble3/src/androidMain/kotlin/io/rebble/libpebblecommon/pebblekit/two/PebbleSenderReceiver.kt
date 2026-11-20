@@ -42,7 +42,7 @@ import kotlin.uuid.toKotlinUuid
 
 private val WATCH_SENDING_TIMEOUT = 10.seconds
 
-class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent {
+internal class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent {
     private val watchManager: Watches = getKoin().get<LibPebble>()
     private val locker: Locker = getKoin().get()
     private val lockerPBWCache: LockerPBWCache = getKoin().get()

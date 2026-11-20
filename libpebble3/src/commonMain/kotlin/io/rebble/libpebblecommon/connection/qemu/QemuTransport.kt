@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
  * comm_session — so this speaks the QEMU serial framing directly, the same way the legacy Android
  * app's QemuDeviceConnector did.
  */
-class QemuTransport(
+internal class QemuTransport(
     private val identifier: PebbleSocketIdentifier,
     private val pebbleProtocolStreams: PebbleProtocolStreams,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
@@ -140,7 +140,7 @@ class QemuTransport(
         selector = null
     }
 
-    override suspend fun disconnect() = cleanup()
+    override suspend fun disconnect(): Unit = cleanup()
 
     override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
 }

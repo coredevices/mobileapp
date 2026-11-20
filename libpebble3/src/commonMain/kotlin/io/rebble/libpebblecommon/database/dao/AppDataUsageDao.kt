@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
-interface AppDataUsageDao {
+internal interface AppDataUsageDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfAbsent(row: AppDataUsageEntity)
 

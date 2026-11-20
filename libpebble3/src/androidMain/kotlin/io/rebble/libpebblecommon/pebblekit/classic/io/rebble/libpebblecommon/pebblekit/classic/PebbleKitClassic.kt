@@ -35,7 +35,7 @@ import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 import kotlin.uuid.toKotlinUuid
 
-class PebbleKitClassic(
+internal class PebbleKitClassic(
     private val device: CompanionAppDevice,
     val appInfo: PbwAppInfo,
     private val pkjsRunning: Boolean,

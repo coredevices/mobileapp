@@ -3,6 +3,6 @@ package io.rebble.libpebblecommon.metadata.pbw.manifest
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Debug(
+internal data class Debug internal constructor(
     val empty: String? = null
 )

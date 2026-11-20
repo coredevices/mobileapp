@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 
-actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
+internal actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
     @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
     val device = adapter.getRemoteDevice(identifier.macAddress)
@@ -36,7 +36,7 @@ actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
     return false
 }
 
-actual fun getBluetoothDevicePairEvents(
+internal actual fun getBluetoothDevicePairEvents(
     context: AppContext,
     identifier: PebbleBleIdentifier,
     connectivityWatcher: ConnectivityWatcher,
@@ -65,7 +65,7 @@ actual fun getBluetoothDevicePairEvents(
         }
 }
 
-actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
+internal actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
     Logger.d("createBond()")
     @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -79,7 +79,7 @@ actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
     }
 }
 
-actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean {
+internal actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean {
     @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
     val device = adapter.getRemoteDevice(identifier.macAddress)
@@ -97,7 +97,7 @@ actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean {
     return false
 }
 
-actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean {
+internal actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean {
     Logger.d("createBondClassic()")
     @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -110,7 +110,7 @@ actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean {
     }
 }
 
-actual fun getBluetoothClassicDevicePairEvents(
+internal actual fun getBluetoothClassicDevicePairEvents(
     context: AppContext,
     identifier: PebbleBtClassicIdentifier,
 ): Flow<BluetoothClassicDevicePairEvent> {

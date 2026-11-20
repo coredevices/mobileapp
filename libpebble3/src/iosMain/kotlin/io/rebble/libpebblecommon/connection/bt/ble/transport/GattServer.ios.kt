@@ -61,17 +61,17 @@ import platform.posix.memcpy
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-data class RegisteredDevice(
+internal data class RegisteredDevice(
     val dataChannel: SendChannel<ByteArray>,
     val device: PebbleBleIdentifier,
     val notificationsEnabled: Boolean,
 )
 
-fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
+internal fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
 
 private fun CBUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
-fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
+internal fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
 private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).apply {
     if (length > 0u) {
@@ -88,7 +88,7 @@ private fun ByteArray.toNSData(): NSData = memScoped {
     )
 }
 
-actual class GattServer(
+internal actual class GattServer(
     private val bleConfigFlow: BleConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
@@ -436,6 +436,6 @@ actual class GattServer(
 private val SEND_TIMEOUT = 8.seconds
 
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+internal actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
     return GattServer(bleConfigFlow, libPebbleCoroutineScope)
 }

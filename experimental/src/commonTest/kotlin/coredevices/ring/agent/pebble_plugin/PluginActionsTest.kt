@@ -2,10 +2,8 @@ package coredevices.ring.agent.pebble_plugin
 
 import coredevices.ring.agent.builtin_servlets.clock.CLOCK_PLUGIN_UUID
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
-import io.rebble.libpebblecommon.plugin.PlatformPlugins
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
-import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -45,17 +43,17 @@ class PluginActionsTest {
     private val watchSettings = FakePlugin(
         actions = listOf(ActionDeclaration(name = "set_on")),
         name = "Watch Settings",
-        pluginUuid = WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID,
+        pluginUuid = BuiltInPlugins.WATCH_SETTINGS,
     ).metadata
     private val watchState = FakePlugin(
         actions = listOf(ActionDeclaration(name = "launch_app")),
         name = "Watch State",
-        pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
+        pluginUuid = BuiltInPlugins.WATCH_STATE,
     ).metadata
     private val notifications = FakePlugin(
         actions = listOf(ActionDeclaration(name = "reply")),
         name = "Notifications",
-        pluginUuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID,
+        pluginUuid = BuiltInPlugins.NOTIFICATIONS,
     ).metadata
     private val clock = FakePlugin(
         actions = listOf(ActionDeclaration(name = "set_alarm")),

@@ -4,7 +4,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import kotlin.uuid.Uuid
 
 /** Strings encrypted at rest with a key held by the platform (Android Keystore, iOS Keychain). */
-interface SecureStorage {
+internal interface SecureStorage {
     suspend fun get(key: String): String?
     suspend fun set(key: String, value: String)
     suspend fun remove(key: String)

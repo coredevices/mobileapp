@@ -11,7 +11,7 @@ import kotlin.math.roundToInt
 // Hardware canvas refuses to draw bitmaps over 100MB; some apps' icons rasterise far bigger.
 private const val MAX_ICON_PX = 256
 
-actual fun iconFor(packageName: String, appContext: AppContext): ImageBitmap? =
+internal actual fun iconFor(packageName: String, appContext: AppContext): ImageBitmap? =
     appIconBitmap(packageName, appContext)?.asImageBitmap()
 
 internal fun appIconBitmap(packageName: String, appContext: AppContext): Bitmap? = try {

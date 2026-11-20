@@ -1,8 +1,7 @@
-package io.rebble.libpebblecommon.connection.endpointmanager.audio
+package io.rebble.libpebblecommon.voice
 
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
-import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 
 @OptIn(ExperimentalUnsignedTypes::class)
-class SpeexAudioFrameDecoder : AudioFrameDecoder {
+public class SpeexAudioFrameDecoder : AudioFrameDecoder {
     override fun open(encoderInfo: VoiceEncoderInfo): AudioPcmDecoder? {
         val speex = encoderInfo as? VoiceEncoderInfo.Speex ?: return null
         val codec = SpeexCodec(
@@ -34,7 +33,7 @@ class SpeexAudioFrameDecoder : AudioFrameDecoder {
 
 /** Decodes a whole recording; throws if the codec is unsupported or any frame fails. */
 @OptIn(ExperimentalUnsignedTypes::class)
-suspend fun AudioFrameDecoder.decodeAll(
+public suspend fun AudioFrameDecoder.decodeAll(
     encoderInfo: VoiceEncoderInfo,
     frames: Flow<UByteArray>,
 ): Buffer {

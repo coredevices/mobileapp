@@ -12,7 +12,7 @@ import kotlin.math.round
  * Light intervals correspond to Sleep/Nap containers; deep intervals are
  * the DeepSleep/DeepNap sub-intervals that occur within them.
  */
-data class SleepInterval(
+public data class SleepInterval(
     val start: Long,
     val end: Long,
     val isDeep: Boolean,
@@ -24,7 +24,7 @@ data class SleepInterval(
  * which the timeline UI renders directly so that interspersed deep-sleep periods
  * and awake gaps within the session show up correctly.
  */
-data class SleepSession(
+public data class SleepSession(
     var start: Long,
     var end: Long,
     var totalSleep: Long = 0,
@@ -41,7 +41,7 @@ data class SleepSession(
  * span when there are multiple sessions, instead of collapsing to a single
  * "main" session and losing the others' time ranges.
  */
-data class DailySleep(
+public data class DailySleep(
     val sessions: List<SleepSession>,
     val totalSleep: Long,
     val deepSleep: Long,
@@ -60,7 +60,7 @@ data class DailySleep(
  * toward deepSleep — they represent the same time already in totalSleep, not additional time.
  * This matches the firmware's ActivitySession model.
  */
-fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
+internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
     val sessions = mutableListOf<SleepSession>()
 
     sleepEntries.sortedBy { it.startTime }.forEach { entry ->
@@ -101,7 +101,7 @@ fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession
  *
  * @return All sessions for the day plus aggregate totals, or null if no sleep data
  */
-suspend fun fetchAndGroupDailySleep(
+internal suspend fun fetchAndGroupDailySleep(
     healthDao: HealthDao,
     dayStartEpochSec: Long,
     timeZone: kotlinx.datetime.TimeZone

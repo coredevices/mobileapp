@@ -5,30 +5,30 @@ import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.requestBytes
 import kotlin.uuid.Uuid
 
-interface HttpInterceptor {
+public interface HttpInterceptor {
     /** Answered from the phone's own data, without using the network. */
-    val servedLocally: Boolean get() = false
+    public val servedLocally: Boolean get() = false
 
-    fun shouldIntercept(url: String): Boolean
-    suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse
+    public fun shouldIntercept(url: String): Boolean
+    public suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse
 }
 
-data class InterceptResponse(
+public data class InterceptResponse(
     val result: String,
     val status: Int,
 ) {
-    companion object {
-        val OK = InterceptResponse(result = "", status = 200)
-        val ERROR = InterceptResponse(result = "", status = 500)
-        val FORBIDDEN = InterceptResponse(result = "", status = 403)
+    public companion object {
+        internal val OK: InterceptResponse = InterceptResponse(result = "", status = 200)
+        public val ERROR: InterceptResponse = InterceptResponse(result = "", status = 500)
+        internal val FORBIDDEN: InterceptResponse = InterceptResponse(result = "", status = 403)
     }
 }
 
-class InjectedPKJSHttpInterceptors(
-    val interceptors: List<HttpInterceptor>,
+public class InjectedPKJSHttpInterceptors(
+    internal val interceptors: List<HttpInterceptor>,
 )
 
-class HttpInterceptorManager(
+internal class HttpInterceptorManager(
     private val interceptors: List<HttpInterceptor>,
     private val dataUsage: DataUsageRecorder,
 ) {

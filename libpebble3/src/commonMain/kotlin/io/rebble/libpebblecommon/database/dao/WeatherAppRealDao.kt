@@ -7,7 +7,7 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntryDao
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface WeatherAppRealDao : WeatherAppEntryDao {
+internal interface WeatherAppRealDao : WeatherAppEntryDao {
     @Query("SELECT * FROM WeatherAppEntryEntity WHERE deleted = 0")
     suspend fun getAll(): List<WeatherAppEntry>
 

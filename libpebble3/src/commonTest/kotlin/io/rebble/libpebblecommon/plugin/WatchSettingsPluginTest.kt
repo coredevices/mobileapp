@@ -145,7 +145,7 @@ class WatchSettingsPluginTest {
         val prefs = FakeWatchPrefs()
         val plugin = WatchSettingsPlugin(prefs)
         val result = plugin.invoke(
-            WatchSettingsPlugin.ACTION_SET_ON,
+            WatchSettingsActions.SET_ON,
             args(PARAM_INSTANCE_ID to BoolWatchPref.Clock24h.id, "on" to "true"),
         )
         assertTrue(result.ok)
@@ -166,7 +166,7 @@ class WatchSettingsPluginTest {
         val app = "8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e"
         assertTrue(
             plugin.invoke(
-                WatchSettingsPlugin.ACTION_SET_VALUE,
+                WatchSettingsActions.SET_VALUE,
                 args(PARAM_INSTANCE_ID to pref.id, "value" to app),
             ).ok
         )
@@ -185,7 +185,7 @@ class WatchSettingsPluginTest {
         val pref = QuicklaunchWatchPref.QlSingleClickUp
         assertTrue(
             plugin.invoke(
-                WatchSettingsPlugin.ACTION_SET_VALUE,
+                WatchSettingsActions.SET_VALUE,
                 args(PARAM_INSTANCE_ID to pref.id, "value" to ""),
             ).ok
         )
@@ -201,7 +201,7 @@ class WatchSettingsPluginTest {
     fun setValueRefusesSomethingThatIsNotAnApp() = runTest {
         val prefs = FakeWatchPrefs()
         val result = WatchSettingsPlugin(prefs).invoke(
-            WatchSettingsPlugin.ACTION_SET_VALUE,
+            WatchSettingsActions.SET_VALUE,
             args(PARAM_INSTANCE_ID to QuicklaunchWatchPref.QlSingleClickUp.id, "value" to "health"),
         )
         assertFalse(result.ok)
@@ -213,7 +213,7 @@ class WatchSettingsPluginTest {
     fun setOnRefusesASettingThatIsNotASwitch() = runTest {
         val prefs = FakeWatchPrefs()
         val result = WatchSettingsPlugin(prefs).invoke(
-            WatchSettingsPlugin.ACTION_SET_ON,
+            WatchSettingsActions.SET_ON,
             args(PARAM_INSTANCE_ID to EnumWatchPref.SystemTextSize.id, "on" to "true"),
         )
         assertFalse(result.ok)
@@ -227,7 +227,7 @@ class WatchSettingsPluginTest {
         val plugin = WatchSettingsPlugin(prefs)
         val option = EnumWatchPref.SystemTextSize.options.last()
         val result = plugin.invoke(
-            WatchSettingsPlugin.ACTION_SET_VALUE,
+            WatchSettingsActions.SET_VALUE,
             args(PARAM_INSTANCE_ID to EnumWatchPref.SystemTextSize.id, "value" to option.displayName.lowercase()),
         )
         assertTrue(result.ok)
@@ -239,7 +239,7 @@ class WatchSettingsPluginTest {
         val prefs = FakeWatchPrefs()
         val plugin = WatchSettingsPlugin(prefs)
         val result = plugin.invoke(
-            WatchSettingsPlugin.ACTION_SET_VALUE,
+            WatchSettingsActions.SET_VALUE,
             args(PARAM_INSTANCE_ID to NumberWatchPref.BacklightTimeoutMs.id, "value" to "5000 ms"),
         )
         assertTrue(result.ok)
@@ -250,7 +250,7 @@ class WatchSettingsPluginTest {
     fun setValueRefusesANumberTheWatchWouldReject() = runTest {
         val prefs = FakeWatchPrefs()
         val result = WatchSettingsPlugin(prefs).invoke(
-            WatchSettingsPlugin.ACTION_SET_VALUE,
+            WatchSettingsActions.SET_VALUE,
             args(PARAM_INSTANCE_ID to NumberWatchPref.BacklightTimeoutMs.id, "value" to "99999"),
         )
         assertFalse(result.ok)
@@ -262,7 +262,7 @@ class WatchSettingsPluginTest {
     fun anUnknownSettingIsRejectedRatherThanWrittenToTheFirstOne() = runTest {
         val prefs = FakeWatchPrefs()
         val result = WatchSettingsPlugin(prefs).invoke(
-            WatchSettingsPlugin.ACTION_SET_ON,
+            WatchSettingsActions.SET_ON,
             args(PARAM_INSTANCE_ID to "no_such_setting", "on" to "true"),
         )
         assertFalse(result.ok)
@@ -272,7 +272,7 @@ class WatchSettingsPluginTest {
 
     @Test
     fun theSwitchActionAsksForTheInstanceAndTheStateToPutItIn() {
-        val setOn = WatchSettingsPlugin(FakeWatchPrefs()).action(WatchSettingsPlugin.ACTION_SET_ON)
+        val setOn = WatchSettingsPlugin(FakeWatchPrefs()).action(WatchSettingsActions.SET_ON)
         assertEquals(listOf(PARAM_INSTANCE_ID, "on"), setOn?.requiredParams)
         // `on` is a value, so nothing can fire this blind; a tile fills it from the checkbox
         // it is already drawing.

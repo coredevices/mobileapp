@@ -4,6 +4,6 @@ import io.rebble.libpebblecommon.connection.PebbleScanResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
-class IosClassicScanner : ClassicScanner {
+internal class IosClassicScanner : ClassicScanner {
     override fun scan(): Flow<PebbleScanResult> = emptyFlow()
 }

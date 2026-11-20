@@ -33,7 +33,7 @@ import kotlin.uuid.Uuid
     sendDeletions = true,
     manualSync = false,
 )
-data class WeatherAppEntry(
+public data class WeatherAppEntry(
     val key: Uuid,
     val currentTemp: Short,
     val currentWeatherType: Byte,
@@ -146,7 +146,7 @@ private fun serializedWeatherStringsLength(locationName: String, forecastShort: 
             forecastShort.encodeToByteArray().size + UShort.SIZE_BYTES
     ).toUShort()
 
-class WeatherAppBlobRecord(
+internal class WeatherAppBlobRecord(
     version: UByte = 3u,
     currentTemp: Short,
     currentWeatherType: UByte,
@@ -160,19 +160,19 @@ class WeatherAppBlobRecord(
     locationName: String,
     forecastShort: String,
 ) : StructMappable(endianness = Endian.Little) {
-    val version = SUByte(m, version)
-    val currentTemp = SShort(m, currentTemp, endianness = Endian.Little)
-    val currentWeatherType = SUByte(m, currentWeatherType)
-    val todayHighTemp = SShort(m, todayHighTemp, endianness = Endian.Little)
-    val todayLowTemp = SShort(m, todayLowTemp, endianness = Endian.Little)
-    val tomorrowWeatherType = SUByte(m, tomorrowWeatherType)
-    val tomorrowHighTemp = SShort(m, tomorrowHighTemp, endianness = Endian.Little)
-    val tomorrowLowTemp = SShort(m, tomorrowLowTemp, endianness = Endian.Little)
-    val lastUpdateTimeUtc = SUInt(m, lastUpdateTimeUtc, endianness = Endian.Little)
-    val isCurrentLocation = SBoolean(m, isCurrentLocation)
-    val allStringsLength = SUShort(m, serializedWeatherStringsLength(locationName, forecastShort), endianness = Endian.Little)
-    val locationName = SLongString(m, locationName, endianness = Endian.Little)
-    val forecastShort = SLongString(m, forecastShort, endianness = Endian.Little)
+    val version: SUByte = SUByte(m, version)
+    val currentTemp: SShort = SShort(m, currentTemp, endianness = Endian.Little)
+    val currentWeatherType: SUByte = SUByte(m, currentWeatherType)
+    val todayHighTemp: SShort = SShort(m, todayHighTemp, endianness = Endian.Little)
+    val todayLowTemp: SShort = SShort(m, todayLowTemp, endianness = Endian.Little)
+    val tomorrowWeatherType: SUByte = SUByte(m, tomorrowWeatherType)
+    val tomorrowHighTemp: SShort = SShort(m, tomorrowHighTemp, endianness = Endian.Little)
+    val tomorrowLowTemp: SShort = SShort(m, tomorrowLowTemp, endianness = Endian.Little)
+    val lastUpdateTimeUtc: SUInt = SUInt(m, lastUpdateTimeUtc, endianness = Endian.Little)
+    val isCurrentLocation: SBoolean = SBoolean(m, isCurrentLocation)
+    val allStringsLength: SUShort = SUShort(m, serializedWeatherStringsLength(locationName, forecastShort), endianness = Endian.Little)
+    val locationName: SLongString = SLongString(m, locationName, endianness = Endian.Little)
+    val forecastShort: SLongString = SLongString(m, forecastShort, endianness = Endian.Little)
 }
 
 // v4 record sizing + "unknown" sentinels — must match weather_db.h.
@@ -246,7 +246,7 @@ private fun Int?.toClampedUShort(): UShort =
  * The minor version decides where the watch looks for the trailing strings, so appending a block
  * here requires firmware that knows that minor.
  */
-class WeatherAppBlobRecordV4(
+internal class WeatherAppBlobRecordV4(
     currentTemp: Short,
     currentWeatherType: UByte,
     todayHighTemp: Short,
@@ -278,27 +278,27 @@ class WeatherAppBlobRecordV4(
     forecastShort: String,
 ) : StructMappable(endianness = Endian.Little) {
     // --- v3-compatible fixed prefix (identical offsets to the v3 record) ---
-    val version = SUByte(m, 4u)
-    val currentTemp = SShort(m, currentTemp, endianness = Endian.Little)
-    val currentWeatherType = SUByte(m, currentWeatherType)
-    val todayHighTemp = SShort(m, todayHighTemp, endianness = Endian.Little)
-    val todayLowTemp = SShort(m, todayLowTemp, endianness = Endian.Little)
-    val tomorrowWeatherType = SUByte(m, tomorrowWeatherType)
-    val tomorrowHighTemp = SShort(m, tomorrowHighTemp, endianness = Endian.Little)
-    val tomorrowLowTemp = SShort(m, tomorrowLowTemp, endianness = Endian.Little)
-    val lastUpdateTimeUtc = SUInt(m, lastUpdateTimeUtc, endianness = Endian.Little)
-    val isCurrentLocation = SBoolean(m, isCurrentLocation)
+    val version: SUByte = SUByte(m, 4u)
+    val currentTemp: SShort = SShort(m, currentTemp, endianness = Endian.Little)
+    val currentWeatherType: SUByte = SUByte(m, currentWeatherType)
+    val todayHighTemp: SShort = SShort(m, todayHighTemp, endianness = Endian.Little)
+    val todayLowTemp: SShort = SShort(m, todayLowTemp, endianness = Endian.Little)
+    val tomorrowWeatherType: SUByte = SUByte(m, tomorrowWeatherType)
+    val tomorrowHighTemp: SShort = SShort(m, tomorrowHighTemp, endianness = Endian.Little)
+    val tomorrowLowTemp: SShort = SShort(m, tomorrowLowTemp, endianness = Endian.Little)
+    val lastUpdateTimeUtc: SUInt = SUInt(m, lastUpdateTimeUtc, endianness = Endian.Little)
+    val isCurrentLocation: SBoolean = SBoolean(m, isCurrentLocation)
 
     // --- v4 additions (fixed-size, appended before the trailing strings) ---
-    val minorVersion = SUByte(m, WEATHER_DB_MINOR_VERSION)
-    val todayFeelsLikeTemp = SShort(m, todayFeelsLikeTemp, endianness = Endian.Little)
-    val todayUvIndexX10 = SShort(m, todayUvIndexX10, endianness = Endian.Little)
-    val todayPrecipProbability = SShort(m, todayPrecipProbability, endianness = Endian.Little)
-    val todayWindSpeed = SUShort(m, todayWindSpeed, endianness = Endian.Little)
-    val todayWindDirection = SUShort(m, todayWindDirection, endianness = Endian.Little)
-    val latitudeE2 = SShort(m, latitudeE2, endianness = Endian.Little)
-    val longitudeE2 = SShort(m, longitudeE2, endianness = Endian.Little)
-    val numDaily = SUByte(m, numDaily)
+    val minorVersion: SUByte = SUByte(m, WEATHER_DB_MINOR_VERSION)
+    val todayFeelsLikeTemp: SShort = SShort(m, todayFeelsLikeTemp, endianness = Endian.Little)
+    val todayUvIndexX10: SShort = SShort(m, todayUvIndexX10, endianness = Endian.Little)
+    val todayPrecipProbability: SShort = SShort(m, todayPrecipProbability, endianness = Endian.Little)
+    val todayWindSpeed: SUShort = SUShort(m, todayWindSpeed, endianness = Endian.Little)
+    val todayWindDirection: SUShort = SUShort(m, todayWindDirection, endianness = Endian.Little)
+    val latitudeE2: SShort = SShort(m, latitudeE2, endianness = Endian.Little)
+    val longitudeE2: SShort = SShort(m, longitudeE2, endianness = Endian.Little)
+    val numDaily: SUByte = SUByte(m, numDaily)
     private val daily = SFixedList(
         m,
         WEATHER_DB_MAX_FORECAST_DAYS,
@@ -311,12 +311,12 @@ class WeatherAppBlobRecordV4(
             }
         },
     ) { WeatherDailyForecastStruct(0, 0, 0u) }
-    val todayHourlyCount = SUByte(m, todayHourlyCount)
-    val todayHourlyWeatherType = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyWeatherType, endianness = Endian.Unspecified)
-    val todayHourlyTemp = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
+    val todayHourlyCount: SUByte = SUByte(m, todayHourlyCount)
+    val todayHourlyWeatherType: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyWeatherType, endianness = Endian.Unspecified)
+    val todayHourlyTemp: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
 
     // --- v4 minor 1 additions ---
-    val locationUtcOffsetMin = SShort(m, locationUtcOffsetMin, endianness = Endian.Little)
+    val locationUtcOffsetMin: SShort = SShort(m, locationUtcOffsetMin, endianness = Endian.Little)
     private val dailyMetrics = SFixedList(
         m,
         WEATHER_DB_MAX_FORECAST_DAYS,
@@ -332,11 +332,11 @@ class WeatherAppBlobRecordV4(
 
     // --- v4 minor 2 additions ---
     // Today's warning-line readings, taken from day 0 of the forecast.
-    val todayWmoCode = SUByte(m, daily.firstOrNull()?.wmoCode.toUnknownableByte())
-    val todayHumidityPct = SUByte(m, daily.firstOrNull()?.humidityPct.toUnknownableByte())
-    val todayVisibilityM = SUShort(m, daily.firstOrNull()?.visibilityM.toClampedUShort(), endianness = Endian.Little)
-    val todayPrecipSumMm = SUShort(m, daily.firstOrNull()?.precipSumMm.toClampedUShort(), endianness = Endian.Little)
-    val dailyFeelsLike = SBytes(
+    val todayWmoCode: SUByte = SUByte(m, daily.firstOrNull()?.wmoCode.toUnknownableByte())
+    val todayHumidityPct: SUByte = SUByte(m, daily.firstOrNull()?.humidityPct.toUnknownableByte())
+    val todayVisibilityM: SUShort = SUShort(m, daily.firstOrNull()?.visibilityM.toClampedUShort(), endianness = Endian.Little)
+    val todayPrecipSumMm: SUShort = SUShort(m, daily.firstOrNull()?.precipSumMm.toClampedUShort(), endianness = Endian.Little)
+    val dailyFeelsLike: SBytes = SBytes(
         m,
         WEATHER_DB_MAX_FORECAST_DAYS * 2,
         dailyShortsLe(daily, WEATHER_V4_TEMP_UNKNOWN) { it.feelsLikeTemp },
@@ -344,8 +344,8 @@ class WeatherAppBlobRecordV4(
     )
 
     // --- v4 minor 3 additions ---
-    val todayWindDirDeg = SShort(m, todayWindDirDeg, endianness = Endian.Little)
-    val dailyWindDirDeg = SBytes(
+    val todayWindDirDeg: SShort = SShort(m, todayWindDirDeg, endianness = Endian.Little)
+    val dailyWindDirDeg: SBytes = SBytes(
         m,
         WEATHER_DB_MAX_FORECAST_DAYS * 2,
         dailyShortsLe(daily, WEATHER_V4_WIND_DIR_DEG_UNKNOWN) { it.windDirectionDeg?.toShort() },
@@ -354,16 +354,16 @@ class WeatherAppBlobRecordV4(
 
     // --- v4 minor 4 additions ---
     // UV x10 per hour 0-23 (255 unknown): the watch's current-hour reading.
-    val todayHourlyUvX10 = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyUvX10, endianness = Endian.Unspecified)
+    val todayHourlyUvX10: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyUvX10, endianness = Endian.Unspecified)
 
     // --- v4 minor 5 additions ---
     // Tomorrow's hourly series, mirroring today's, for the clock dial's after-midnight hours.
-    val tomorrowHourlyCount = SUByte(m, tomorrowHourlyCount)
-    val tomorrowHourlyWeatherType = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyWeatherType, endianness = Endian.Unspecified)
-    val tomorrowHourlyTemp = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
+    val tomorrowHourlyCount: SUByte = SUByte(m, tomorrowHourlyCount)
+    val tomorrowHourlyWeatherType: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyWeatherType, endianness = Endian.Unspecified)
+    val tomorrowHourlyTemp: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
 
     // --- variable-length trailing strings (MUST stay last) ---
-    val allStringsLength = SUShort(m, serializedWeatherStringsLength(locationName, forecastShort), endianness = Endian.Little)
-    val locationName = SLongString(m, locationName, endianness = Endian.Little)
-    val forecastShort = SLongString(m, forecastShort, endianness = Endian.Little)
+    val allStringsLength: SUShort = SUShort(m, serializedWeatherStringsLength(locationName, forecastShort), endianness = Endian.Little)
+    val locationName: SLongString = SLongString(m, locationName, endianness = Endian.Little)
+    val forecastShort: SLongString = SLongString(m, forecastShort, endianness = Endian.Little)
 }

@@ -17,7 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
 import kotlin.uuid.Uuid
 
 /** AES-GCM with a Keystore key under [keyAlias]; ciphertexts live in the [prefsName] prefs file. */
-class KeystoreSecureStorage(
+public class KeystoreSecureStorage(
     context: Context,
     private val keyAlias: String,
     private val prefsName: String,
@@ -73,7 +73,7 @@ class KeystoreSecureStorage(
         return String(cipher.doFinal(ciphertext))
     }
 
-    override suspend fun set(key: String, value: String) = withContext(Dispatchers.IO) {
+    override suspend fun set(key: String, value: String): Unit = withContext(Dispatchers.IO) {
         prefs.edit { putString(key, encrypt(value)) }
     }
 
@@ -88,17 +88,17 @@ class KeystoreSecureStorage(
         }
     }
 
-    override suspend fun remove(key: String) = withContext(Dispatchers.IO) {
+    override suspend fun remove(key: String): Unit = withContext(Dispatchers.IO) {
         prefs.edit { remove(key) }
     }
 
-    override suspend fun destroy() = withContext(Dispatchers.IO) {
+    override suspend fun destroy(): Unit = withContext(Dispatchers.IO) {
         prefs.edit(commit = true) { clear() }
         context.deleteSharedPreferences(prefsName)
         synchronized(keyLock) { keyStore.deleteEntry(keyAlias) }
     }
 
-    companion object {
+    public companion object {
         private val keyLock = Any()
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

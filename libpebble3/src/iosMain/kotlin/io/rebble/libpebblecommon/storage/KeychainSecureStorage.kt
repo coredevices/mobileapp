@@ -42,7 +42,7 @@ import kotlin.uuid.Uuid
 
 /** Generic-password Keychain items under [service], one account per key. */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-class KeychainSecureStorage(private val service: String) : SecureStorage {
+public class KeychainSecureStorage(private val service: String) : SecureStorage {
 
     override suspend fun set(key: String, value: String) {
         val data = NSString.create(value)!!.dataUsingEncoding(NSUTF8StringEncoding) ?: return
@@ -79,9 +79,9 @@ class KeychainSecureStorage(private val service: String) : SecureStorage {
         return NSString.create(data = data, encoding = NSUTF8StringEncoding) as? String
     }
 
-    override suspend fun remove(key: String) = delete(query(key))
+    override suspend fun remove(key: String): Unit = delete(query(key))
 
-    override suspend fun destroy() = delete(query(account = null))
+    override suspend fun destroy(): Unit = delete(query(account = null))
 
     private fun delete(query: CFMutableDictionaryRef?) {
         val status = SecItemDelete(query)

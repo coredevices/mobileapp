@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.util.Endian
 import kotlin.time.Instant
 
-open class BlobCommand constructor(message: Message, token: UShort, database: BlobDatabase) :
+internal open class BlobCommand constructor(message: Message, token: UShort, database: BlobDatabase) :
     PebblePacket(
         endpoint
     ) {
@@ -22,9 +22,9 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
         Clear(0x05u),
     }
 
-    val command = SUByte(m, message.value)
-    val token = SUShort(m, token)
-    val database = SUByte(m, database.id)
+    val command: SUByte = SUByte(m, message.value)
+    val token: SUShort = SUShort(m, token)
+    val database: SUByte = SUByte(m, database.id)
 
     open class InsertCommand(
         token: UShort,
@@ -34,10 +34,10 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
     ) : BlobCommand(
         Message.Insert, token, database
     ) {
-        val keySize = SUByte(m, key.size.toUByte())
-        val targetKey = SBytes(m, key.size, key)
-        val valSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
-        val targetValue = SBytes(m, value.size, value)
+        val keySize: SUByte = SUByte(m, key.size.toUByte())
+        val targetKey: SBytes = SBytes(m, key.size, key)
+        val valSize: SUShort = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
+        val targetValue: SBytes = SBytes(m, value.size, value)
     }
 
     open class InsertWithTimestampCommand(
@@ -49,18 +49,18 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
     ) : BlobCommand(
         Message.InsertWithTimestamp, token, database
     ) {
-        val timestamp = SUInt(m,timestamp.epochSeconds.toUInt(), endianness = Endian.Little)
-        val keySize = SUByte(m, key.size.toUByte())
-        val targetKey = SBytes(m, key.size, key)
-        val valSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
-        val targetValue = SBytes(m, value.size, value)
+        val timestamp: SUInt = SUInt(m,timestamp.epochSeconds.toUInt(), endianness = Endian.Little)
+        val keySize: SUByte = SUByte(m, key.size.toUByte())
+        val targetKey: SBytes = SBytes(m, key.size, key)
+        val valSize: SUShort = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
+        val targetValue: SBytes = SBytes(m, value.size, value)
     }
 
     class DeleteCommand(token: UShort, database: BlobDatabase, key: UByteArray) : BlobCommand(
         Message.Delete, token, database
     ) {
-        val keySize = SUByte(m, key.size.toUByte())
-        val targetKey = SBytes(m, key.size, key)
+        val keySize: SUByte = SUByte(m, key.size.toUByte())
+        val targetKey: SBytes = SBytes(m, key.size, key)
     }
 
     class ClearCommand(token: UShort, database: BlobDatabase) : BlobCommand(
@@ -68,12 +68,12 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
     )
 
     companion object {
-        val endpoint = ProtocolEndpoint.BLOBDB_V1
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.BLOBDB_V1
     }
 }
 
-open class BlobResponse(response: BlobStatus = BlobStatus.GeneralFailure) : PebblePacket(endpoint) {
-    enum class BlobStatus(val value: UByte) {
+public open class BlobResponse internal constructor(response: BlobStatus = BlobStatus.GeneralFailure) : PebblePacket(endpoint) {
+    public enum class BlobStatus(public val value: UByte) {
         Success(0x01u),
         GeneralFailure(0x02u),
         InvalidOperation(0x03u),
@@ -90,31 +90,31 @@ open class BlobResponse(response: BlobStatus = BlobStatus.GeneralFailure) : Pebb
         WatchDisconnected(0xFFu),
     }
 
-    class Success : BlobResponse(BlobStatus.Success)
-    class GeneralFailure : BlobResponse(BlobStatus.GeneralFailure)
-    class InvalidOperation : BlobResponse(BlobStatus.InvalidOperation)
-    class InvalidDatabaseID : BlobResponse(BlobStatus.InvalidDatabaseID)
-    class InvalidData : BlobResponse(BlobStatus.InvalidData)
-    class KeyDoesNotExist : BlobResponse(BlobStatus.KeyDoesNotExist)
-    class DatabaseFull : BlobResponse(BlobStatus.DatabaseFull)
-    class DataStale : BlobResponse(BlobStatus.DataStale)
-    class NotSupported : BlobResponse(BlobStatus.NotSupported)
-    class Locked : BlobResponse(BlobStatus.Locked)
-    class TryLater : BlobResponse(BlobStatus.TryLater)
+    internal class Success : BlobResponse(BlobStatus.Success)
+    internal class GeneralFailure : BlobResponse(BlobStatus.GeneralFailure)
+    internal class InvalidOperation : BlobResponse(BlobStatus.InvalidOperation)
+    internal class InvalidDatabaseID : BlobResponse(BlobStatus.InvalidDatabaseID)
+    internal class InvalidData : BlobResponse(BlobStatus.InvalidData)
+    internal class KeyDoesNotExist : BlobResponse(BlobStatus.KeyDoesNotExist)
+    internal class DatabaseFull : BlobResponse(BlobStatus.DatabaseFull)
+    internal class DataStale : BlobResponse(BlobStatus.DataStale)
+    internal class NotSupported : BlobResponse(BlobStatus.NotSupported)
+    internal class Locked : BlobResponse(BlobStatus.Locked)
+    internal class TryLater : BlobResponse(BlobStatus.TryLater)
 
-    val token = SUShort(m)
-    val response = SUByte(m, response.value)
+    internal val token: SUShort = SUShort(m)
+    internal val response: SUByte = SUByte(m, response.value)
 
-    val responseValue
+    internal val responseValue: BlobResponse.BlobStatus
         get() = BlobStatus.values().firstOrNull { it.value == response.get() }
             ?: error("Unknown blobdb response ${response.get()}")
 
-    companion object {
-        val endpoint = ProtocolEndpoint.BLOBDB_V1
+    public companion object {
+        internal val endpoint: ProtocolEndpoint = ProtocolEndpoint.BLOBDB_V1
     }
 }
 
-fun blobDBPacketsRegister() {
+internal fun blobDBPacketsRegister() {
     PacketRegistry.registerCustomTypeOffset(BlobResponse.endpoint, 4 + UShort.SIZE_BYTES)
     PacketRegistry.register(
         BlobResponse.endpoint,

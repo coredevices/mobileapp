@@ -1,3 +1,3 @@
 package io.rebble.libpebblecommon.connection
 
-actual class AppContext
+public actual class AppContext

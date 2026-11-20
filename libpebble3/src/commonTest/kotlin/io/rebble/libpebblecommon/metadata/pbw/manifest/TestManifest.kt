@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class TestManifest {
+internal class TestManifest {
     companion object {
         const val MANIFEST_JSON_SIMPLICITY_V1 = "{\"manifestVersion\": 1, \"generatedBy\": \"46e8a544-50dc-4610-aa27-d86115f76f11\", \"generatedAt\": 1449884654, \"application\": {\"timestamp\": 1449884653, \"sdk_version\": {\"major\": 5, \"minor\": 19}, \"crc\": 893549736, \"name\": \"pebble-app.bin\", \"size\": 1339}, \"debug\": {}, \"type\": \"application\", \"resources\": {\"timestamp\": 1449884653, \"crc\": 3436670150, \"name\": \"app_resources.pbpack\", \"size\": 4232}}"
         const val MANIFEST_JSON_SIMPLICITY = "{\"manifestVersion\": 2, \"generatedBy\": \"46e8a544-50dc-4610-aa27-d86115f76f11\", \"generatedAt\": 1449884654, \"application\": {\"timestamp\": 1449884653, \"sdk_version\": {\"major\": 5, \"minor\": 72}, \"crc\": 266802728, \"name\": \"pebble-app.bin\", \"size\": 1363}, \"debug\": {}, \"app_layouts\": \"layouts.json\", \"type\": \"application\", \"resources\": {\"timestamp\": 1449884653, \"crc\": 3168848230, \"name\": \"app_resources.pbpack\", \"size\": 4218}}"

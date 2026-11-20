@@ -55,10 +55,10 @@ private fun WatchPref<*>.kind(): SettingKind = when (this) {
  * and the quick-launch buttons, which read as the uuid of the app they open, empty when nothing
  * is on them. Debug settings are left out: they are hidden in the app too.
  */
-class WatchSettingsPlugin(
+internal class WatchSettingsPlugin(
     private val watchPrefs: WatchPrefs,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_WATCH_SETTINGS_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.WATCH_SETTINGS
     override val name: String = "Watch Settings"
     override val description: String = "The watch's own settings, readable and changeable."
 
@@ -77,7 +77,7 @@ class WatchSettingsPlugin(
 
     override val actions: List<ActionDeclaration> = listOf(
         ActionDeclaration(
-            name = ACTION_SET_ON,
+            name = WatchSettingsActions.SET_ON,
             description = "Turn a setting that is a switch on or off.",
             parameters = schema(
                 """
@@ -90,7 +90,7 @@ class WatchSettingsPlugin(
             callerPermissions = WRITE,
         ),
         ActionDeclaration(
-            name = ACTION_SET_VALUE,
+            name = WatchSettingsActions.SET_VALUE,
             description = "Set a setting to a value: `on`/`off` for a switch, one of the " +
                 "choices by the name it is shown under, a number, a time range like " +
                 "`22:00-07:00`, or the uuid of the app a quick-launch button should open — " +
@@ -124,12 +124,12 @@ class WatchSettingsPlugin(
         val preference = settings().firstOrNull { it.pref.id == id }
             ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "no setting called '$id'")
         return when (action) {
-            ACTION_SET_ON -> {
+            WatchSettingsActions.SET_ON -> {
                 val on = args["on"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
                     ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "'on' must be a boolean")
                 setOn(preference, on)
             }
-            ACTION_SET_VALUE -> {
+            WatchSettingsActions.SET_VALUE -> {
                 val value = args["value"]?.jsonPrimitive?.content
                     ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "'value' is required")
                 setValue(preference, value)
@@ -287,22 +287,16 @@ class WatchSettingsPlugin(
     }
 
     companion object {
-        const val CATEGORY = "watch"
-        const val ITEM_SWITCH = "switch_setting"
-        const val ITEM_NUMBER = "number_setting"
-        const val ITEM_TEXT = "text_setting"
-        const val ITEM_APP = "app_setting"
-        const val PROPERTY_VALUE = "value"
-        const val ACTION_SET_ON = "set_on"
-        const val ACTION_SET_VALUE = "set_value"
+        const val CATEGORY: String = "watch"
+        const val ITEM_SWITCH: String = "switch_setting"
+        const val ITEM_NUMBER: String = "number_setting"
+        const val ITEM_TEXT: String = "text_setting"
+        const val ITEM_APP: String = "app_setting"
+        const val PROPERTY_VALUE: String = "value"
 
         private const val ON = "On"
         private const val OFF = "Off"
         private const val NOTHING = "Nothing"
         private val WRITE = listOf(PluginPermission(PluginPermissions.WRITE_WATCH_SETTINGS))
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_WATCH_SETTINGS_UUID: Uuid =
-            Uuid.parse("00000000-0000-0000-0001-000000000006")
     }
 }

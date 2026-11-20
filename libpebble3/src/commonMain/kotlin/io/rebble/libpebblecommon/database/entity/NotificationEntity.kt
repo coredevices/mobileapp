@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision
 @Entity(indices = [
     Index(value = ["pkg", "channelId"], unique = false),
 ])
-data class NotificationEntity(
+public data class NotificationEntity internal constructor(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val pkg: String,

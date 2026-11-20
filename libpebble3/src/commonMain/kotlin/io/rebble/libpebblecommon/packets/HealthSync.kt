@@ -8,14 +8,14 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
-sealed class HealthSyncOutgoingPacket : PebblePacket(ProtocolEndpoint.HEALTH_SYNC) {
+internal sealed class HealthSyncOutgoingPacket : PebblePacket(ProtocolEndpoint.HEALTH_SYNC) {
     class RequestSync(timeSinceLastSync: UInt) : HealthSyncOutgoingPacket() {
-        val command = SUByte(m, 1u)
-        val timeSince = SUInt(m, timeSinceLastSync, endianness = Endian.Little)
+        val command: SUByte = SUByte(m, 1u)
+        val timeSince: SUInt = SUInt(m, timeSinceLastSync, endianness = Endian.Little)
     }
 }
 
-enum class HealthCommand(val code: UByte) {
+internal enum class HealthCommand(val code: UByte) {
     Sync(0x01u),
     Response(0x11u),
 }
@@ -24,17 +24,17 @@ enum class HealthCommand(val code: UByte) {
  * Raw incoming packet used when the watch requests a health sync.
  * The payload is left uninterpreted so we accept any watch-side command.
  */
-class HealthSyncIncomingPacket : PebblePacket(ProtocolEndpoint.HEALTH_SYNC) {
-    val command = SUByte(m)
-    val result = SUByte(m)
+internal class HealthSyncIncomingPacket : PebblePacket(ProtocolEndpoint.HEALTH_SYNC) {
+    val command: SUByte = SUByte(m)
+    val result: SUByte = SUByte(m)
 }
 
-enum class HealthResult(val code: UByte) {
+internal enum class HealthResult(val code: UByte) {
     Ack(0x01u),
     Nack(0x02u),
 }
 
-fun healthSyncPacketsRegister() {
+internal fun healthSyncPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.HEALTH_SYNC) {
         HealthSyncIncomingPacket()
     }

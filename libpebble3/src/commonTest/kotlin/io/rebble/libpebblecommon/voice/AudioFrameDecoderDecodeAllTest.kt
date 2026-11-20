@@ -1,6 +1,5 @@
-package io.rebble.libpebblecommon.connection.endpointmanager.audio
+package io.rebble.libpebblecommon.voice
 
-import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.readByteArray

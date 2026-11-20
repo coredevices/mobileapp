@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun peripheralFromIdentifier(
+internal actual fun peripheralFromIdentifier(
     identifier: PebbleBleIdentifier,
     name: String,
     autoConnect: Boolean,
@@ -19,7 +19,7 @@ actual fun peripheralFromIdentifier(
     autoConnectIf { autoConnect }
 }
 
-actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+internal actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     if (this is AndroidPeripheral) {
         return this.requestMtu(mtu)
     }
@@ -30,7 +30,7 @@ private val LOG_TAG = "Peripheral.refreshServicesNative"
 private val REDISCOVER_TIMEOUT = 10.seconds
 private const val KABLE_ON_SERVICE_CHANGED_CLASS = "com.juul.kable.gatt.OnServiceChanged"
 
-actual suspend fun Peripheral.refreshServicesNative(): Boolean {
+internal actual suspend fun Peripheral.refreshServicesNative(): Boolean {
     val logger = Logger.withTag(LOG_TAG)
     if (this !is AndroidPeripheral) {
         logger.w("Not an AndroidPeripheral, skipping refresh")

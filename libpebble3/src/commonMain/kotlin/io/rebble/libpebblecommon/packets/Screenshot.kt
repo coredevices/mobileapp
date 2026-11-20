@@ -8,36 +8,36 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.SUnboundBytes
 import io.rebble.libpebblecommon.structmapper.StructMappable
 
-class ScreenshotRequest : PebblePacket(ProtocolEndpoint.SCREENSHOT) {
+internal class ScreenshotRequest : PebblePacket(ProtocolEndpoint.SCREENSHOT) {
     /**
      * Command. Only one command (take screenshot, value 0) is supported for now
      */
-    val command = SUByte(m, 0u)
+    val command: SUByte = SUByte(m, 0u)
 }
 
-sealed class ScreenshotResponse : PebblePacket(ProtocolEndpoint.SCREENSHOT)
+internal sealed class ScreenshotResponse : PebblePacket(ProtocolEndpoint.SCREENSHOT)
 
-class ScreenshotData : ScreenshotResponse() {
-    val data = SUnboundBytes(m)
+internal class ScreenshotData : ScreenshotResponse() {
+    val data: SUnboundBytes = SUnboundBytes(m)
 }
 
-class ScreenshotHeader : ScreenshotResponse() {
+internal class ScreenshotHeader : ScreenshotResponse() {
     /**
      * @see ScreenshotResponseCode
      */
-    val responseCode = SUByte(m)
+    val responseCode: SUByte = SUByte(m)
 
     /**
      * @see ScreenshotVersion
      */
-    val version = SUInt(m)
+    val version: SUInt = SUInt(m)
 
-    val width = SUInt(m)
-    val height = SUInt(m)
-    val data = SUnboundBytes(m)
+    val width: SUInt = SUInt(m)
+    val height: SUInt = SUInt(m)
+    val data: SUnboundBytes = SUnboundBytes(m)
 }
 
-enum class ScreenshotResponseCode(val rawCode: UByte) {
+internal enum class ScreenshotResponseCode(val rawCode: UByte) {
     OK(0u),
     MalformedCommand(1u),
     OutOfMemory(2u),
@@ -51,7 +51,7 @@ enum class ScreenshotResponseCode(val rawCode: UByte) {
     }
 }
 
-enum class ScreenshotVersion(val rawCode: UInt, val bitsPerPixel: Int) {
+internal enum class ScreenshotVersion(val rawCode: UInt, val bitsPerPixel: Int) {
     BLACK_WHITE_1_BIT(1u, 1),
     COLOR_8_BIT(2u, 8);
 
@@ -63,7 +63,7 @@ enum class ScreenshotVersion(val rawCode: UInt, val bitsPerPixel: Int) {
     }
 }
 
-fun screenshotPacketsRegister() {
+internal fun screenshotPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.SCREENSHOT) {
         // The services needs to decide whether each message is a header or not (but this
         // needs to create some kind of Screenshot packet).

@@ -21,8 +21,11 @@ import io.rebble.libpebblecommon.connection.UserFacingError
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
-import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
+import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
+import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
@@ -86,7 +89,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 import kotlinx.serialization.json.Json
 
-class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
+internal class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
 
 internal data class AppVersionState(
     val id: Uuid,
@@ -104,13 +107,17 @@ internal fun appsNeedingUpdatePrefetch(apps: List<AppVersionState>): List<Uuid> 
         !it.sideloaded && it.currentVersion !in it.cachedVersions && it.cachedVersions.isNotEmpty()
     }.map { it.id }
 
-interface AppFileReader {
+internal interface AppFileReader {
     suspend fun getAppFile(uuid: Uuid, name: String): String?
 }
 
-class Locker(
+internal class Locker internal constructor(
     private val watchManager: WatchManager,
-    database: Database,
+    private val lockerEntryDao: LockerEntryRealDao,
+    private val timelinePinDao: TimelinePinRealDao,
+    private val timelineReminderDao: TimelineReminderRealDao,
+    private val appPermissionDao: LockerAppPermissionDao,
+    private val watchPrefDao: WatchPrefRealDao,
     private val lockerPBWCache: LockerPBWCache,
     private val config: WatchConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -126,11 +133,6 @@ class Locker(
     private val phoneNetworkMonitor: PhoneNetworkMonitor,
     private val pluginFileAccess: PluginFileAccess,
 ) : LockerApi, AppFileReader {
-    private val lockerEntryDao = database.lockerEntryDao()
-    private val timelinePinDao = database.timelinePinDao()
-    private val timelineReminderDao = database.timelineReminderDao()
-    private val appPermissionDao = database.lockerAppPermissionDao()
-    private val watchPrefDao = database.watchPrefDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
@@ -488,7 +490,7 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean?> = emptyMap()): Boolean {
+    internal suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean?> = emptyMap()): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val type = when {
             pbwApp.info.loadablePlugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin
@@ -673,7 +675,7 @@ class Locker(
     }
 }
 
-fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
+internal fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
     properties = AppProperties(
         id = uuid,
         type = type,
@@ -701,7 +703,7 @@ fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemA
     systemApp = this,
 )
 
-fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
+internal fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
     if (systemApp) {
         return findSystemApp(id)?.wrap(orderIndex)
     }
@@ -742,7 +744,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
     )
 }
 
-fun findSystemApp(uuid: Uuid): SystemApps? = SystemApps.entries.find { it.uuid == uuid }
+internal fun findSystemApp(uuid: Uuid): SystemApps? = SystemApps.entries.find { it.uuid == uuid }
 
 /** For a store that doesn't send appinfo fields: keeps what the pbw gave us. */
 internal fun LockerEntry.withAppInfoOf(existing: LockerEntry) = copy(
@@ -752,7 +754,7 @@ internal fun LockerEntry.withAppInfoOf(existing: LockerEntry) = copy(
     configurable = configurable || existing.configPage != null,
 )
 
-fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerEntry {
+internal fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(uuid)
     return LockerEntry(
         id = uuid,
@@ -820,10 +822,10 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
     )
 }
 
-expect fun getLockerPBWCacheDirectory(context: AppContext): Path
-expect fun getLockerPBWCacheLegacyDirectory(context: AppContext): Path?
+public expect fun getLockerPBWCacheDirectory(context: AppContext): Path
+internal expect fun getLockerPBWCacheLegacyDirectory(context: AppContext): Path?
 
-class StaticLockerPBWCache(
+internal class StaticLockerPBWCache(
     context: AppContext,
     private val httpClient: HttpClient,
     private val errorTracker: ErrorTracker,
@@ -862,7 +864,7 @@ class StaticLockerPBWCache(
     }
 }
 
-abstract class LockerPBWCache(private val context: AppContext) {
+internal abstract class LockerPBWCache(private val context: AppContext) {
     private val cacheDir = getLockerPBWCacheDirectory(context)
     private val pkjsCacheDir = Path(cacheDir, "pkjs")
 
@@ -871,7 +873,7 @@ abstract class LockerPBWCache(private val context: AppContext) {
     }
 
     companion object {
-        const val DEFAULT_STORAGE_LIMIT_BYTES = 50L * 1024 * 1024 // 50 MB
+        const val DEFAULT_STORAGE_LIMIT_BYTES: Long = 50L * 1024 * 1024 // 50 MB
     }
 
     private fun migrateFromLegacyIfNeeded(context: AppContext) {
@@ -1042,7 +1044,7 @@ abstract class LockerPBWCache(private val context: AppContext) {
     }
 }
 
-fun orderIndexForInsert(type: AppType) = when (type) {
+public fun orderIndexForInsert(type: AppType): Int = when (type) {
     AppType.Watchface -> -1
     AppType.Watchapp -> SystemApps.entries.size
     AppType.Plugin -> 0

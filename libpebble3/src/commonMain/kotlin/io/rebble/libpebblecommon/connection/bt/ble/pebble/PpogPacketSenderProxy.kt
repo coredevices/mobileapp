@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
  * post-discovery by [PebbleBle] based on whether the watch advertises the
  * reversed PPoG service.
  */
-class PpogPacketSenderProxy(
+internal class PpogPacketSenderProxy(
     private val ppogClient: PpogClient,
     private val ppogServer: PpogServer,
 ) : PPoGPacketSender {

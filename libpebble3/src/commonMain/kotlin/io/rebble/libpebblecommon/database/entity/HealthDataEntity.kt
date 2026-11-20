@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "health_data")
-data class HealthDataEntity(
+public data class HealthDataEntity internal constructor(
     @PrimaryKey
     val timestamp: Long,
     val steps: Int,
@@ -24,7 +24,7 @@ data class HealthDataEntity(
     tableName = "overlay_data",
     primaryKeys = ["startTime", "type"]
 )
-data class OverlayDataEntity(
+public data class OverlayDataEntity(
     val startTime: Long,
     val duration: Long,
     val type: Int,

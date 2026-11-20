@@ -13,7 +13,7 @@ import kotlin.time.Clock
  * One-shot migration of the phone-side respectDoNotDisturb config into the
  * [BoolWatchPref.RespectPhoneSilence] watch pref.
  */
-class RespectDoNotDisturbMigrator(
+internal class RespectDoNotDisturbMigrator(
     private val watchPrefRealDao: WatchPrefRealDao,
     private val libPebbleConfigHolder: LibPebbleConfigHolder,
     private val settings: Settings,

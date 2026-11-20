@@ -16,13 +16,13 @@ import io.rebble.libpebblecommon.util.PrivateLogger
 
 private val logger = Logger.withTag("NotificationImage")
 
-sealed interface NotificationImageSource {
+internal sealed interface NotificationImageSource {
     data class FromBitmap(val bitmap: Bitmap) : NotificationImageSource
     data class FromUri(val uri: Uri) : NotificationImageSource
 }
 
 /** An image attached to a notification, with the dimensions of the original. */
-data class NotificationImage(
+internal data class NotificationImage(
     val source: NotificationImageSource,
     val width: Int,
     val height: Int,
@@ -32,7 +32,7 @@ data class NotificationImage(
  * [caption] is filled in even when [image] isn't, because the sender's own words still read better
  * than the app's "Image" placeholder when images are turned off.
  */
-data class NotificationAttachment(
+internal data class NotificationAttachment(
     val image: NotificationImage? = null,
     val caption: CharSequence? = null,
     /**
@@ -57,7 +57,7 @@ data class NotificationAttachment(
  * Only the image's dimensions are decoded — the bytes are read later, and only for notifications
  * that survive filtering.
  */
-fun StatusBarNotification.extractAttachment(
+internal fun StatusBarNotification.extractAttachment(
     context: Context,
     includeImage: Boolean,
     privateLogger: PrivateLogger,

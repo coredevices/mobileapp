@@ -8,7 +8,7 @@ import io.rebble.libpebblecommon.database.entity.TimelinePinDao
 import kotlin.uuid.Uuid
 
 @Dao
-interface TimelinePinRealDao : TimelinePinDao {
+internal interface TimelinePinRealDao : TimelinePinDao {
     @Query("SELECT * FROM TimelinePinEntity WHERE parentId = :parentId AND deleted = 0")
     suspend fun getPinsForWatchapp(parentId: Uuid): List<TimelinePin>
 

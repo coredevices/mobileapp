@@ -3,8 +3,8 @@ package io.rebble.libpebblecommon
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
 
-object Logging {
-    fun setMinSeverity(severity: LPKSeverity) = Logger.setMinSeverity(
+internal object Logging {
+    fun setMinSeverity(severity: LPKSeverity): Unit = Logger.setMinSeverity(
         when (severity) {
             LPKSeverity.Verbose -> Severity.Verbose
             LPKSeverity.Debug -> Severity.Debug
@@ -16,7 +16,7 @@ object Logging {
     )
 }
 
-enum class LPKSeverity {
+internal enum class LPKSeverity {
     Verbose,
     Debug,
     Info,

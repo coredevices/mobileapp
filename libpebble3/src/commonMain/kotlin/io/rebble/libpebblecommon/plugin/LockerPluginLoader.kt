@@ -16,7 +16,7 @@ import kotlin.uuid.Uuid
  * manifest is registered, and unregistered when the app leaves the locker or plugins are switched
  * off.
  */
-class LockerPluginLoader(
+internal class LockerPluginLoader(
     private val registry: PluginRegistry,
     private val scope: LibPebbleCoroutineScope,
     private val lockerEntryDao: LockerEntryRealDao,

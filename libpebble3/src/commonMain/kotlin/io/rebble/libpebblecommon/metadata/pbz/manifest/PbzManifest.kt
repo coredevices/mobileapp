@@ -8,7 +8,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PbzManifest(
+internal data class PbzManifest(
     val manifestVersion: Int,
     val generatedAt: Long,
     val generatedBy: String? = null,
@@ -20,7 +20,7 @@ data class PbzManifest(
     val type: String
 )
 
-data class PbzManifestWrapper(
+internal data class PbzManifestWrapper(
     val manifest: PbzManifest,
     val zipPath: Path,
     val manifestPath: Path,
@@ -28,6 +28,6 @@ data class PbzManifestWrapper(
     fun getFile(fileName: String): RawSource {
         return DiskUtil.getFile(zipPath, Path(manifestPath, fileName).toString())
     }
-    fun getFirmware() = getFile(manifest.firmware.name)
-    fun getResources() = manifest.resources?.let { getFile(it.name) }
+    fun getFirmware(): RawSource = getFile(manifest.firmware.name)
+    fun getResources(): RawSource? = manifest.resources?.let { getFile(it.name) }
 }

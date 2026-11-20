@@ -43,7 +43,7 @@ import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIDevice
 import kotlin.time.Instant
 
-class IosSystemCalendar(
+internal class IosSystemCalendar(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : SystemCalendar {
     private val logger = Logger.withTag("IosSystemCalendar")
@@ -223,9 +223,9 @@ class IosSystemCalendar(
     override fun supportsPinActions(): Boolean = false
 }
 
-fun EKAlarm.asReminder(): EventReminder = EventReminder.fromStartOffset(relativeOffset)
+internal fun EKAlarm.asReminder(): EventReminder = EventReminder.fromStartOffset(relativeOffset)
 
-fun EKParticipant.asAttendee(): EventAttendee {
+internal fun EKParticipant.asAttendee(): EventAttendee {
     val status = when (participantStatus) {
         EKParticipantStatusAccepted -> EventAttendee.AttendanceStatus.Accepted
         EKParticipantStatusDeclined -> EventAttendee.AttendanceStatus.Declined
@@ -244,7 +244,7 @@ fun EKParticipant.asAttendee(): EventAttendee {
     )
 }
 
-fun CGColorRef?.cgColorToInt(): Int {
+internal fun CGColorRef?.cgColorToInt(): Int {
     if (this == null) return 0 // or handle null case as needed
 
     val colorSpace = CGColorGetColorSpace(this)

@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
  * This will manage scheduling background tasks etc. For now, it just triggers stuff to happen
  * immediately (in a way that might be killed if we're not in the foreground etc).
  */
-class WebSyncManager(
+internal class WebSyncManager(
     private val webServices: WebServices,
     private val locker: Locker,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,

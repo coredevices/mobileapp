@@ -34,9 +34,9 @@ import platform.darwin.dispatch_get_main_queue
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 
-actual class PhoneNetworkMonitor {
+public actual class PhoneNetworkMonitor {
     @OptIn(ExperimentalForeignApi::class)
-    actual val connection: Flow<String?> = callbackFlow {
+    public actual val connection: Flow<String?> = callbackFlow {
         val monitor = nw_path_monitor_create()
         nw_path_monitor_set_update_handler(monitor) { path ->
             trySend(
@@ -54,7 +54,7 @@ actual class PhoneNetworkMonitor {
         awaitClose { nw_path_monitor_cancel(monitor) }
     }.distinctUntilChanged()
 
-    actual val cellGeneration: Flow<String?> = callbackFlow {
+    public actual val cellGeneration: Flow<String?> = callbackFlow {
         val info = CTTelephonyNetworkInfo()
         trySend(info.generation())
 

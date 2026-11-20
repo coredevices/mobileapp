@@ -26,7 +26,7 @@ import kotlin.uuid.toJavaUuid
  * Delivers third-party data logging sessions to companion apps over PebbleKit 2. Not tied to a
  * running watchapp: spooled data can arrive on reconnect while no watchapp is open.
  */
-class PebbleKit2Datalogging(
+internal class PebbleKit2Datalogging(
     private val context: Context,
     private val datalogging: Datalogging,
     private val locker: Locker,

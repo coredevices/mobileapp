@@ -29,7 +29,7 @@ private val logger = Logger.withTag("LockerEntry")
     sendDeletions = true,
     manualSync = true,
 )
-data class LockerEntry(
+internal data class LockerEntry(
     val id: Uuid,
     val version: String,
     val title: String,
@@ -96,7 +96,7 @@ data class LockerEntry(
     }
 }
 
-fun LockerEntry.asMetadata(platform: WatchType, watchPermissions: UInt? = null): AppMetadata? {
+internal fun LockerEntry.asMetadata(platform: WatchType, watchPermissions: UInt? = null): AppMetadata? {
     // Pick the best-matching variant for this watch.
     val entryPlatform = platform.getCompatibleAppVariants().firstNotNullOfOrNull { variant ->
         platforms.firstOrNull { it.name == variant.codename }
@@ -135,7 +135,7 @@ fun LockerEntry.asMetadata(platform: WatchType, watchPermissions: UInt? = null):
 private fun String.toVersionByte(): UByte =
     toUIntOrNull()?.coerceAtMost(UByte.MAX_VALUE.toUInt())?.toUByte() ?: 0u
 
-data class LockerEntryAppstoreData(
+internal data class LockerEntryAppstoreData internal constructor(
     val hearts: Int,
     val developerId: String,
     val timelineEnabled: Boolean,
@@ -148,7 +148,7 @@ data class LockerEntryAppstoreData(
 )
 
 @Serializable
-data class CompanionApp(
+public data class CompanionApp(
     val id: Int,
     val icon: String,
     val name: String,
@@ -158,7 +158,7 @@ data class CompanionApp(
 )
 
 @Serializable
-data class LockerEntryPlatform(
+internal data class LockerEntryPlatform(
     val lockerEntryId: Uuid,
     val sdkVersion: String,
     val processInfoFlags: Int,
@@ -172,14 +172,14 @@ data class LockerEntryPlatform(
 )
 
 // Only some fields should trigger a watch resync if changed:
-fun LockerEntryPlatform.recordHashCode(): Int {
+internal fun LockerEntryPlatform.recordHashCode(): Int {
     var result = sdkVersion.hashCode()
     result = 31 * result + processInfoFlags.hashCode()
     result = 31 * result + pbwIconResourceId
     return result
 }
 
-fun List<LockerEntryPlatform>.recordHashCode(): Int {
+internal fun List<LockerEntryPlatform>.recordHashCode(): Int {
     var result = 0
     for (platform in this) {
         result = 31 * result + platform.recordHashCode()
@@ -187,4 +187,4 @@ fun List<LockerEntryPlatform>.recordHashCode(): Int {
     return result
 }
 
-val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")
+public val APP_VERSION_REGEX: Regex = Regex("(\\d+)\\.(\\d+)(:?-.*)?")

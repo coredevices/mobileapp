@@ -28,7 +28,7 @@ import io.rebble.libpebblecommon.util.DataBuffer
 import kotlin.time.Instant
 
 @Dao
-interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
+internal interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
     @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         val key = write.key.toByteArray().decodeToString().trimEnd('\u0000')

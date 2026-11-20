@@ -29,7 +29,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class PhoneCalendarSyncer(
+internal class PhoneCalendarSyncer(
     private val timelinePinDao: TimelinePinRealDao,
     private val calendarDao: CalendarDao,
     private val timeProvider: TimeProvider,
@@ -269,7 +269,7 @@ class PhoneCalendarSyncer(
     }
 }
 
-data class EventAndPin(val event: CalendarEvent, val pin: TimelinePin)
+internal data class EventAndPin(val event: CalendarEvent, val pin: TimelinePin)
 
 /**
  * `platformId` is not stable - iOS may hand back a new `calendarIdentifier` for the same calendar

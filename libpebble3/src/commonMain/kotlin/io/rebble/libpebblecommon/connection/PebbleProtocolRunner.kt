@@ -13,7 +13,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-data class InboundPPMessage(
+internal data class InboundPPMessage(
     val packet: PebblePacket,
     val rawBytes: UByteArray,
 ) {
@@ -36,7 +36,7 @@ data class InboundPPMessage(
     }
 }
 
-class PebbleProtocolStreams(
+internal class PebbleProtocolStreams(
     val inboundPPBytes: ByteChannel = ByteChannel(),
     // Using ByteArray here because I'm not 100% sure how the watch handles multiple PP messages
     // within a single PPoG packet (we could make this [Byte] (or use source/sink) if that
@@ -47,7 +47,7 @@ class PebbleProtocolStreams(
     ),
 )
 
-class PebbleProtocolRunner(
+internal class PebbleProtocolRunner(
     private val pebbleProtocolStreams: PebbleProtocolStreams,
     private val identifier: PebbleIdentifier,
 ) {

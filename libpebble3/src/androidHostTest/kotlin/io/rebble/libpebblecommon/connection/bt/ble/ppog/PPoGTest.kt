@@ -21,7 +21,7 @@ import org.junit.Test
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
-class PPoGTest {
+internal class PPoGTest {
     private val ppStreams = PebbleProtocolStreams()
     private val ppogStreams = PPoGStream()
     private val outboundPPoGPackets = Channel<ByteArray>(capacity = 100)

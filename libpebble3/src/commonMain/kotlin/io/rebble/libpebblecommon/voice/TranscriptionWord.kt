@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.voice
 
 import io.rebble.libpebblecommon.packets.Word
 
-data class TranscriptionWord (
+public data class TranscriptionWord (
     val word: String,
     val confidence: Float
 )

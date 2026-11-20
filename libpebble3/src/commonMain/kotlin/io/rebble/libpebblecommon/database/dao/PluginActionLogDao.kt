@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
-interface PluginActionLogDao {
+internal interface PluginActionLogDao {
     @Insert
     suspend fun insert(row: PluginActionLogEntity)
 

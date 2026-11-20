@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.contacts.SystemContacts
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
-class IosSystemContacts : SystemContacts {
+internal class IosSystemContacts : SystemContacts {
     override fun registerForContactsChanges(): Flow<Unit> {
         return flow {  }
     }

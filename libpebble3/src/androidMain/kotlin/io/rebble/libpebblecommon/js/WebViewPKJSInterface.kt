@@ -5,7 +5,7 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import co.touchlab.kermit.Logger
 
-class WebViewPKJSInterface(
+internal class WebViewPKJSInterface(
     jsRunner: JsRunner,
     device: CompanionAppDevice,
     private val context: Context,

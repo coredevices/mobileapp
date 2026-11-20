@@ -6,7 +6,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
-actual val pkjsPlatformModule: Module = module {
+internal actual val pkjsPlatformModule: Module = module {
     factory { params ->
         JavascriptCoreJsRunner(
             appContext = get(),

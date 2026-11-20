@@ -6,25 +6,25 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import kotlin.uuid.Uuid
 
-class AppReorderResult() :
+internal class AppReorderResult() :
     PebblePacket(ProtocolEndpoint.APP_REORDER) {
     /**
      * Result code. See [AppOrderResultCode].
      */
-    val status = SUByte(m)
+    val status: SUByte = SUByte(m)
 
 }
 
-sealed class AppReorderOutgoingPacket(type: AppReorderType) :
+internal sealed class AppReorderOutgoingPacket(type: AppReorderType) :
     PebblePacket(ProtocolEndpoint.APP_REORDER) {
 
     /**
      * Packet type. See [AppReorderType].
      */
-    val command = SUByte(m, type.value)
+    val command: SUByte = SUByte(m, type.value)
 }
 
-enum class AppOrderResultCode(val value: UByte) {
+internal enum class AppOrderResultCode(val value: UByte) {
     SUCCESS(0x01u),
     FAILED(0x02u),
     INVALID(0x03u),
@@ -41,12 +41,12 @@ enum class AppOrderResultCode(val value: UByte) {
 /**
  * Packet sent from the watch when user opens an app that is not in the watch storage.
  */
-class AppReorderRequest(
+internal class AppReorderRequest(
     appList: List<Uuid>
 ) : AppReorderOutgoingPacket(AppReorderType.REORDER_APPS) {
-    val appCount = SByte(m, appList.size.toByte())
+    val appCount: SByte = SByte(m, appList.size.toByte())
 
-    val appList = SFixedList<SUUID>(
+    val appList: SFixedList<SUUID> = SFixedList<SUUID>(
         mapper = m,
         count = appList.size,
         default = appList.map { SUUID(StructMapper(), it) },
@@ -57,12 +57,12 @@ class AppReorderRequest(
         })
 }
 
-enum class AppReorderType(val value: UByte) {
+internal enum class AppReorderType(val value: UByte) {
     REORDER_APPS(0x01u)
 }
 
 
-fun appReorderIncomingRegister() {
+internal fun appReorderIncomingRegister() {
     PacketRegistry.register(
         ProtocolEndpoint.APP_REORDER,
     ) { AppReorderResult() }

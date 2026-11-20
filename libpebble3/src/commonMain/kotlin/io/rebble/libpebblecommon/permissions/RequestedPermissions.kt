@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlin.uuid.Uuid
 import io.rebble.libpebblecommon.web.LockerEntry as WebLockerEntry
 
-data class RequestedPermissions(
+public data class RequestedPermissions(
     val declared: List<PluginPermission>?,
     val hasPkjs: Boolean,
     val hasCompanionApp: Boolean = false,
@@ -27,7 +27,7 @@ data class RequestedPermissions(
             listOfNotNull(PluginPermissions.HEALTH.takeIf { hasHealth && legacyForHealth })).distinct()
 
     /** Only for an app not installed yet; otherwise use `AppPermissions.subjectOf`. */
-    fun subject(appUuid: Uuid) = PermissionSubject(
+    public fun subject(appUuid: Uuid): PermissionSubject = PermissionSubject(
         appUuid = appUuid,
         legacy = declared == null,
         hasAndroidCompanion = hasAndroidCompanion,
@@ -36,10 +36,10 @@ data class RequestedPermissions(
     )
 }
 
-fun declaredPermissions(usesPermissions: List<PluginPermission>, manifestVersion: Int): List<PluginPermission>? =
+public fun declaredPermissions(usesPermissions: List<PluginPermission>, manifestVersion: Int): List<PluginPermission>? =
     usesPermissions.takeUnless { isLegacy(manifestVersion) }
 
-fun PbwApp.requestedPermissions(companionsOf: LockerEntry? = null) = RequestedPermissions(
+internal fun PbwApp.requestedPermissions(companionsOf: LockerEntry? = null): RequestedPermissions = RequestedPermissions(
     declared = info.declaredPermissions,
     hasPkjs = hasPKJS,
     hasCompanionApp = companionsOf?.androidCompanion != null || companionsOf?.iosCompanion != null,
@@ -52,7 +52,7 @@ fun PbwApp.requestedPermissions(companionsOf: LockerEntry? = null) = RequestedPe
 )
 
 /** Null when the store sent no appinfo fields (as the Rebble store doesn't): the pbw says then. */
-fun WebLockerEntry.requestedPermissions(): RequestedPermissions? {
+internal fun WebLockerEntry.requestedPermissions(): RequestedPermissions? {
     val manifestVersion = manifestVersion ?: return null
     return RequestedPermissions(
         declared = declaredPermissions(usesPermissions.orEmpty(), manifestVersion),
@@ -66,7 +66,7 @@ fun WebLockerEntry.requestedPermissions(): RequestedPermissions? {
     )
 }
 
-data class InstallReview(
+public data class InstallReview internal constructor(
     val appUuid: Uuid,
     val appName: String,
     val toReview: List<String>,
@@ -78,10 +78,10 @@ data class InstallReview(
     /** The developer said which permissions are required. */
     val describesRequired: Boolean get() = declared?.describesRequired() == true
 
-    fun isRequired(key: String) = declared?.isRequired(key) == true
+    public fun isRequired(key: String): Boolean = declared?.isRequired(key) == true
 
     /** Installing waits for these: all of them, unless the developer said which are required. */
-    fun needsAnswer(key: String) = !describesRequired || isRequired(key)
+    public fun needsAnswer(key: String): Boolean = !describesRequired || isRequired(key)
 
-    fun reasonFor(key: String) = declared?.declarationOf(key)?.reason
+    public fun reasonFor(key: String): String? = declared?.declarationOf(key)?.reason
 }

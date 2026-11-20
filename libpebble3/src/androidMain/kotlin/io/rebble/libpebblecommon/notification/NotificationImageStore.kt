@@ -22,7 +22,7 @@ import androidx.core.graphics.scale
  * the card comes into view — long after the notification was posted, and possibly in a later
  * process — so the bytes have to outlive both.
  */
-class NotificationImageStore(
+internal class NotificationImageStore(
     appContext: AppContext,
 ) : NotificationImageProvider {
     private val logger = Logger.withTag("NotificationImageStore")

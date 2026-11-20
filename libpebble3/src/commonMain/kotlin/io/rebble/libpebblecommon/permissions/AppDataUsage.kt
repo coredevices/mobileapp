@@ -17,22 +17,22 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-fun interface DataUsageRecorder {
+internal fun interface DataUsageRecorder {
     /** Never blocks: safe from a JS bridge callback. */
     fun record(appUuid: Uuid, url: String, sentBytes: Long, receivedBytes: Long, requests: Int)
 }
 
 /** What the app put in a request: the URL and its headers carry data as much as the body does. */
-fun requestBytes(method: String, url: String, headers: Map<String, Any>, bodyBytes: Long): Long =
+internal fun requestBytes(method: String, url: String, headers: Map<String, Any>, bodyBytes: Long): Long =
     method.length + url.encodeToByteArray().size + bodyBytes +
         headers.entries.sumOf { (name, value) -> name.length + value.toString().encodeToByteArray().size }
 
-interface AppDataUsageApi {
+public interface AppDataUsageApi {
     /** Every app's traffic over the last [days] days, today included. */
-    fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>>
+    public fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>>
 }
 
-class AppDataUsage(
+internal class AppDataUsage(
     private val dao: AppDataUsageDao,
     private val permissions: AppPermissions,
     private val network: PhoneNetworkMonitor,
@@ -104,14 +104,14 @@ class AppDataUsage(
 
     override fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>> = dao.flowSince(firstDay(days))
 
-    suspend fun deleteOlderThan(days: Int) = dao.deleteBefore(firstDay(days))
+    suspend fun deleteOlderThan(days: Int): Unit = dao.deleteBefore(firstDay(days))
 
     private fun firstDay(days: Int) = clock.now().localDay() - (days - 1)
 }
 
-data class UsageKey(val permission: String, val declared: Boolean)
+internal data class UsageKey internal constructor(val permission: String, val declared: Boolean)
 
-data class PermissionDataUsage(
+public data class PermissionDataUsage internal constructor(
     val permission: String,
     val declared: Boolean,
     val requests: Long,
@@ -129,7 +129,7 @@ data class PermissionDataUsage(
         }
 }
 
-data class AppDataUsageSummary(val appUuid: Uuid, val byPermission: List<PermissionDataUsage>) {
+public data class AppDataUsageSummary internal constructor(val appUuid: Uuid, val byPermission: List<PermissionDataUsage>) {
     val requests: Long get() = byPermission.sumOf { it.requests }
     val sentBytes: Long get() = byPermission.sumOf { it.sentBytes }
     val receivedBytes: Long get() = byPermission.sumOf { it.receivedBytes }
@@ -138,7 +138,7 @@ data class AppDataUsageSummary(val appUuid: Uuid, val byPermission: List<Permiss
 }
 
 /** Per app and permission, the heaviest first. */
-fun List<AppDataUsageEntity>.byApp(): List<AppDataUsageSummary> =
+public fun List<AppDataUsageEntity>.byApp(): List<AppDataUsageSummary> =
     groupBy { it.appUuid }
         .map { (appUuid, appRows) ->
             AppDataUsageSummary(

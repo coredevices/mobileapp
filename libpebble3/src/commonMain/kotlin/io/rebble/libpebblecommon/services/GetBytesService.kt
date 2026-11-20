@@ -22,7 +22,7 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
 
-class GetBytesService(
+internal class GetBytesService(
     private val protocolHandler: PebbleProtocolHandler,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val appContext: AppContext,
@@ -94,7 +94,7 @@ class GetBytesService(
  * This means that you can be safe in the knowledge that you will not miss any inbound messages
  * while thinking about other things.
  */
-inline fun <reified T> PebbleProtocolHandler.handleMessages(
+internal inline fun <reified T> PebbleProtocolHandler.handleMessages(
     connectionCoroutineScope: ConnectionCoroutineScope,
     block: (messages: ReceiveChannel<T>) -> Unit,
 ) {

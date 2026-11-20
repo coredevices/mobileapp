@@ -7,14 +7,14 @@ import io.rebble.libpebblecommon.util.Endian
 /**
  * Maps class properties to a struct equivalent
  */
-class StructMapper(endianness: Endian = Endian.Unspecified, private val debugTag: String? = null): Mappable(endianness) {
+public class StructMapper internal constructor(endianness: Endian = Endian.Unspecified, private val debugTag: String? = null): Mappable(endianness) {
     private var struct: MutableList<Mappable> = mutableListOf()
 
     /**
      * Register a mappable object with the StructMapper (tracks index + auto serialization based on declaration order)
      * Ideally only use this within mappable type definitions
      */
-    fun register(type: Mappable): Int {
+    public fun register(type: Mappable): Int {
         struct.add(type)
         return struct.size - 1
     }
@@ -23,7 +23,7 @@ class StructMapper(endianness: Endian = Endian.Unspecified, private val debugTag
      * Get the struct as a list of Mappables
      * @return The list of mappables
      */
-    fun getStruct(): List<Mappable> {
+    public fun getStruct(): List<Mappable> {
         return struct.toList()
     }
 

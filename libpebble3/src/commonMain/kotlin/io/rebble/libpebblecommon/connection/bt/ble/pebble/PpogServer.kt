@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 
-class PpogServer(
+internal class PpogServer(
     private val identifier: PebbleBleIdentifier,
     private val gattServerManager: GattServerManager,
 ) : PPoGPacketSender {

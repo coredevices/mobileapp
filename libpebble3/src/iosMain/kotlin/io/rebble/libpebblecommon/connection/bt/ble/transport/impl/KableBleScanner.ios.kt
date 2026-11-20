@@ -12,9 +12,9 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
-actual fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner = KableBleScanner(bleConfigFlow)
+internal actual fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner = KableBleScanner(bleConfigFlow)
 
-actual fun configureKableCentral(stateRestoration: Boolean) {
+internal actual fun configureKableCentral(stateRestoration: Boolean) {
     // Opts the watch connection into CoreBluetooth state preservation/restoration
     // (CBCentralManagerOptionRestoreIdentifierKey). Without it iOS never relaunches us for
     // central-side events, so a jetsammed app stays disconnected until the user opens it.
@@ -36,4 +36,4 @@ internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Ad
     }
 }.advertisements
 
-actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier = PebbleBleIdentifier(uuid = Uuid.parse(toString()))
+public actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier = PebbleBleIdentifier(uuid = Uuid.parse(toString()))

@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import io.rebble.libpebblecommon.connection.AppContext
 
-class AndroidTimeChangedReceiver(private val context: Context) : TimeChanged {
+internal class AndroidTimeChangedReceiver(private val context: Context) : TimeChanged {
     override fun registerForTimeChanges(onChanged: () -> Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -20,5 +20,5 @@ class AndroidTimeChangedReceiver(private val context: Context) : TimeChanged {
     }
 }
 
-actual fun createTimeChanged(appContext: AppContext): TimeChanged =
+internal actual fun createTimeChanged(appContext: AppContext): TimeChanged =
     AndroidTimeChangedReceiver(appContext.context)

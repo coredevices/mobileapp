@@ -26,7 +26,7 @@ import kotlin.uuid.Uuid
     sendDeletions = true,
     manualSync = false,
 )
-data class AppPrefsEntry(
+internal data class AppPrefsEntry(
     val id: String,
     val value: String,
 ) : BlobDbItem {
@@ -49,7 +49,7 @@ data class AppPrefsEntry(
 private const val KEY_WEATHER_APP = "weatherApp"
 private val json = Json { ignoreUnknownKeys = true }
 
-suspend fun AppPrefsEntryDao.setWeatherSettings(weatherPrefs: WeatherPrefsValue) {
+internal suspend fun AppPrefsEntryDao.setWeatherSettings(weatherPrefs: WeatherPrefsValue) {
     insertOrReplace(
         AppPrefsEntry(
             id = KEY_WEATHER_APP,
@@ -59,7 +59,7 @@ suspend fun AppPrefsEntryDao.setWeatherSettings(weatherPrefs: WeatherPrefsValue)
 }
 
 @Serializable
-data class WeatherPrefsValue(
+internal data class WeatherPrefsValue(
     val locationUuids: List<Uuid>,
 ) {
     companion object {
@@ -69,9 +69,9 @@ data class WeatherPrefsValue(
     }
 }
 
-class WeatherPrefsBlobItem(
+internal class WeatherPrefsBlobItem(
     locationUuids: List<Uuid>,
 ) : StructMappable(endianness = Endian.Little) {
-    val numLocations = SUByte(m, locationUuids.size.toUByte())
-    val uuids = SUUIDList(m, locationUuids)
+    val numLocations: SUByte = SUByte(m, locationUuids.size.toUByte())
+    val uuids: SUUIDList = SUUIDList(m, locationUuids)
 }

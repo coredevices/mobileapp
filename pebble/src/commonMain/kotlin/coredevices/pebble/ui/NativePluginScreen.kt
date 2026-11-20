@@ -53,24 +53,19 @@ import coredevices.pebble.weather.WeatherPlugin
 import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.locker.AppType
-import io.rebble.libpebblecommon.plugin.CalendarPlugin
-import io.rebble.libpebblecommon.plugin.MusicPlugin
-import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
-import io.rebble.libpebblecommon.plugin.PlatformPlugins
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
-import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import kotlin.uuid.Uuid
 
 // Built-in plugins have no pbw, so the UI maps each to an icon rather than reading one from a bundle.
 fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
-    MusicPlugin.BUILT_IN_MUSIC_UUID -> Icons.Filled.MusicNote
-    CalendarPlugin.BUILT_IN_CALENDAR_UUID -> Icons.Filled.CalendarMonth
+    BuiltInPlugins.MUSIC -> Icons.Filled.MusicNote
+    BuiltInPlugins.CALENDAR -> Icons.Filled.CalendarMonth
     WeatherPlugin.BUILT_IN_WEATHER_UUID -> Icons.Filled.Cloud
-    PhoneStatePlugin.BUILT_IN_PHONE_STATE_UUID -> Icons.Filled.Smartphone
-    WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID -> Icons.Filled.Watch
-    WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID -> Icons.Filled.Apps
-    PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID -> Icons.Filled.Notifications
+    BuiltInPlugins.PHONE_STATE -> Icons.Filled.Smartphone
+    BuiltInPlugins.WATCH_SETTINGS -> Icons.Filled.Watch
+    BuiltInPlugins.WATCH_STATE -> Icons.Filled.Apps
+    BuiltInPlugins.NOTIFICATIONS -> Icons.Filled.Notifications
     PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> Icons.Filled.Tune
     else -> AppType.Plugin.icon()
 }
@@ -78,7 +73,7 @@ fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
 fun PluginMetadata.settingsRoute(): NavBarRoute? = when (pluginUuid) {
     WeatherPlugin.BUILT_IN_WEATHER_UUID ->
         PebbleNavBarRoutes.WatchSettingsCategoryRoute(section = Section.Weather.name, topLevelType = TopLevelType.Phone.name)
-    CalendarPlugin.BUILT_IN_CALENDAR_UUID -> PebbleNavBarRoutes.CalendarsRoute
+    BuiltInPlugins.CALENDAR -> PebbleNavBarRoutes.CalendarsRoute
     PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> PebbleNavBarRoutes.ComplicationsRoute
     else -> null
 }

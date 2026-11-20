@@ -30,32 +30,32 @@ import kotlinx.serialization.json.JsonObject
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
-sealed interface PluginCaller {
+public sealed interface PluginCaller {
     /** Checking plugin state for the UI rather than acting for the user: never prompts, isn't counted. */
-    val probe: Boolean get() = false
+    public val probe: Boolean get() = false
 
     /** A PKJS app, held to each plugin's caller permissions. */
-    data class App(val subject: PermissionSubject, val name: String) : PluginCaller
+    public data class App internal constructor(val subject: PermissionSubject, val name: String) : PluginCaller
 
     /** The phone app itself (e.g. Index), trusted with every plugin. */
-    data class Host(override val probe: Boolean = false) : PluginCaller
+    public data class Host(override val probe: Boolean = false) : PluginCaller
 }
 
-object PluginHeartbeatCounters {
-    const val HOST_INVOCATIONS = "plugin.invocation_count"
-    const val HOST_OBSERVATIONS = "plugin.observation_count"
-    const val PKJS_INVOCATIONS = "plugin.pkjs_invocation_count"
-    const val PKJS_OBSERVATIONS = "plugin.pkjs_observation_count"
+public object PluginHeartbeatCounters {
+    internal const val HOST_INVOCATIONS: String = "plugin.invocation_count"
+    internal const val HOST_OBSERVATIONS: String = "plugin.observation_count"
+    internal const val PKJS_INVOCATIONS: String = "plugin.pkjs_invocation_count"
+    internal const val PKJS_OBSERVATIONS: String = "plugin.pkjs_observation_count"
 
-    val all = listOf(HOST_INVOCATIONS, HOST_OBSERVATIONS, PKJS_INVOCATIONS, PKJS_OBSERVATIONS)
+    public val all: List<String> = listOf(HOST_INVOCATIONS, HOST_OBSERVATIONS, PKJS_INVOCATIONS, PKJS_OBSERVATIONS)
 
-    const val SUBSCRIPTIONS = "subscription_count"
-    const val INVOCATIONS = "invocation_count"
+    internal const val SUBSCRIPTIONS: String = "subscription_count"
+    internal const val INVOCATIONS: String = "invocation_count"
 
-    fun perPlugin(pluginUuid: Uuid, metric: String) = "plugin.$pluginUuid.$metric"
+    internal fun perPlugin(pluginUuid: Uuid, metric: String): String = "plugin.$pluginUuid.$metric"
 }
 
-class PluginClient(
+internal class PluginClient(
     private val registry: PluginRegistry,
     private val permissions: AppPermissions,
     private val runningApps: RunningApps,
@@ -67,10 +67,10 @@ class PluginClient(
 
     override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> get() = registry.disabledBuiltIns
 
-    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) =
+    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean): Unit =
         registry.setBuiltInEnabled(pluginUuid, enabled)
 
-    override fun registerPlugin(plugin: NativePlugin) = registry.registerPlugin(plugin)
+    override fun registerPlugin(plugin: NativePlugin): Unit = registry.registerPlugin(plugin)
 
     override fun unregisterPlugin(pluginUuid: Uuid) {
         registry.unregisterPlugin(pluginUuid)
@@ -78,7 +78,7 @@ class PluginClient(
 
     override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> get() = registry.preferredSources
 
-    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) =
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?): Unit =
         registry.setPreferredSource(category, item, pluginUuid)
 
     override fun sourcePlugin(category: String, item: String): PluginMetadata? =

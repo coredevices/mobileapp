@@ -10,14 +10,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 
-interface PebbleProtocolHandler {
+internal interface PebbleProtocolHandler {
     val inboundMessages: SharedFlow<PebblePacket>
     val rawInboundMessages: Flow<ByteArray>
     suspend fun send(message: PebblePacket, priority: PacketPriority = PacketPriority.NORMAL)
     suspend fun send(message: ByteArray, priority: PacketPriority = PacketPriority.NORMAL)
 }
 
-class RealPebbleProtocolHandler(
+internal class RealPebbleProtocolHandler(
     private val pebbleProtocolStreams: PebbleProtocolStreams,
     connectionScope: ConnectionCoroutineScope,
     identifier: PebbleIdentifier,

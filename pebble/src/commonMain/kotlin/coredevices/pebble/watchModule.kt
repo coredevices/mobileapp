@@ -24,7 +24,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealBatteryChargedNotifier
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.firmware.postWatchFullyChargedNotification
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFrameDecoder
+import io.rebble.libpebblecommon.voice.SpeexAudioFrameDecoder
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
@@ -100,7 +100,7 @@ import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.util.SystemGeolocation
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
@@ -139,7 +139,7 @@ val watchModule = module {
             get(),
             get(),
         )
-    } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
+    } binds arrayOf(NotificationApps::class, SystemGeolocation::class)
 
     singleOf(::HostedPluginOAuthApi) bind PluginOAuthApi::class
 
@@ -277,7 +277,7 @@ val watchModule = module {
     single {
         HybridTranscription(
             get(),
-            lazy { get<LibPebble3>() },
+            lazy { get<LibPebble>() },
             get(),
             get(),
         )

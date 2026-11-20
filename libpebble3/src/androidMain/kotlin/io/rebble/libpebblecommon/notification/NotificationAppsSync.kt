@@ -38,7 +38,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-class AndroidNotificationAppsSync(
+internal class AndroidNotificationAppsSync(
     private val context: AppContext,
     private val notificationAppDao: NotificationAppRealDao,
     private val timeProvider: TimeProvider,
@@ -287,7 +287,7 @@ private fun NotificationAppItem.findChannelByName(groupName: String?, channelNam
         ?.channels?.find { it.name == channelName }
 }
 
-class AndroidPackageChangedReceiver(private val context: Application) {
+internal class AndroidPackageChangedReceiver(private val context: Application) {
     private val logger = Logger.withTag("NotificationAppsSync")
 
     fun registerForPackageChanges(onPackageChanged: (String) -> Unit, onLocaleChanged: () -> Unit) {

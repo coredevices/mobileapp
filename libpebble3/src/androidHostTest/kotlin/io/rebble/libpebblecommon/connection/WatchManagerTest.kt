@@ -54,7 +54,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class WatchManagerTest {
+internal class WatchManagerTest {
     // Watches present in the DB at WatchManager construction. Set before create().
     private var seededKnownWatches: List<KnownWatchItem> = emptyList()
     private val removedKnownWatches = mutableListOf<String>()
