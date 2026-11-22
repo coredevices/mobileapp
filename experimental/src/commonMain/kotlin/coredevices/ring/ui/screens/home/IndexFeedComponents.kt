@@ -231,7 +231,7 @@ internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
     val lastSyncedAt by koinInject<RingSync>().lastSyncedAt.collectAsState()
 
     // Re-evaluate on a slow tick so the relative label ages ("just now" →
-    // "5m ago") and flips back to the pulsing prompt once the sync goes stale.
+    // "5 min ago") and flips back to the pulsing prompt once the sync goes stale.
     var now by remember { mutableStateOf(Clock.System.now()) }
     LaunchedEffect(lastSyncedAt) {
         while (true) {
