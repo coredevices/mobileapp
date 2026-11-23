@@ -105,7 +105,7 @@ UTF8(
 ) || rawMultipartBodyBytes
 ```
 
-The signing key is the UTF-8 byte sequence of the secret exactly as entered. The signature header is:
+The signing key is the UTF-8 byte sequence of the secret as entered, with leading and trailing whitespace removed. The signature header is:
 
 ```text
 X-Index-Signature: <lowercase hex HMAC-SHA256(signingKey, bytesAbove)>

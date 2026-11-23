@@ -49,7 +49,7 @@ internal fun createWebhookSignature(
     body: ByteArray,
 ): String {
     val signature = hmacSha256(
-        key = secret.encodeToByteArray(),
+        key = secret.trim().encodeToByteArray(),
         message = buildWebhookSignatureInput(timestamp, deliveryId, triggerValue, isTest, body),
     )
     return signature.joinToString("") {

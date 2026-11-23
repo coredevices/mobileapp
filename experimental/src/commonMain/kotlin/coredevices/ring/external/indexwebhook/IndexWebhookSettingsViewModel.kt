@@ -180,7 +180,7 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null } ?: return
         if (_signingSecretLoading.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value.takeIf { signRequests }
+        val signingSecret = _signingSecretInput.value.trim().takeIf { signRequests }
         if (signRequests && signingSecret.isNullOrBlank()) return
         _testState.value = WebhookTestState.Sending
         viewModelScope.launch {
@@ -214,7 +214,7 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null }
         if (_signingSecretLoading.value || _saving.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value
+        val signingSecret = _signingSecretInput.value.trim()
         if (signRequests && signingSecret.isBlank()) return
         val payloadMode = _payloadModeInput.value
         val clickPayload = _clickPayloadInput.value.trim()
