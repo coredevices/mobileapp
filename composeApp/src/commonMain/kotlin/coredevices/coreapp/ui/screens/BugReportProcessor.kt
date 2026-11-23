@@ -516,8 +516,13 @@ class BugReportProcessor(
             val userIdToken = try {
                 Firebase.auth.currentUser?.getIdToken(true)
             } catch (e: Exception) {
-                logger.e(e) { "No user token: ${e.message}" }
-                null
+                logger.w(e) { "Token refresh failed, using cached token: ${e.message}" }
+                try {
+                    Firebase.auth.currentUser?.getIdToken(false)
+                } catch (e: Exception) {
+                    logger.e(e) { "No user token: ${e.message}" }
+                    null
+                }
             }
             try {
                 block(state, userIdToken)
