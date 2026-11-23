@@ -47,7 +47,7 @@ class BackupImporter(
     /** [onProgress] is called with (imported so far, total recordings in the archive). */
     suspend fun import(
         zipPath: Path,
-        onProgress: (imported: Int, total: Int) -> Unit = { _, _ -> },
+        onProgress: suspend (imported: Int, total: Int) -> Unit = { _, _ -> },
     ): Result = withContext(Dispatchers.IO) {
         val user = Firebase.auth.currentUser ?: throw IllegalStateException("Not signed in")
         logger.i { "Starting backup import for user ${user.uid}" }

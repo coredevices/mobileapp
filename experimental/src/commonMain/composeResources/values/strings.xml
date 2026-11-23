@@ -79,4 +79,805 @@
 
     <string name="upcoming">Upcoming</string>
     <string name="all">All</string>
+
+    <string name="feed_set_due_date">Set due date…</string>
+    <string name="feed_clear">Clear</string>
+    <!-- Fallback title for a list with no name -->
+    <string name="feed_list_untitled">List</string>
+    <string name="feed_new_list">New list</string>
+    <!-- Content description for an overflow menu button -->
+    <string name="feed_more">More</string>
+    <string name="feed_rename_list">Rename list</string>
+    <string name="feed_change_list_type">Change list type</string>
+    <string name="feed_delete_list">Delete list</string>
+    <string name="feed_no_matches">No matches.</string>
+    <string name="feed_nothing_here_yet">Nothing here yet.</string>
+    <string name="feed_add_item">Add item</string>
+    <string name="feed_add_note">Add note</string>
+    <!-- Used as %1$s in feed_delete_list_subitem_count when the list has no name -->
+    <string name="feed_this_list">this list</string>
+    <string name="feed_list_type">List Type</string>
+    <string name="feed_list_type_select_default">Select a default type for new entries:</string>
+    <!-- Entry type: a plain note -->
+    <string name="feed_type_note">Note</string>
+    <!-- Entry type: a checklist item -->
+    <string name="feed_type_checkbox">Checkbox</string>
+    <!-- %1$s is an entry type, e.g. Note -->
+    <string name="feed_list_type_keep_as">Keep as %1$s</string>
+    <!-- %1$s is an entry type, e.g. Note -->
+    <string name="feed_list_type_switch_to">Switch to %1$s</string>
+    <string name="feed_delete_list_title">Delete list?</string>
+    <!-- %1$s is the list name -->
+    <plurals name="feed_delete_list_subitem_count">
+        <item quantity="one">%1$s has %2$d subitem.</item>
+        <item quantity="other">%1$s has %2$d subitems.</item>
+    </plurals>
+    <string name="feed_move_subitems">Move subitems</string>
+    <string name="feed_move_subitems_subtitle">Add them to another list before deleting this one.</string>
+    <!-- Name of the default notes list -->
+    <string name="feed_notes_to_self">Notes to self</string>
+    <string name="feed_delete_all_subitems">Delete all subitems</string>
+    <string name="feed_delete_all_subitems_subtitle">Remove every subitem in this list.</string>
+    <string name="feed_emoji">Emoji</string>
+    <string name="feed_no_emoji">No emoji</string>
+    <string name="feed_search_emojis">Search emojis</string>
+    <string name="feed_remove_checkbox">Remove Checkbox</string>
+    <string name="feed_add_checkbox">Add Checkbox</string>
+    <string name="feed_convert_to_reminder">Convert to Reminder</string>
+    <string name="feed_open">Open</string>
+    <!-- Header for completed items; %1$d is the count -->
+    <string name="feed_done_count">Done · %1$d</string>
+    <string name="feed_overdue">Overdue</string>
+    <!-- %1$s is a lowercase item type, e.g. reminder -->
+    <string name="feed_delete_kind">Delete %1$s</string>
+    <!-- Section header for the recording an item came from -->
+    <string name="feed_source_header">SOURCE</string>
+    <!-- %1$s is a date and time -->
+    <string name="feed_due_at">Due %1$s</string>
+    <!-- %1$s is the question the user asked -->
+    <string name="feed_answer_capture">Q&amp;A capture\nQ: "%1$s"</string>
+    <!-- %1$s is a contact name the message was sent to -->
+    <string name="feed_message_to">To %1$s</string>
+    <!-- %1$s is a relative time, e.g. 5 min ago -->
+    <string name="feed_created">Created %1$s</string>
+    <string name="feed_title_placeholder">Title</string>
+    <!-- Label for the due date field -->
+    <string name="feed_due">Due</string>
+    <string name="feed_type_header">TYPE</string>
+    <string name="feed_lists_header">LISTS</string>
+    <string name="feed_notes_placeholder">Notes…</string>
+    <string name="feed_timestamp">Timestamp</string>
+    <!-- Entry type: a reminder -->
+    <string name="feed_type_reminder">Reminder</string>
+    <string name="feed_early_alert">Early alert</string>
+    <!-- %1$s is a duration, e.g. 2h 30m -->
+    <string name="feed_lead_time_before">%1$s before</string>
+    <string name="feed_duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="feed_duration_hours">%1$dh</string>
+    <string name="feed_duration_minutes">%1$dm</string>
+    <string name="feed_duration_seconds">%1$ds</string>
+    <!-- %1$s is an uppercase relative time, e.g. 5 MIN AGO -->
+    <string name="feed_recorded_ago">RECORDED · %1$s</string>
+    <!-- Fallback title for a recording -->
+    <string name="feed_index_recording">Index Recording</string>
+    <string name="feed_all_notes">All notes</string>
+    <string name="feed_no_matching_lists">No matching lists.</string>
+    <string name="feed_no_lists_yet">No lists yet.</string>
+    <!-- Title of the section/screen listing questions the user asked Index -->
+    <string name="feed_you_asked">You asked</string>
+    <string name="feed_no_matching_questions">No matching questions.</string>
+    <string name="feed_no_questions_yet">No questions yet. Ask your Index.</string>
+    <string name="feed_not_found">Not found</string>
+    <string name="feed_item_gone">This item is gone.</string>
+    <!-- Sort order label -->
+    <string name="feed_sort_newest">Newest</string>
+    <!-- Sort order label -->
+    <string name="feed_sort_oldest">Oldest</string>
+    <!-- Sort order label: alphabetical -->
+    <string name="feed_sort_a_to_z">A–Z</string>
+    <!-- Sort order label: reverse alphabetical -->
+    <string name="feed_sort_z_to_a">Z–A</string>
+    <!-- Sort order label -->
+    <string name="feed_sort_due_date">Due date</string>
+    <string name="feed_no_recordings_yet">No recordings yet.</string>
+    <string name="feed_index_feed_title">Index feed</string>
+    <string name="feed_processing">Processing…</string>
+    <string name="feed_transferring">Transferring…</string>
+    <string name="feed_no_speech_detected">No speech detected</string>
+    <string name="feed_retry_transcription">Retry transcription</string>
+    <!-- %1$s is a relative time, e.g. 5 min ago -->
+    <string name="feed_last_synced">Last synced %1$s</string>
+    <!-- Prompt to press the Index ring button to sync recordings -->
+    <string name="feed_click_ring_to_sync">Click ring to sync</string>
+    <string name="feed_see_all">See all</string>
+    <string name="feed_new_note">New note</string>
+    <string name="feed_processed_offline">Processed offline</string>
+    <string name="feed_transcription_error">Transcription error</string>
+    <!-- Subtitle for a scheduled item (timer/alarm) with no due time -->
+    <string name="feed_scheduled">Scheduled</string>
+    <!-- Shown on an empty list card -->
+    <string name="feed_no_list_items_yet">No 🎶 yet</string>
+    <plurals name="feed_match_count">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <string name="feed_reminders">Reminders</string>
+    <string name="feed_all_done">You're all done!</string>
+    <!-- %1$s is the search query -->
+    <string name="feed_no_matches_for">No matches for "%1$s"</string>
+    <!-- Time until due, e.g. in 5m -->
+    <string name="feed_due_in_minutes">in %1$dm</string>
+    <!-- Time until due, e.g. in 3h -->
+    <string name="feed_due_in_hours">in %1$dh</string>
+    <!-- Time until due, e.g. in 2d -->
+    <string name="feed_due_in_days">in %1$dd</string>
+    <string name="feed_delete_recording">Delete recording</string>
+    <string name="feed_error_loading_recording">Error loading recording</string>
+    <string name="feed_copied_to_clipboard">Copied to clipboard</string>
+    <string name="feed_delete_recording_title">Delete recording?</string>
+    <string name="feed_delete_recording_message">This will permanently delete the recording.</string>
+    <plurals name="feed_delete_recording_linked_items">
+        <item quantity="one">This recording created %1$d item in your feed.</item>
+        <item quantity="other">This recording created %1$d items in your feed.</item>
+    </plurals>
+    <string name="feed_delete_recording_only">Delete recording only</string>
+    <plurals name="feed_delete_recording_keep_items">
+        <item quantity="one">Keep the item in your feed</item>
+        <item quantity="other">Keep the items in your feed</item>
+    </plurals>
+    <plurals name="feed_delete_recording_and_items">
+        <item quantity="one">Delete recording and item</item>
+        <item quantity="other">Delete recording and items</item>
+    </plurals>
+    <string name="feed_remove_everything">Remove everything</string>
+    <string name="feed_transcribed_offline">Transcribed offline</string>
+    <!-- Shown while the AI assistant is working -->
+    <string name="feed_thinking">Thinking</string>
+    <!-- Accessibility label; Click & Hold is the Index ring's long-press gesture -->
+    <string name="feed_send_as_click_hold">Send as Click &amp; Hold</string>
+    <string name="feed_send">Send</string>
+    <string name="feed_dismiss_keyboard">Dismiss keyboard</string>
+    <string name="feed_hold_to_record">Hold to record</string>
+    <string name="feed_type_or_hold_to_record">Type or hold to record…</string>
+    <!-- Status label while audio is being recorded -->
+    <string name="feed_recording_in_progress">Recording</string>
+    <string name="feed_stop">Stop</string>
+    <!-- %1$s is a contact name -->
+    <string name="feed_action_messaged">Messaged %1$s</string>
+    <string name="feed_action_completed">Action completed</string>
+    <string name="feed_action_failed">Action failed</string>
+    <string name="feed_action_gathered_info">Gathered info</string>
+    <!-- %1$s is the event title, %2$s the date, %3$s the time -->
+    <string name="feed_action_added_to_calendar">Added %1$s at %2$s, %3$s to calendar</string>
+    <string name="feed_action_needs_confirmation">Needs confirmation</string>
+    <string name="feed_action_denied">Action denied</string>
+    <string name="feed_hide_tool_calls">Hide tool calls</string>
+    <string name="feed_show_tool_calls">Show tool calls</string>
+    <string name="feed_confirm_action">Confirm action</string>
+    <!-- Label above the name of the tool the AI wants to run -->
+    <string name="feed_tool_action">Action</string>
+    <string name="feed_tool_parameters">Parameters</string>
+    <string name="feed_tool_description">Description</string>
+    <string name="feed_more_details">More details</string>
+    <string name="feed_action_destructive">This action is destructive</string>
+    <string name="feed_deny">Deny</string>
+    <string name="feed_allow">Allow</string>
+    <string name="feed_action_parameters">Action parameters</string>
+
+    <string name="backup_vm_deleting_backup">Deleting backup...</string>
+    <string name="backup_vm_collecting_audio">Collecting audio files...</string>
+    <string name="backup_vm_deleting_documents">Deleting documents...</string>
+    <plurals name="backup_vm_deleting_audio">
+        <item quantity="one">Deleting %1$d audio file...</item>
+        <item quantity="other">Deleting %1$d audio files...</item>
+    </plurals>
+    <string name="backup_vm_backup_deleted">Backup deleted</string>
+    <string name="backup_vm_delete_failed">Delete failed: %1$s</string>
+    <string name="backup_vm_deleting_local_feed">Deleting local feed...</string>
+    <string name="backup_vm_local_feed_deleted">Local feed deleted</string>
+    <string name="backup_vm_starting_backup">Starting backup...</string>
+    <string name="backup_vm_backing_up">Backing up %1$d...</string>
+    <string name="backup_vm_backing_up_of_total">Backing up %1$d/%2$d...</string>
+    <string name="backup_vm_no_recordings">No recordings to backup</string>
+    <string name="backup_vm_choose_save_location">Choose save location...</string>
+    <plurals name="backup_vm_saved_with_skipped">
+        <item quantity="one">Backup saved — %1$d recording skipped (key mismatch). Restore the original key and retry.</item>
+        <item quantity="other">Backup saved — %1$d recordings skipped (key mismatch). Restore the original key and retry.</item>
+    </plurals>
+    <string name="backup_vm_backup_saved">Backup saved</string>
+    <string name="backup_vm_save_failed">Backup created but save failed: %1$s</string>
+    <string name="backup_vm_backup_failed">Backup failed: %1$s</string>
+    <string name="backup_vm_reading_backup">Reading backup...</string>
+    <plurals name="backup_vm_importing">
+        <item quantity="one">Importing %1$d recording...</item>
+        <item quantity="other">Importing %1$d recordings...</item>
+    </plurals>
+    <string name="backup_vm_imported_progress">Imported %1$d/%2$d...</string>
+    <string name="backup_vm_import_done">Done — %1$d imported, %2$d already existed, %3$d audio files</string>
+    <string name="backup_vm_import_done_with_failures">Done — %1$d imported, %2$d already existed, %3$d audio files, %4$d failed</string>
+    <string name="backup_vm_import_failed">Import failed: %1$s</string>
+    <string name="encryption_vm_key_generated_qr_saved">Encryption key generated — QR code saved to your photos</string>
+    <string name="encryption_vm_key_generated">Encryption key generated and saved</string>
+    <string name="encryption_vm_failed">Failed: %1$s</string>
+    <string name="encryption_vm_key_restored">Key restored from Password Manager</string>
+    <string name="encryption_vm_checking_backup">Checking key backup...</string>
+    <string name="encryption_vm_verify_backup_failed">Could not verify key backup: %1$s</string>
+    <string name="encryption_vm_enabled">Encryption enabled — future uploads encrypted</string>
+    <string name="encryption_vm_no_local_key">Can't enable encryption: no key on this device</string>
+    <string name="encryption_vm_key_mismatch">Can't enable encryption: key on this device doesn't match your account key</string>
+    <string name="encryption_vm_key_unusable">Can't enable encryption: key is unusable (%1$s)</string>
+    <string name="encryption_vm_disabled">Encryption disabled — future uploads will be unencrypted</string>
+    <string name="encryption_vm_key_generation_failed">Key generation failed</string>
+    <string name="encryption_vm_invalid_key">That key isn't valid for this account</string>
+    <string name="encryption_vm_invalid_qr_key">That QR code isn't a valid key for this account</string>
+    <string name="encryption_vm_no_qr_found">No QR code found in that photo</string>
+    <string name="encryption_vm_qr_import_failed">QR import failed</string>
+    <string name="encryption_vm_qr_import_failed_reason">QR import failed: %1$s</string>
+    <string name="encryption_vm_imported_from_qr">Key imported from QR code</string>
+    <string name="encryption_vm_imported_from_text">Key imported from text</string>
+    <string name="encryption_vm_key_import_failed">Key import failed: %1$s</string>
+    <string name="listen_dialog_mic_permission_denied">Microphone permission denied</string>
+    <string name="listen_dialog_complete_failed">Failed to complete recording: %1$s</string>
+    <!-- Title shown while the phone microphone is recording -->
+    <string name="listen_dialog_recording">Recording</string>
+    <string name="listen_dialog_finish">Finish</string>
+    <string name="listen_dialog_processing">Processing</string>
+    <!-- Item type labels in the Index feed -->
+    <string name="object_kind_reminder">Reminder</string>
+    <string name="object_kind_scheduled">Scheduled</string>
+    <string name="object_kind_checklist">Checklist</string>
+    <string name="object_kind_note">Note</string>
+    <string name="object_kind_answer">Answer</string>
+    <string name="object_kind_message">Message</string>
+    <string name="object_kind_action_log">Action</string>
+    <string name="object_kind_calendar_event">Event</string>
+    <string name="object_kind_delegated">Sent</string>
+    <string name="object_kind_list">List</string>
+    <!-- Default name for a newly created list -->
+    <string name="index_new_list_name">New list</string>
+    <string name="recording_vm_deleted">Deleted recording</string>
+    <plurals name="recording_vm_deleted_with_items">
+        <item quantity="one">Deleted recording + %1$d item</item>
+        <item quantity="other">Deleted recording + %1$d items</item>
+    </plurals>
+    <string name="recording_vm_delete_failed">Couldn't delete: %1$s</string>
+    <string name="recording_vm_play_failed">Could not play recording — audio unavailable</string>
+    <string name="recording_vm_export_failed">Couldn't export recording</string>
+    <string name="recording_vm_no_file_to_export">No recording file to export</string>
+    <string name="recording_vm_retrying">Retrying...</string>
+    <string name="ring_diagnostics_unreachable">Couldn't reach your Index 01</string>
+    <string name="timers_alarms_title">Timers &amp; alarms</string>
+    <string name="timers_alarms_empty">No timers or alarms. Ask your Index to set one.</string>
+    <string name="timers_alarms_timers">Timers</string>
+    <string name="timers_alarms_alarms">Alarms</string>
+    <!-- %1$s is a duration, e.g. "20 min" -->
+    <string name="timers_alarms_duration_timer">%1$s timer</string>
+    <string name="timers_alarms_timer">Timer</string>
+    <!-- %1$s is the timer name, %2$s the time it ends -->
+    <string name="timers_alarms_timer_subtitle">%1$s · Ends %2$s</string>
+    <string name="webhook_sheet_title">Webhook · %1$s</string>
+    <string name="webhook_sheet_copy_from">Copy from %1$s</string>
+    <string name="webhook_sheet_url">Webhook URL</string>
+    <string name="webhook_sheet_payload">Payload (optional)</string>
+    <string name="webhook_sheet_payload_hint">Sent as JSON with the click count. Valid JSON is embedded as-is, anything else as text</string>
+    <string name="webhook_sheet_what_to_send">What to send</string>
+    <string name="webhook_sheet_send_json">Send as JSON</string>
+    <string name="webhook_sheet_send_json_hint">application/json instead of multipart/form-data. Audio is base64</string>
+    <string name="webhook_sheet_headers">Headers</string>
+    <string name="webhook_sheet_header_value">Value</string>
+    <string name="webhook_sheet_remove_header">Remove header</string>
+    <string name="webhook_sheet_add_header">Add header</string>
+    <string name="webhook_sheet_security">Security</string>
+    <string name="webhook_sheet_sign_requests">Sign requests</string>
+    <string name="webhook_sheet_sign_requests_hint">Add an HMAC-SHA256 signature</string>
+    <string name="webhook_sheet_signing_secret">Signing secret</string>
+    <string name="webhook_sheet_paste_secret">Paste a secret</string>
+    <string name="webhook_sheet_hide_secret">Hide signing secret</string>
+    <string name="webhook_sheet_show_secret">Show signing secret</string>
+    <string name="webhook_sheet_secret_required">A signing secret is required</string>
+    <string name="webhook_sheet_secret_hint">Use a unique random secret of at least 32 bytes</string>
+    <string name="webhook_sheet_send_test">Send test event</string>
+    <string name="webhook_sheet_sending">Sending...</string>
+    <string name="webhook_sheet_saving">Saving…</string>
+    <string name="webhook_sheet_remove">Remove webhook</string>
+    <string name="webhook_sheet_recent_runs">Recent runs</string>
+    <string name="webhook_sheet_no_runs_click">No runs yet. They'll show up here after your first click.</string>
+    <string name="webhook_sheet_no_runs_recording">No runs yet. They'll show up here after your first recording.</string>
+    <string name="webhook_sheet_mode_recording">Recording</string>
+    <string name="webhook_sheet_mode_transcription">Transcription</string>
+    <string name="webhook_sheet_mode_both">Both</string>
+    <string name="webhook_vm_remove_failed">Could not remove webhook</string>
+    <string name="webhook_vm_save_failed">Could not save webhook</string>
+    <string name="index_notif_transfer_failed">Transfer failed</string>
+    <string name="index_notif_agent_error">Agent processing error</string>
+    <string name="index_notif_transcribe_failed">Unable to transcribe Index recording</string>
+    <string name="index_notif_action_error">Error performing action</string>
+    <string name="index_notif_reminder_set">Reminder set for %1$s, %2$s</string>
+    <string name="index_notif_alarm_set">Alarm set for %1$s</string>
+    <string name="index_notif_calendar_added">Added to calendar for %1$s, %2$s</string>
+    <string name="index_notif_timer_set">%1$s timer set, ending at %2$s</string>
+    <string name="index_notif_timer_set_no_duration">Timer set to end at %1$s</string>
+    <string name="index_notif_answered">Answered</string>
+    <string name="index_notif_assistant_complete">Assistant complete</string>
+    <string name="index_notif_email_to_me">Email to me</string>
+    <string name="index_notif_send_to">Send to %1$s</string>
+    <string name="index_notif_no_audio_title">No audio detected</string>
+    <string name="index_notif_no_audio_text">No speech was detected in your Index 01 recording.</string>
+    <string name="index_notif_pairing_title">Index 01 Pairing Issue</string>
+    <string name="index_notif_pairing_text">Your Index 01 requires re-pairing to function correctly. Tap for info.</string>
+    <string name="index_notif_evicted_title">Some Index 01 recordings were lost</string>
+    <string name="index_notif_evicted_text">Your Index 01's storage filled up before it could sync with your phone, so the oldest recordings were overwritten.</string>
+    <string name="index_notif_recovering_title">Recovering your Index 01</string>
+    <string name="index_notif_recovering_text">Your Index 01 ran into a problem and is being restored.</string>
+    <string name="index_notif_legacy_title">%1$s needs relinking</string>
+    <string name="index_notif_legacy_text">The built-in %1$s integration will be removed soon. Tap to relink it as a plugin in Index settings.</string>
+    <string name="index_notif_speech_model_required_title">Speech model download required</string>
+    <string name="index_notif_speech_model_required_text">Recordings can't be transcribed on this phone until the speech model is downloaded. Tap to download it.</string>
+    <string name="index_notif_speech_model_pending_title">Speech model still downloading</string>
+    <string name="index_notif_speech_model_pending_text">Recordings can't be transcribed until the download finishes. Check you aren't on a metered connection, or switch to cloud speech recognition until it completes.</string>
+    <string name="tool_call_reading_sources">Reading data sources</string>
+    <string name="tool_call_read_sources">Read data sources</string>
+    <string name="tool_call_loading_mcp">Loading MCP plugin</string>
+    <string name="tool_call_loaded_mcp">Loaded MCP plugin</string>
+    <!-- %1$s is a tool name, e.g. "search contacts" -->
+    <string name="tool_call_calling">Calling %1$s</string>
+    <string name="tool_call_called">Called %1$s</string>
+    <string name="tool_call_calling_tool">Calling tool</string>
+    <string name="tool_call_called_tool">Called tool</string>
+    <plurals name="tool_calls_calling">
+        <item quantity="one">Calling %1$d tool</item>
+        <item quantity="other">Calling %1$d tools</item>
+    </plurals>
+    <plurals name="tool_calls_called">
+        <item quantity="one">Called %1$d tool</item>
+        <item quantity="other">Called %1$d tools</item>
+    </plurals>
+    <string name="reminder_notif_at_place">Reminder: %1$s</string>
+    <string name="reminder_notif_done">Done</string>
+    <string name="reminder_notif_upcoming">Upcoming reminder</string>
+    <string name="reminder_notif_title">Reminder</string>
+    <string name="local_clock_alarm">Alarm</string>
+    <string name="ring_repair_required_title">Re-pairing required</string>
+    <string name="ring_repair_required_body">Please re-pair your Index 01 device to continue using it.</string>
+    <string name="ring_sync_bug_prompt_title">Index ran into a problem</string>
+    <string name="ring_sync_bug_prompt_body">We detected a data transfer error with a recent recording from your Index 01.\nSorry about that! Please help us improve by sending a bug report.</string>
+    <string name="encryption_key_save_cancelled">Save cancelled. You can save the key later from the Backup menu.</string>
+    <string name="encryption_key_gpm_not_set_up">Google Password Manager is not set up. Go to Settings &gt; Passwords &amp; Accounts to configure it.</string>
+    <string name="encryption_key_gpm_save_failed">Could not save to Password Manager: %1$s</string>
+    <string name="encryption_key_gpm_not_found">No encryption key found in Google Password Manager. Generate a new key first.</string>
+    <string name="encryption_key_cancelled">Cancelled by user.</string>
+    <string name="encryption_key_gpm_read_failed">Could not read from Password Manager: %1$s</string>
+    <string name="encryption_key_icloud_save_failed">Could not save to iCloud Keychain. Make sure iCloud Keychain is enabled in Settings &gt; Apple ID &gt; iCloud &gt; Passwords and Keychain.</string>
+    <string name="encryption_key_icloud_not_found">No encryption key found in iCloud Keychain. Make sure iCloud Keychain is enabled and synced, or generate a new key.</string>
+
+    <!-- Default destination prompt -->
+    <string name="settings_default_destination_title">Set default destination?</string>
+    <string name="settings_default_destination_not_now">Not now</string>
+    <string name="settings_default_destination_set">Set default</string>
+    <!-- %1$s: integration name, %2$s: what it receives, e.g. "notes and reminders" -->
+    <string name="settings_default_destination_message">Do you want to set %1$s as your default destination for %2$s?</string>
+
+    <!-- Destination rows -->
+    <string name="settings_destination_not_connected">Not connected</string>
+    <string name="settings_destination_hold_to_reconfigure">Hold to reconfigure</string>
+
+    <!-- Notion -->
+    <string name="settings_notion_linked">Notion Linked</string>
+    <string name="settings_notion_link_failed">Notion Link Failed</string>
+    <string name="settings_notion_page_title">Notion Page</string>
+    <string name="settings_notion_page_description">Choose the page to place your notes' Reminders list in.</string>
+    <string name="settings_notion_page_none">No pages found. Give Index access to a page in Notion, then try again.</string>
+    <string name="settings_notion_page_load_failed">Failed to load pages</string>
+
+    <!-- Target calendar -->
+    <string name="settings_target_calendar_title">Target Calendar</string>
+    <string name="settings_target_calendar_description">Choose the calendar Index adds events to.</string>
+    <string name="settings_target_calendar_none">No calendars found.</string>
+    <string name="settings_target_calendar_no_write_access">No write access</string>
+
+    <!-- Diagnostics -->
+    <string name="settings_diagnostics_dialog_title">Index 01 Diagnostics</string>
+    <string name="settings_diagnostics_start">Start</string>
+    <string name="settings_diagnostics_try_again">Try Again</string>
+    <string name="settings_diagnostics_file_bug_report">File Bug Report</string>
+    <!-- %1$s is shown in bold: settings_diagnostics_intro_bold -->
+    <string name="settings_diagnostics_intro">This checks the Bluetooth connection between your phone and Index 01. %1$s then tap Start.</string>
+    <string name="settings_diagnostics_intro_bold">Place the device right next to your phone,</string>
+    <string name="settings_diagnostics_running">Keep your Index 01 next to your phone and click the button...</string>
+    <string name="settings_diagnostics_error">An error occurred: %1$s\nPlease try again ensuring you've clicked the button to wake up the device</string>
+    <string name="settings_diagnostics_completed">Diagnostics complete. If support asked you to run this, file a bug report to send them the results.</string>
+
+    <!-- Store plugin installer -->
+    <string name="settings_store_plugin_add_failed">Couldn't add %1$s</string>
+    <string name="settings_store_plugin_check_connection">Check your connection and try again.</string>
+
+    <!-- Battery life -->
+    <string name="settings_battery_life_header">Index 01 Battery Life Estimate</string>
+    <string name="settings_battery_life_no_data_title">Not enough data yet</string>
+    <string name="settings_battery_life_no_data_subtitle">Use your Index and we'll estimate how long its battery will last.</string>
+    <string name="settings_battery_life_almost_empty">Battery almost empty</string>
+    <!-- %1$s: duration, e.g. "3 months" -->
+    <string name="settings_battery_life_about_left">About %1$s left</string>
+    <string name="settings_battery_life_stop_soon">Your Index will stop working soon.</string>
+    <!-- %1$s: battery percentage, e.g. "80%"; %2$s: recording time, e.g. "11 sec" -->
+    <string name="settings_battery_life_remaining_summary">%1$s remaining · %2$s of recording a day on average</string>
+    <string name="settings_battery_life_learning">Learning your usage</string>
+    <string name="settings_battery_life_learning_progress">Day %1$d of %2$d — keep using your Index and an estimate will appear here.</string>
+    <string name="settings_battery_life_seconds">%1$d sec</string>
+    <string name="settings_battery_life_minutes">%1$d min</string>
+    <plurals name="settings_battery_life_years">
+        <item quantity="one">%1$d year</item>
+        <item quantity="other">%1$d years</item>
+    </plurals>
+    <plurals name="settings_battery_life_months">
+        <item quantity="one">%1$d month</item>
+        <item quantity="other">%1$d months</item>
+    </plurals>
+    <plurals name="settings_battery_life_weeks">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <plurals name="settings_battery_life_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+
+    <!-- Index agent actions -->
+    <string name="settings_actions_header">Index Agent</string>
+    <string name="settings_actions_description">Select what Index Agent can read and do.</string>
+    <!-- Lowercase, the %1$s link in settings_actions_sentence_note -->
+    <string name="settings_actions_capture_type_note">note</string>
+    <!-- Lowercase, the %1$s link in settings_actions_sentence_reminder -->
+    <string name="settings_actions_capture_type_reminder">reminder</string>
+    <string name="settings_actions_capture_type_note_title">Note</string>
+    <string name="settings_actions_capture_type_reminder_title">Reminder</string>
+    <!-- %1$s and %2$s are tappable links: the word "note", then the destination app (e.g. Notion) -->
+    <string name="settings_actions_sentence_note">Any unclear requests become a %1$s in %2$s</string>
+    <!-- %1$s and %2$s are tappable links: the word "reminder", then the destination app (e.g. Google Tasks) -->
+    <string name="settings_actions_sentence_reminder">Any unclear requests become a %1$s in %2$s</string>
+    <string name="settings_actions_capture_sheet_title">Any unclear requests become</string>
+    <string name="settings_actions_capture_sheet_subtitle">Used when Index can't tell what you meant.</string>
+    <string name="settings_actions_capture_note_subtitle">A thought to keep, nothing to do</string>
+    <string name="settings_actions_capture_reminder_subtitle">Something you intend to do</string>
+    <plurals name="settings_actions_contacts_count">
+        <item quantity="one">%1$d contact</item>
+        <item quantity="other">%1$d contacts</item>
+    </plurals>
+    <string name="settings_actions_notes">Notes</string>
+    <string name="settings_actions_notes_example">“Remember I parked on level 3”</string>
+    <string name="settings_actions_reminders">Reminders</string>
+    <string name="settings_actions_reminders_example">“Remind me to call Mom at 5pm”</string>
+    <string name="settings_actions_lists">Lists</string>
+    <string name="settings_actions_lists_example">“Add milk to my shopping list”</string>
+    <string name="settings_actions_calendar">Calendar</string>
+    <string name="settings_actions_calendar_example">“Create new event - lunch with Sarah at noon on Friday” → create event on phone calendar</string>
+    <string name="settings_actions_timers_alarms">Timers &amp; Alarms</string>
+    <string name="settings_actions_timers_alarms_example">“Set an alarm for 7:30” → alarm on this phone</string>
+    <string name="settings_actions_beeper_messaging">Beeper Messaging</string>
+    <string name="settings_actions_beeper_messaging_example">“Tell Jake I’m running late” → message to an approved contact</string>
+    <string name="settings_actions_notification_reply">Reply to Notifications</string>
+    <string name="settings_actions_notification_reply_example">“Reply on my way” → reply to the notification on your Pebble watch</string>
+    <string name="settings_actions_bug_reports">Bug Reports</string>
+    <string name="settings_actions_bug_reports_example">“Create a bug report for Index, the light didn’t turn on” → sends a bug report</string>
+    <string name="settings_actions_mcp_server">MCP Server</string>
+    <string name="settings_actions_grant_actions">Use actions</string>
+    <string name="settings_actions_grant_sources">Use data sources</string>
+    <plurals name="settings_actions_plugin_actions_count">
+        <item quantity="one">%1$d action</item>
+        <item quantity="other">%1$d actions</item>
+    </plurals>
+    <plurals name="settings_actions_plugin_sources_count">
+        <item quantity="one">%1$d data source</item>
+        <item quantity="other">%1$d data sources</item>
+    </plurals>
+    <string name="settings_actions_add_plugin">Add plugin integration</string>
+    <string name="settings_actions_add_plugin_browse">Browse plugins in the store</string>
+    <string name="settings_actions_add_plugin_later">You can add plugins from settings later</string>
+    <string name="settings_actions_add_mcp_server">Add MCP server</string>
+    <string name="settings_actions_add_mcp_server_subtitle">Connect a remote server over HTTP</string>
+    <string name="settings_actions_where_notes_save">Where notes save</string>
+    <string name="settings_actions_where_lists_save">Where list items save</string>
+    <string name="settings_actions_where_reminders_save">Where reminders save</string>
+    <!-- Followed by the destination name, e.g. "Saves to Notion" -->
+    <string name="settings_actions_saves_to">Saves to</string>
+    <string name="settings_actions_configure_plugin">Configure plugin</string>
+    <!-- Plugin permission state -->
+    <string name="settings_actions_denied">Denied</string>
+    <!-- Plugin permission state -->
+    <string name="settings_actions_allowed">Allowed</string>
+    <!-- %1$s is shown in bold: settings_gesture_dest_index_agent -->
+    <string name="settings_actions_no_agent">Nothing routes to the Index agent right now, so actions are off. Point a gesture at %1$s above to turn them back on.</string>
+    <string name="settings_actions_plugin">Plugin</string>
+    <string name="settings_actions_get_more">Get more</string>
+    <string name="settings_actions_add_more_later">You can add more from Settings later</string>
+
+    <!-- Ring button gestures -->
+    <string name="settings_gesture_click">Click</string>
+    <string name="settings_gesture_double_click">Double click</string>
+    <string name="settings_gesture_triple_click">Triple click</string>
+    <string name="settings_gesture_hold">Hold &amp; Talk</string>
+    <string name="settings_gesture_click_hold">Double click &amp; hold</string>
+    <string name="settings_gesture_dest_play_pause">Play/Pause</string>
+    <string name="settings_gesture_dest_next_track">Next track</string>
+    <string name="settings_gesture_dest_previous_track">Previous track</string>
+    <string name="settings_gesture_dest_index_agent">Index agent</string>
+    <string name="settings_gesture_dest_local_agent">Local agent</string>
+    <string name="settings_gesture_dest_web_search">Web search</string>
+    <string name="settings_gesture_dest_webhook_only">Webhook only</string>
+    <string name="settings_gesture_dest_webhook">Webhook</string>
+    <string name="settings_gesture_dest_agent_command">Agent command</string>
+    <string name="settings_gesture_dest_agent_plugin">Agent plugin</string>
+    <string name="settings_gesture_dest_unavailable_agent">Unavailable agent</string>
+    <!-- Gesture does nothing -->
+    <string name="settings_gesture_dest_nothing">Nothing</string>
+    <string name="settings_gesture_option_play_pause">Play or pause music</string>
+    <string name="settings_gesture_option_next_track">Skip to the next track</string>
+    <string name="settings_gesture_option_webhook">Send to webhook</string>
+    <string name="settings_gesture_option_agent_command">Run an Index agent command</string>
+    <string name="settings_gesture_option_previous_track">Go back to the last track</string>
+    <string name="settings_gesture_sub_index_agent">Takes actions for you in the cloud, on this phone when offline</string>
+    <string name="settings_gesture_sub_local_agent">Runs on this phone only. Experimental, supports fewer actions</string>
+    <string name="settings_gesture_sub_web_search">Answer lands in your feed</string>
+    <string name="settings_gesture_sub_webhook_only">Recording to your endpoint, kept in your feed</string>
+    <string name="settings_gesture_sub_webhook">Click count and your payload to your endpoint</string>
+    <string name="settings_gesture_sub_agent_command">Sends a command, eg "Unlock front door"</string>
+    <!-- Lowercase label before a dashed line: the gesture "also" goes to a webhook -->
+    <string name="settings_gesture_also">also</string>
+    <!-- Lowercase, follows settings_gesture_also -->
+    <string name="settings_gesture_send_to_webhook">send to webhook</string>
+    <string name="settings_gesture_configure">Configure</string>
+    <string name="settings_gesture_command">Command</string>
+    <string name="settings_gesture_command_placeholder">Unlock front door</string>
+    <string name="settings_gesture_command_help">Runs as if you'd said it to Index, using your plugins and actions. For example: "Unlock front door", "Turn off the living room lights" or "Start a 25 minute timer"</string>
+    <string name="settings_gesture_also_send_to_webhook">Also send to webhook</string>
+    <string name="settings_gesture_webhook_settings">Webhook settings</string>
+    <string name="settings_gesture_other_agents">Other agents</string>
+    <string name="settings_gesture_other_agents_subtitle">What you say goes straight to the agent you pick</string>
+    <string name="settings_gesture_no_longer_installed">No longer installed</string>
+    <string name="settings_gesture_webhook_not_configured">Not configured yet. Tap to set up</string>
+
+    <!-- Index settings screen -->
+    <!-- %1$s: integration names -->
+    <string name="settings_index_needs_relinking">%1$s needs re-linking</string>
+    <string name="settings_index_relink_description">Built-in integrations are being replaced by plugins and will be removed in an upcoming version. Relink each one as a plugin to keep sending to it.</string>
+    <string name="settings_index_legacy_notes">Notes</string>
+    <string name="settings_index_legacy_reminders">Reminders</string>
+    <string name="settings_index_legacy_lists">Lists</string>
+    <string name="settings_index_legacy_shortcut">Notification shortcut</string>
+    <string name="settings_index_new_to_index">New to Index 01?</string>
+    <string name="settings_index_new_to_index_description">It's a new kind of gadget! A quick read goes a long way.</string>
+    <string name="settings_index_getting_started_guide">Getting Started Guide</string>
+    <string name="settings_index_faq">FAQ</string>
+    <string name="settings_index_paired_to_index">Paired to Index 01</string>
+    <string name="settings_index_no_ring_paired">No Ring Paired</string>
+    <string name="settings_index_paired">Paired</string>
+    <string name="settings_index_not_paired">Not paired</string>
+    <string name="settings_index_ring_button">Ring Button</string>
+    <string name="settings_index_speech_recognition">Speech Recognition</string>
+    <string name="settings_index_advanced">Advanced</string>
+    <string name="settings_index_timers_alarms">Timers &amp; alarms</string>
+    <string name="settings_index_timers_alarms_subtitle">View and cancel timers and alarms set by your Index</string>
+    <string name="settings_index_web">Index on the web (experimental)</string>
+    <string name="settings_index_web_subtitle">View your Index notes and reminders in a browser at index.rePebble.com</string>
+    <string name="settings_index_backup">Backup</string>
+    <string name="settings_index_backup_subtitle">Sync, manage, or delete cloud backup</string>
+    <string name="settings_index_notification_shortcut">Notification Shortcut</string>
+    <string name="settings_index_email_me">Email me</string>
+    <string name="settings_index_auto_dismiss">Auto-dismiss Notifications</string>
+    <string name="settings_index_auto_dismiss_subtitle">Dismiss recording action notifications after 5 minutes</string>
+    <string name="settings_index_validate_choices">Validate agent choices</string>
+    <string name="settings_index_validate_choices_subtitle">When online, asks for your confirmation before taking actions you may not have intended</string>
+    <string name="settings_index_firmware_version">Ring Firmware Version</string>
+    <string name="settings_index_firmware_not_seen">Not yet seen device</string>
+    <string name="settings_index_diagnostics">Diagnostics</string>
+    <string name="settings_index_diagnostics_subtitle">Record diagnostic information from your Index 01, only needed if support asks.</string>
+    <string name="settings_index_disable_bt_sync">Disable Bluetooth Sync</string>
+    <string name="settings_index_disable_bt_sync_subtitle">Turn on if Pebble is also installed on another profile of this phone. Index can't sync when two profiles connect to the ring at once.</string>
+    <string name="settings_index_force_close">Please force close the app to apply</string>
+    <string name="settings_index_pending_intent_scan">Use PendingIntent scan</string>
+    <string name="settings_index_pending_intent_scan_subtitle">Improves background reliability and battery consumption</string>
+    <string name="settings_index_android_only">Available on Android only</string>
+    <string name="settings_index_scan_by_address">Scan by paired address</string>
+    <string name="settings_index_scan_by_address_subtitle">Improves latency and battery</string>
+    <string name="settings_index_debug_details">Enable Debug Details</string>
+    <string name="settings_index_version">Version: %1$s</string>
+
+    <!-- Beeper contacts -->
+    <string name="settings_beeper_add_contact">Add Contact</string>
+    <string name="settings_beeper_allowed_contacts">Allowed Contacts</string>
+    <string name="settings_beeper_permission_required">Beeper permission is required to access your contacts.</string>
+    <string name="settings_beeper_grant_permission">Grant Permission</string>
+    <string name="settings_beeper_description">Contacts Index is allowed to message. Try saying "Message Alice - What's up?"</string>
+    <string name="settings_beeper_message_anyone">Message anyone</string>
+    <string name="settings_beeper_message_anyone_subtitle">Index asks you before messaging someone not on this list</string>
+    <string name="settings_beeper_no_contacts">No contacts added yet.</string>
+    <string name="settings_beeper_nickname_value">Nickname: %1$s</string>
+    <string name="settings_beeper_nickname">Nickname</string>
+    <string name="settings_beeper_dms_only">DMs only</string>
+    <!-- %1$s: messaging network, e.g. "WhatsApp" -->
+    <string name="settings_beeper_group">%1$s (group)</string>
+    <string name="settings_beeper_last_message">Last message: %1$s</string>
+
+    <!-- Backup -->
+    <string name="settings_backup_enter_key_title">Enter Encryption Key</string>
+    <string name="settings_backup_enter_key_description">Type or paste the encryption key from another device.</string>
+    <string name="settings_backup_encryption_key">Encryption key</string>
+    <string name="settings_backup_import">Import</string>
+    <string name="settings_backup_delete_title">Delete Backup</string>
+    <string name="settings_backup_delete_warning">This will permanently delete all your cloud backup data. This cannot be undone.</string>
+    <!-- %1$s: the word the user must type, always "delete" -->
+    <string name="settings_backup_type_to_confirm">Type "%1$s" to confirm:</string>
+    <string name="settings_backup_title">Backup</string>
+    <string name="settings_backup_items">Items in backup</string>
+    <plurals name="settings_backup_recordings_count">
+        <item quantity="one">%1$d recording across all devices</item>
+        <item quantity="other">%1$d recordings across all devices</item>
+    </plurals>
+    <string name="settings_backup_recordings_count_unknown">— recordings across all devices</string>
+    <string name="settings_backup_id">ID: %1$s</string>
+    <string name="settings_backup_enabled">Backup enabled</string>
+    <string name="settings_backup_enabled_subtitle">Automatically sync recordings to cloud</string>
+    <string name="settings_backup_download">Download Full Backup</string>
+    <string name="settings_backup_download_subtitle">Download all recordings and data as a zip file</string>
+    <string name="settings_backup_delete_cloud">Delete cloud backup</string>
+    <string name="settings_backup_delete_cloud_subtitle">Permanently delete all cloud data</string>
+    <string name="settings_backup_encryption">Encryption</string>
+    <string name="settings_backup_generate_key">Generate Encryption Key</string>
+    <string name="settings_backup_key_exists">Key exists</string>
+    <string name="settings_backup_key_generated_before">A key was generated before but isn't on this device — restore it instead</string>
+    <string name="settings_backup_create_key">Create encryption key</string>
+    <string name="settings_backup_restore_key">Restore Key from Password Manager</string>
+    <string name="settings_backup_restore_key_subtitle">Read key from Google Password Manager or iCloud Keychain</string>
+    <string name="settings_backup_import_qr">Import Key from QR Code</string>
+    <string name="settings_backup_import_qr_subtitle">Pick your key's QR code from your photos</string>
+    <string name="settings_backup_enter_key">Enter Key Manually</string>
+    <string name="settings_backup_enter_key_subtitle">Type or paste your encryption key as text</string>
+    <string name="settings_backup_disable_encryption">Disable Encryption</string>
+    <string name="settings_backup_enable_encryption">Enable Encryption</string>
+    <string name="settings_backup_encryption_on">All new uploads are encrypted</string>
+    <string name="settings_backup_encryption_off">Encrypt all recordings before uploading to cloud</string>
+
+    <!-- Encryption -->
+    <string name="settings_encryption_not_backed_up_title">Encryption key not backed up</string>
+    <string name="settings_encryption_not_backed_up_message">You're attempting to enable backup encryption without a confirmed keychain backup of your key, please ensure you've saved your key either via QR code or copied it to your clipboard and saved it elsewhere.</string>
+    <string name="settings_encryption_not_backed_up_warning">If you lose this key, you will not be able to sync or restore anything from backups and will have to start fresh.</string>
+    <string name="settings_encryption_confirm_saved">I confirm, my key is saved elsewhere</string>
+    <string name="settings_encryption_key_backup_title">Encryption Key Backup</string>
+    <string name="settings_encryption_key_backup_description">Save this key securely. You will need it to decrypt your backups.</string>
+    <string name="settings_encryption_copy_key">Copy Key</string>
+    <string name="settings_encryption_setup_title">Set up backup encryption</string>
+    <string name="settings_encryption_setup_prompt">Generate an encryption key so only you can read your backups. You'll save a copy so you can restore on another device.</string>
+    <string name="settings_encryption_setup_generating">Generating your key and saving it to your password manager…</string>
+    <string name="settings_encryption_setup_saved">Saved to your password manager.</string>
+    <string name="settings_encryption_setup_qr_saved">A QR code of your key was also saved to your photos.</string>
+    <string name="settings_encryption_setup_save_safe">Save this key somewhere safe too — you'll need it to restore your backups and it can't be recovered.</string>
+    <string name="settings_encryption_setup_restoring">Looking for your key in your password manager…</string>
+    <string name="settings_encryption_setup_paste">Your key was generated on another device and isn't in this password manager. Paste your backup key, or import the QR code saved in your photos.</string>
+    <string name="settings_encryption_import_qr">Import QR code from photos</string>
+    <string name="settings_encryption_generate_key">Generate Key</string>
+    <string name="settings_encryption_restore">Restore</string>
+
+    <!-- Speech -->
+    <string name="settings_speech_engine_platform">iOS Speech Recognition</string>
+    <string name="settings_speech_engine_remote_only">Cloud only</string>
+    <string name="settings_speech_engine_remote_first">Cloud, with local fallback (Recommended)</string>
+    <string name="settings_speech_engine_local_first">Local, cloud fallback</string>
+    <string name="settings_speech_engine_local_only">Local only</string>
+    <string name="settings_speech_engine_platform_detail">Private, stays on this phone</string>
+    <string name="settings_speech_engine_remote_only_detail">Best performance, requires connection</string>
+    <string name="settings_speech_engine_download_detail">Requires 400MB download</string>
+    <string name="settings_speech_engine_local_only_detail">Complete privacy, requires 400MB download</string>
+    <string name="settings_speech_engine_unsupported">This device doesn't support local speech recognition</string>
+    <string name="settings_speech_model_downloaded">Downloaded</string>
+    <string name="settings_speech_model_download_size">%1$d MB download</string>
+    <string name="settings_speech_language_not_selectable">Not selectable for this speech model</string>
+    <string name="settings_speech_engine">Speech Engine</string>
+    <string name="settings_speech_language">Spoken Language</string>
+    <string name="settings_speech_model">Speech Model</string>
+    <string name="settings_speech_wispr">Cloud speech recognition by Wispr Flow</string>
+    <string name="settings_speech_engine_sheet_subtitle">Select what turns your recordings into text</string>
+    <string name="settings_speech_sign_in_required">Sign in to use cloud speech recognition</string>
+    <string name="settings_speech_model_sheet_subtitle">Select which model transcribes on this phone</string>
+    <string name="settings_speech_downloading">Downloading…</string>
+    <string name="settings_speech_delete_model">Delete %1$s</string>
+    <string name="settings_speech_language_sheet_subtitle">The language you speak when recording</string>
+    <string name="settings_speech_search_languages">Search languages</string>
+    <string name="settings_speech_download_required">Download Required</string>
+    <string name="settings_speech_download_lite">Download lite model: %1$dMB</string>
+    <string name="settings_speech_download_offline">Download offline model: %1$dMB</string>
+    <string name="settings_speech_download_message">To use offline speech recognition, you need to download a model first. Data charges may apply, Wi-Fi is recommended.</string>
+    <string name="settings_speech_download_lite_message">Your device may struggle with larger models, a reduced accuracy model will be used.</string>
+
+    <!-- Add integration -->
+    <string name="settings_integration_add">Add integration</string>
+    <string name="settings_integration_calendar">Calendar</string>
+    <string name="settings_integration_reminders">Reminders</string>
+    <string name="settings_integration_notes">Notes</string>
+    <string name="settings_integration_phone_calendar">Phone Calendar</string>
+    <string name="settings_integration_calendar_blocked">Calendar access is blocked. Allow calendar access for the app in system settings, then try again.</string>
+    <string name="settings_integration_calendar_not_granted">Calendar access was not granted. Index can only add events to your calendar with this permission.</string>
+    <string name="settings_integration_calendar_description">Connect your phone's calendar so Index can add events when you ask. This grants the app calendar access.</string>
+    <string name="settings_integration_calendar_connected">Phone Calendar connected.</string>
+    <string name="settings_integration_sign_in_cancelled">Sign in was cancelled.</string>
+    <string name="settings_integration_unknown_error">Unknown error</string>
+    <string name="settings_integration_gtasks_description">Sign in with Google to sync reminders to Google Tasks.</string>
+    <string name="settings_integration_signed_in">Successfully signed in.</string>
+    <string name="settings_integration_sign_in_error">Error signing in: %1$s</string>
+    <string name="settings_integration_sign_in_error_multiline">Error signing in:\n%1$s</string>
+    <string name="settings_integration_notion_no_page">No page found for notes. Please give access to a single page in Notion for your notes.</string>
+    <string name="settings_integration_notion_description">Sign in to send notes to Notion.</string>
+    <string name="settings_integration_obsidian_default_vault">Obsidian vault</string>
+    <string name="settings_integration_obsidian_no_folder">No folder selected.</string>
+    <string name="settings_integration_obsidian_description">Pick your Obsidian vault folder. Notes will be written there as Markdown files.</string>
+    <string name="settings_integration_obsidian_picking">Picking…</string>
+    <string name="settings_integration_obsidian_pick_folder">Pick vault folder</string>
+    <string name="settings_integration_obsidian_vault_folder">VAULT FOLDER</string>
+    <string name="settings_integration_obsidian_change">Change</string>
+    <string name="settings_integration_obsidian_how_saved">How should each note be saved?</string>
+    <string name="settings_integration_obsidian_separate_file">A separate file for each note</string>
+    <string name="settings_integration_obsidian_separate_file_description">Saved as its own timestamped file</string>
+    <string name="settings_integration_obsidian_main_note">Add to one main note</string>
+    <string name="settings_integration_obsidian_main_note_description">Everything is appended to Pebble Index.md</string>
+    <string name="settings_integration_obsidian_existing_note">Add to an existing note</string>
+    <string name="settings_integration_obsidian_existing_note_description">Append to a note you choose</string>
+    <string name="settings_integration_obsidian_subfolder">Subfolder</string>
+    <string name="settings_integration_obsidian_subfolder_help">A folder inside your vault. Created if it doesn't exist.</string>
+    <string name="settings_integration_obsidian_extra_tag">Extra tag (optional)</string>
+    <string name="settings_integration_obsidian_extra_tag_placeholder">fleeting</string>
+    <string name="settings_integration_obsidian_extra_tag_help">Added to each new note's frontmatter alongside #index.</string>
+    <string name="settings_integration_obsidian_main_note_help">Creates Pebble Index.md in your vault if it doesn't exist yet.</string>
+    <string name="settings_integration_obsidian_note_path">Note to append to</string>
+    <string name="settings_integration_obsidian_note_path_placeholder">Inbox/Index notes</string>
+    <string name="settings_integration_obsidian_note_path_help">Path inside your vault, subfolders allowed. Created if it doesn't exist.</string>
+    <string name="settings_integration_error">Error: %1$s</string>
+    <string name="settings_integration_tasker_not_installed">Tasker is not installed. Install Tasker, then try again.</string>
+    <string name="settings_integration_tasker_description">Sends your notes and reminders to Tasker as a shared intent (text/plain), so you can route them to any app or action.</string>
+    <string name="settings_integration_tasker_receive">To receive them, in Tasker:</string>
+    <!-- Tasker UI terms: Event, Received Share -->
+    <string name="settings_integration_tasker_step1">1.  Add a profile, pick Event → Received Share.</string>
+    <!-- Keep %rs_text unchanged: it is a Tasker variable name -->
+    <string name="settings_integration_tasker_step2">2.  Attach a task — your text arrives in the %rs_text variable.</string>
+    <!-- Keep %rs_package_name and coredevices.coreapp unchanged -->
+    <string name="settings_integration_tasker_step3">3.  Optional: limit it to this app with %rs_package_name = coredevices.coreapp.</string>
+    <string name="settings_integration_tasker_connected">Tasker connected. Choose it for notes or reminders in Index settings.</string>
+
+    <!-- HTTP MCP server -->
+    <string name="settings_mcp_edit_title">Edit HTTP MCP Server</string>
+    <string name="settings_mcp_add_title">Add HTTP MCP Server</string>
+    <string name="settings_mcp_name_invalid">Name can only contain letters, digits, - and _ characters, up to 32</string>
+    <string name="settings_mcp_url">URL</string>
+    <string name="settings_mcp_fetching">Fetching server info...</string>
+    <string name="settings_mcp_unreachable">Couldn't reach server: %1$s</string>
+    <string name="settings_mcp_unknown_error">unknown error</string>
+    <string name="settings_mcp_server_title">Server: %1$s</string>
+    <string name="settings_mcp_description">Description</string>
+    <string name="settings_mcp_description_placeholder">e.g. Controls the lights, thermostat and kids' internet at home</string>
+    <string name="settings_mcp_description_help">Tells the assistant what this server is for</string>
+    <!-- MCP transport type -->
+    <string name="settings_mcp_streamable">Streamable</string>
+    <string name="settings_mcp_auth_optional">Authorization (optional)</string>
+    <string name="settings_mcp_auth_header">Authorization Header</string>
+    <string name="settings_mcp_prompts">Prompts (%1$d/%2$d selected)</string>
+
+    <!-- Saved places -->
+    <!-- %1$s: latitude, %2$s: longitude, %3$s: radius in meters -->
+    <string name="settings_geofence_coords">%1$s, %2$s (%3$sm radius)</string>
+    <string name="settings_geofence_saved_places">Saved Places</string>
+    <string name="settings_geofence_none">No saved places yet, add one below.</string>
+    <string name="settings_geofence_delete_title">Delete Saved Place</string>
+    <string name="settings_geofence_delete_confirm">Delete “%1$s”?</string>
+    <plurals name="settings_geofence_reminder_count">
+        <item quantity="one">%1$d reminder</item>
+        <item quantity="other">%1$d reminders</item>
+    </plurals>
+    <!-- %1$s: place name, %2$s: e.g. "3 reminders" -->
+    <string name="settings_geofence_used_by">“%1$s” is used by %2$s. You can either delete these reminders or remove their place association.</string>
+    <string name="settings_geofence_delete_reminders">Delete reminders</string>
+    <string name="settings_geofence_remove_association">Remove association</string>
+    <string name="settings_geofence_add_title">Add Saved Place</string>
+    <string name="settings_geofence_edit_title">Edit Saved Place</string>
+    <string name="settings_geofence_address">Address</string>
+    <string name="settings_geofence_address_placeholder">Search for an address</string>
+    <string name="settings_geofence_address_not_found">Couldn't find that address.</string>
+    <string name="settings_geofence_radius">Radius: %1$d m</string>
 </resources>

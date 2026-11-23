@@ -37,6 +37,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.app_activity_action_count
+import coreapp.pebble.generated.resources.app_activity_by_app
+import coreapp.pebble.generated.resources.app_activity_by_plugin
+import coreapp.pebble.generated.resources.app_activity_empty
+import coreapp.pebble.generated.resources.app_activity_failed
+import coreapp.pebble.generated.resources.app_activity_hide_actions
+import coreapp.pebble.generated.resources.app_activity_intro
+import coreapp.pebble.generated.resources.app_activity_recent_activity
+import coreapp.pebble.generated.resources.app_activity_recent_count
+import coreapp.pebble.generated.resources.app_activity_show_actions
+import coreapp.pebble.generated.resources.app_activity_show_all
+import coreapp.pebble.generated.resources.app_activity_title
 import coredevices.pebble.rememberLibPebble
 import coredevices.util.relativeTime
 import io.rebble.libpebblecommon.PLUGIN_ACTION_LOG_KEPT_DAYS
@@ -55,20 +68,24 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private const val PREVIEW_ACTIONS = 15
 
-private enum class ActivityGrouping(val label: String) { ByApp("By app"), ByPlugin("By plugin") }
+private enum class ActivityGrouping(val label: StringResource) { ByApp(Res.string.app_activity_by_app), ByPlugin(Res.string.app_activity_by_plugin) }
 
 @Composable
 fun AppActivityScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("App activity")
+        topBarParams.title(getString(Res.string.app_activity_title))
     }
     val libPebble = rememberLibPebble()
     val log by remember { libPebble.pluginActionLog() }.collectAsState(null)
@@ -85,9 +102,9 @@ fun AppActivityScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         item {
             Text(
                 if (entries.isEmpty()) {
-                    "None of your apps have taken actions using plugins in the last $PLUGIN_ACTION_LOG_KEPT_DAYS days."
+                    stringResource(Res.string.app_activity_empty, PLUGIN_ACTION_LOG_KEPT_DAYS)
                 } else {
-                    "What actions your apps took using plugins over the last $PLUGIN_ACTION_LOG_KEPT_DAYS days."
+                    stringResource(Res.string.app_activity_intro, PLUGIN_ACTION_LOG_KEPT_DAYS)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -98,7 +115,7 @@ fun AppActivityScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
                     ActivityGrouping.entries.forEach {
-                        FilterChip(selected = grouping == it, onClick = { grouping = it }, label = { Text(it.label) })
+                        FilterChip(selected = grouping == it, onClick = { grouping = it }, label = { Text(stringResource(it.label)) })
                     }
                 }
             }
@@ -142,12 +159,12 @@ private fun ActivityGroupRow(
             leadingContent = { AppOrPluginIcon(uuid, 56.dp, icons, nav) },
             headlineContent = { Text(title, fontWeight = FontWeight.Bold) },
             supportingContent = {
-                Text("${entries.size} actions · last ${relativeTime(Instant.fromEpochMilliseconds(entries.first().atMs))}")
+                Text(pluralStringResource(Res.plurals.app_activity_action_count, entries.size, entries.size, relativeTime(Instant.fromEpochMilliseconds(entries.first().atMs))))
             },
             trailingContent = {
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Hide actions" else "Show actions",
+                    contentDescription = stringResource(if (expanded) Res.string.app_activity_hide_actions else Res.string.app_activity_show_actions),
                 )
             },
         )
@@ -173,7 +190,7 @@ private fun ActionLogPreview(
     entries.take(PREVIEW_ACTIONS).forEach { ActionLogRow(it, describer, showCaller, icons, nav) }
     if (entries.size > PREVIEW_ACTIONS) {
         TextButton(onClick = showAll, modifier = Modifier.padding(horizontal = 4.dp)) {
-            Text("Show all ${entries.size}")
+            Text(stringResource(Res.string.app_activity_show_all, entries.size))
         }
     }
 }
@@ -189,10 +206,10 @@ fun AppActivitySection(appUuid: Uuid, nav: NavBarNav) {
     var open by rememberSaveable(appUuid.toString()) { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            SectionHeader("Recent activity", open) { open = !open }
+            SectionHeader(stringResource(Res.string.app_activity_recent_activity), open) { open = !open }
             if (!open) {
                 Text(
-                    "${entries.size} actions in the last $PLUGIN_ACTION_LOG_KEPT_DAYS days",
+                    pluralStringResource(Res.plurals.app_activity_recent_count, entries.size, entries.size, PLUGIN_ACTION_LOG_KEPT_DAYS),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -217,7 +234,7 @@ fun ActionLogScreen(nav: NavBarNav, topBarParams: TopBarParams, callerUuid: Uuid
     val icons = rememberActionLogIcons(entries.map { if (callerUuid == null) it.appUuid else it.pluginUuid }.toSet())
     val title = callerUuid?.let { describer.appName(it) }
         ?: pluginUuid?.let { describer.pluginName(it) }
-        ?: "App activity"
+        ?: stringResource(Res.string.app_activity_title)
     LaunchedEffect(title) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
@@ -246,9 +263,9 @@ private fun ActionLogRow(
         Column {
             Text(describer.describe(entry), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             val caller = if (showCaller) "${describer.appName(entry.appUuid)} · " else ""
-            val error = entry.error?.let { " · Failed: $it" }.orEmpty()
+            val time = caller + relativeTime(Instant.fromEpochMilliseconds(entry.atMs))
             Text(
-                caller + relativeTime(Instant.fromEpochMilliseconds(entry.atMs)) + error,
+                entry.error?.let { stringResource(Res.string.app_activity_failed, time, it) } ?: time,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (entry.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             )

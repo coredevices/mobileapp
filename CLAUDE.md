@@ -163,6 +163,14 @@ existing firmware versions, if the alternative is waiting for users to update.
 The only exception to this is if we decide we want to make a feature work on legacy watches whose
 firmware cannot be updated.
 
+### 20. Localisation
+
+No hard-coded user-visible strings. Add them to the module's `composeResources/values/strings.xml` (prefix keys with the feature, e.g. `watch_settings_app_theme`) and use `stringResource(Res.string.x)`, or `getString(Res.string.x)` in suspend code. Generic words (Cancel, OK, Save…) live in `:util`. Android-only notification text goes in Android `res` (`util/src/androidMain/res`) via `Context.getString`.
+
+- Placeholders are positional (`%1$s`, `%1$d`); use `<plurals>` for counts. Write apostrophes literally (no `\'`).
+- Don't translate logs, debug-only UI, product names, or text sent to the watch or LLM.
+- Translations come from Weblate as PRs on the public repo; don't edit `values-*/` by hand. When a new language is added, also add it to `androidApp/src/main/res/xml/locales_config.xml` and `CFBundleLocalizations` in `iosApp/iosApp/Info.plist`.
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.

@@ -56,6 +56,14 @@ import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_built_in
+import coreapp.pebble.generated.resources.plugin_built_in_disabled
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.disable
+import coreapp.util.generated.resources.enable
+import coreapp.util.generated.resources.settings
+import org.jetbrains.compose.resources.stringResource
 
 // Built-in plugins have no pbw, so the UI maps each to an icon rather than reading one from a bundle.
 fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
@@ -77,8 +85,6 @@ fun PluginMetadata.settingsRoute(): NavBarRoute? = when (pluginUuid) {
     PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> PebbleNavBarRoutes.ComplicationsRoute
     else -> null
 }
-
-private const val BUILT_IN_DEVELOPER_NAME = "Built-in"
 
 private fun NavBarNav.openNativePlugin(plugin: PluginMetadata) =
     navigateTo(PebbleNavBarRoutes.NativePluginRoute(plugin.pluginUuid.toString()))
@@ -137,7 +143,7 @@ fun NativePluginCard(plugin: PluginMetadata, navBarNav: NavBarNav) {
                 modifier = Modifier.padding(start = 5.dp, end = 5.dp).heightIn(min = 18.dp),
             )
             Text(
-                BUILT_IN_DEVELOPER_NAME,
+                stringResource(Res.string.plugin_built_in),
                 color = Color.Gray,
                 fontSize = 10.sp,
                 lineHeight = 10.sp,
@@ -196,24 +202,24 @@ fun NativePluginScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, uuid: U
             Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 10.dp)) {
                 Text(plugin.name, fontSize = 20.sp)
                 Text(
-                    if (disabled) "$BUILT_IN_DEVELOPER_NAME · Disabled" else BUILT_IN_DEVELOPER_NAME,
+                    stringResource(if (disabled) Res.string.plugin_built_in_disabled else Res.string.plugin_built_in),
                     fontSize = 12.sp,
                     color = Color.Gray,
                 )
                 PebbleElevatedButton(
-                    text = "Settings",
+                    text = stringResource(UtilRes.string.settings),
                     onClick = { settingsRoute?.let { navBarNav.navigateTo(it) } },
                     enabled = settingsRoute != null,
                     icon = Icons.Default.Settings,
-                    contentDescription = "Settings",
+                    contentDescription = stringResource(UtilRes.string.settings),
                     primaryColor = false,
                     modifier = Modifier.padding(5.dp),
                 )
                 PebbleElevatedButton(
-                    text = if (disabled) "Enable" else "Disable",
+                    text = stringResource(if (disabled) UtilRes.string.enable else UtilRes.string.disable),
                     onClick = { libPebble.setBuiltInPluginEnabled(plugin.pluginUuid, disabled) },
                     icon = if (disabled) Icons.Default.PlayArrow else Icons.Default.Block,
-                    contentDescription = if (disabled) "Enable" else "Disable",
+                    contentDescription = stringResource(if (disabled) UtilRes.string.enable else UtilRes.string.disable),
                     primaryColor = false,
                     modifier = Modifier.padding(5.dp),
                 )

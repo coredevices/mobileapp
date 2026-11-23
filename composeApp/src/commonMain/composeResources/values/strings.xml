@@ -1,4 +1,244 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <resources>
+    <!-- Bug report -->
+    <string name="bug_report_sign_in_required">Please sign in before submitting a bug report</string>
+    <string name="bug_report_creating">Creating bug report...</string>
+    <string name="bug_report_gathering_watch_logs">Gathering Watch Logs</string>
+    <string name="bug_report_title">Bug Report</string>
+    <string name="bug_report_share">Share</string>
+    <string name="bug_report_success">Success</string>
+    <string name="bug_report_sent">Report Sent!</string>
+    <string name="bug_report_send">Send Report</string>
+    <string name="bug_report_send_icon">Send</string>
+    <string name="bug_report_describe">Please describe the bug</string>
+    <!-- Followed by two choices: "Index bug" / "Watch bug" -->
+    <string name="bug_report_type_label">This is a:</string>
+    <string name="bug_report_type_index">Index bug</string>
+    <string name="bug_report_type_watch">Watch bug</string>
+    <string name="bug_report_must_sign_in">You must sign in to submit a bug report</string>
+    <string name="bug_report_include_recording">Include recording</string>
+    <string name="bug_report_include_recent_recordings">Include recent recordings</string>
+    <string name="bug_report_take_screenshot">Take Watch Screenshot</string>
+    <string name="bug_report_capturing_screenshot">Capturing screenshot...</string>
+    <string name="bug_report_watch_screenshot">Watch screenshot</string>
+    <!-- Retake the watch screenshot -->
+    <string name="bug_report_retake">Retake</string>
+    <string name="bug_report_how_to">How to submit a great bug report</string>
+    <string name="bug_report_changelog_hint">Tap to see what's working and what's still in development</string>
+    <string name="bug_report_logs_note">Please note that logs + device info will be sent with this report</string>
+    <string name="bug_report_follow_up_hint">You can follow up on an existing bug report by adding more logs or information:</string>
+    <string name="bug_report_my_reports">My Bug Reports</string>
+    <string name="bug_report_attach_files">Attach Files</string>
+    <string name="bug_report_remove_attachments">Remove Attachments</string>
+    <string name="bug_report_add_image">Add Image</string>
+    <string name="bug_report_remove_images">Remove Images</string>
+    <string name="bug_report_clear_attachments">Clear attachments</string>
+    <plurals name="bug_report_remove_files">
+        <item quantity="one">Remove %1$d file</item>
+        <item quantity="other">Remove %1$d files</item>
+    </plurals>
+    <string name="bug_report_attach_image">Attach an image</string>
+    <string name="bug_report_add_images">Add Images</string>
+    <string name="bug_report_error_unknown">Unknown error</string>
+    <string name="bug_report_error_auth">Authentication failed. Please sign in and try again.</string>
+    <string name="bug_report_error_fill_in">Please fill in both your email and bug description before submitting.</string>
+    <string name="bug_report_error_email">Please enter a valid email address.</string>
+    <string name="bug_report_error_describe">Please describe the bug you encountered.</string>
+    <string name="bug_report_error_submit_connection">Unable to submit bug report. Please check your connection and try again.</string>
+    <string name="bug_report_error_submit_retry">Unable to submit bug report. Please try again.</string>
+    <string name="bug_report_error_network">Network error. Please check your connection and try again.</string>
+    <string name="bug_report_error_timeout">Request timed out. Please try again.</string>
+    <string name="bug_report_error_submit_later">Unable to submit bug report. Please try again later.</string>
+    <string name="bug_report_error_no_id">Bug report created but no ID returned</string>
+    <string name="bug_report_gathering_watch_logs_progress">Gathering watch logs...</string>
+    <string name="bug_report_uploading_attachments">Uploading attachments</string>
+    <!-- %1$s is the error message -->
+    <string name="bug_report_failed">Bug report failed: %1$s</string>
+    <string name="bug_report_uploaded">Bug report successfully uploaded!</string>
+    <string name="bug_report_error_unexpected">An unexpected error occurred</string>
+    <string name="bug_report_error_prepare_connection">Unable to prepare file uploads. Please check your connection and try again.</string>
+    <string name="bug_report_error_prepare_later">Unable to prepare file uploads. Please try again later.</string>
+    <string name="bug_report_error_partial_upload">Some attachments failed to upload (%1$d of %2$d successful). The bug report was submitted but without all attachments.</string>
+    <string name="bug_report_error_upload_network">Network error during file upload. Please check your connection and try again.</string>
+    <string name="bug_report_error_upload_timeout">File upload timed out. Please try again with a better connection.</string>
+    <string name="bug_report_error_upload_later">Unable to upload attachments. Please try again later.</string>
 
+    <string name="bug_report_list_sign_in">Please sign in to view your bug reports</string>
+    <string name="bug_report_list_empty">No bug reports found</string>
+    <!-- Last message from a support agent; %1$s is the message text -->
+    <string name="bug_report_list_agent_message">Agent: %1$s</string>
+    <plurals name="bug_report_uploading_attachments_count">
+        <item quantity="one">Uploading attachment</item>
+        <item quantity="other">Uploading attachments</item>
+    </plurals>
+    <!-- %1$s is the bug report subject -->
+    <string name="bug_report_view_title">Report: %1$s</string>
+    <string name="bug_report_view_attach_more_logs">Attach More Logs</string>
+    <string name="bug_report_view_fetching_logs">Fetching and uploading new logs</string>
+    <string name="bug_report_view_upload_more_logs">Upload More Logs</string>
+    <string name="support_message_title">Pebble Support message</string>
+    <string name="support_chat_channel_name">Support Chat</string>
+
+    <!-- Web page screen titles -->
+    <string name="nav_alpha_test_instructions">Alpha Test Instructions</string>
+    <string name="nav_whats_new_app">What's new in the app</string>
+    <string name="nav_whats_new_pebbleos">What’s new in PebbleOS</string>
+    <string name="nav_getting_started">Getting Started &amp; Troubleshooting</string>
+
+    <!-- Voice model update prompt -->
+    <string name="stt_update_title_downloading">Updating voice model</string>
+    <string name="stt_update_title_failed">Update failed</string>
+    <string name="stt_update_title">Voice model update</string>
+    <string name="stt_update_later">Later</string>
+    <!-- Button: update the voice model -->
+    <string name="stt_update_action">Update</string>
+    <string name="stt_update_downloading">Downloading the updated model. This may take a few minutes.</string>
+    <string name="stt_update_failed">The download didn't finish. Check your connection and try again.</string>
+    <string name="stt_update_body">We've improved on-device voice recognition. Update the model to keep transcribing offline.</string>
+    <string name="stt_update_notification_title">Offline voice recognition</string>
+    <string name="stt_update_notification_body">We've improved offline voice recognition. Open the app to update the model.</string>
+
+    <!-- Speech model download dialog -->
+    <string name="speech_download_not_needed">The current speech engine doesn't need a download.</string>
+    <string name="speech_download_model">Download speech model</string>
+    <string name="speech_download_scheduled">The download is scheduled. Make sure you're on a stable non-metered connection for it to begin.</string>
+    <string name="speech_download_downloading">Downloading the offline speech model. Recordings can't be transcribed on this phone until it finishes.</string>
+    <string name="speech_download_downloaded">The offline speech model is downloaded.</string>
+    <string name="speech_download_needed">To use offline speech recognition, you need to download a model first. Data charges may apply, Wi-Fi is recommended.</string>
+    <!-- %1$s is the size in megabytes -->
+    <string name="speech_download_with_size">Download (%1$sMB)</string>
+    <string name="speech_download_required">Download Required</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_get_started">Get Started</string>
+    <!-- Followed by device choices: Watch / Index 01 / Both -->
+    <string name="onboarding_i_have_a">I have a:</string>
+    <string name="onboarding_device_watch">Watch</string>
+    <!-- Device choice: both a watch and an Index 01 -->
+    <string name="onboarding_device_both">Both</string>
+    <string name="onboarding_sign_in_body">Sign in to backup your Pebble account to backup apps, settings, etc</string>
+    <string name="onboarding_connect_pebble">Connect a Pebble!</string>
+    <!-- Android permission dialog button label; must match the system dialog wording -->
+    <string name="onboarding_android_location_highlight">While using the app</string>
+    <!-- %1$s is the highlighted system button label -->
+    <string name="onboarding_android_location">Tap %1$s to get accurate weather, sunrise/sunset and other info</string>
+    <!-- Android system settings option label; must match the system wording -->
+    <string name="onboarding_android_background_location_highlight">Allow All The Time</string>
+    <!-- %1$s is the highlighted system option label -->
+    <string name="onboarding_android_background_location">Tap %1$s to keep Pebble working correctly while the app is in the background</string>
+    <!-- iOS permission dialog button label; must match the system dialog wording -->
+    <string name="onboarding_ios_location_highlight">Allow While Using App</string>
+    <!-- %1$s is the highlighted system button label -->
+    <string name="onboarding_ios_location">Tap %1$s to get accurate weather and other info</string>
+    <!-- iOS permission dialog button label; must match the system dialog wording -->
+    <string name="onboarding_ios_background_location_highlight">Change to Always Allow</string>
+    <!-- %1$s is the highlighted system button label -->
+    <string name="onboarding_ios_background_location">Tap %1$s to keep Pebble working correctly while the app is in the background</string>
+
+    <!-- Watch onboarding -->
+    <string name="watch_onboarding_title">Get Started!</string>
+    <string name="watch_onboarding_waiting_restart">Waiting for your Pebble to restart..</string>
+    <string name="watch_onboarding_waiting_connect">Waiting for your Pebble to connect..</string>
+    <string name="watch_onboarding_checking_updates">Checking for PebbleOS updates..</string>
+    <string name="watch_onboarding_skip_setup">Skip Setup</string>
+    <string name="watch_onboarding_updating">Updating your watch to the latest version of PebbleOS...</string>
+    <string name="watch_onboarding_once_connected">Once your Pebble is connected, we'll get it set up</string>
+    <string name="watch_onboarding_app_permissions">App permissions</string>
+    <string name="watch_onboarding_add_watchfaces">Add some Watchfaces</string>
+    <string name="watch_onboarding_add_apps">Add some Apps</string>
+    <string name="watch_onboarding_more_apps">Get more apps from the Pebble App Store!</string>
+    <string name="watch_onboarding_language_pack">Install a language pack</string>
+    <!-- %1$s is a language name -->
+    <string name="watch_onboarding_installing_language">Installing %1$s</string>
+    <!-- %1$s is a language name -->
+    <string name="watch_onboarding_installed_language">Currently installed: %1$s</string>
+    <string name="watch_onboarding_choose_language">Choose Language</string>
+    <string name="watch_onboarding_configure_watch">Configure your watch</string>
+    <string name="watch_onboarding_speech_recognition">Speech Recognition</string>
+    <string name="watch_onboarding_configure_more">Configure more in Settings</string>
+    <string name="watch_onboarding_finished">Finished</string>
+    <string name="watch_onboarding_add_failed">Failed to add app</string>
+
+    <!-- Index 01 (ring) onboarding -->
+    <string name="ring_onboarding_welcome_title">Meet Index 01</string>
+    <string name="ring_onboarding_welcome_body">You're holding an entirely new type of device. Index 01 isn't like anything you've used before. Please spend a few minutes learning how it works, and how to get the most out of it.</string>
+    <string name="ring_onboarding_get_started">Get started</string>
+    <string name="ring_onboarding_sign_in_title">Sign in to continue</string>
+    <string name="ring_onboarding_sign_in_body">Index 01 needs an account for backup and agent processing. Sign in to finish setting up your ring.</string>
+    <!-- %1$s is an email address -->
+    <string name="ring_onboarding_signed_in_as">Signed in as %1$s</string>
+    <string name="ring_onboarding_exit">Exit onboarding</string>
+    <string name="ring_demo_not_working">Not working? Report a bug</string>
+    <string name="ring_demo_open_bug_report">Open bug report</string>
+    <string name="ring_demo_downloading_model">Downloading speech model…</string>
+    <string name="ring_demo_wait_download">Please wait for the download to complete before trying.</string>
+    <string name="ring_demo_try_it">Try it out! Hold the button and speak into the ring, then release.</string>
+    <string name="ring_demo_receiving">Receiving recording...</string>
+    <string name="ring_demo_too_short">Recording too short! Try holding the button a bit longer.</string>
+    <string name="ring_demo_transfer_failed">Transfer failed</string>
+    <string name="ring_demo_no_action">No action taken</string>
+    <string name="ring_demo_thinking">Thinking...</string>
+
+    <!-- Index 01 onboarding FAQ -->
+    <string name="ring_faq_bug_question">What if I find a bug?</string>
+    <string name="ring_faq_bug_answer">This app is a work in progress. We're constantly experimenting and building new features. If you have any problems, we'd love if you report them to us with as much detail as possible. We'll fix it as soon as we can.\n\nSettings → Get Help → Report a bug (be sure to tap Index)</string>
+    <string name="ring_faq_listen_question">Is it always listening?</string>
+    <string name="ring_faq_listen_answer">Nope! Index 01 only listens while you're holding the button. When you release, it'll be processed by your phone if in range.</string>
+    <string name="ring_faq_ask_question">What can I record?</string>
+    <string name="ring_faq_ask_answer">Jot down notes, add a reminder or todo, set timers and alarms, or whatever else you need to remember! Double-click-and-hold to ask quick questions and get the answer* in a notification.\n\n*Included free for now; pricing may change.</string>
+    <string name="ring_faq_mic_question">Where's the microphone?</string>
+    <string name="ring_faq_mic_answer">Look for the small hole, that's the mic.\n\nHold it within 5-10 cm of your mouth when recording, and wear the ring so your finger doesn't cover the hole.</string>
+    <string name="ring_faq_how_question">How do I use it?</string>
+    <string name="ring_faq_how_answer">Hold the button, speak your mind, then release. You'll see a green light blink twice on your ring, then a notification in 5-10 seconds on your phone with the transcription.</string>
+    <string name="ring_faq_offline_question">What if I want to ditch my phone?</string>
+    <string name="ring_faq_offline_answer">Index 01 can store up to 5 minutes of recordings. When you get back to your phone, just click the button to wake it and your recordings will automatically sync!</string>
+    <string name="ring_faq_charge_question">How do I charge it?</string>
+    <string name="ring_faq_charge_answer">You don't! Index 01 will last up to two years (or more) with 20 six second recordings each day.</string>
+    <string name="ring_faq_offline2_question">Can it be used while offline / in bad cell service?</string>
+    <string name="ring_faq_offline2_answer">Yes! Your recordings are always saved to Index 01 and synced to your phone regardless of internet status.\n\nIf you select the optional local speech recognition and a local AI model, Index 01 can even process your recordings offline. We recommend setting it up as cloud with a local fallback for the best experience.</string>
+    <string name="ring_faq_continue_to_setup">Continue to setup</string>
+
+    <!-- Index 01 onboarding setup step -->
+    <string name="setup_local_stt_unsupported">This device doesn't support local speech recognition</string>
+    <string name="setup_cloud_stt_sign_in">You need to be signed in to use cloud speech recognition</string>
+    <string name="setup_error_try_later">Error occurred. Please try again later.</string>
+    <string name="setup_download_error">Error starting download. Please try again later.</string>
+    <string name="setup_platform_stt_title">On-device speech recognition</string>
+    <string name="setup_platform_stt_body">Uses Apple's built-in speech recognition — no download needed. Audio is processed on your phone, falling back to cloud transcription if the language isn't supported or on-device transcription fails.</string>
+    <!-- %1$s is a comma-separated list of languages -->
+    <string name="setup_platform_stt_languages">Supported languages:\n%1$s</string>
+    <string name="setup_title">Get Set Up</string>
+    <string name="setup_speech_recognition">Speech recognition</string>
+    <string name="setup_ring_button">Ring Button</string>
+    <string name="setup_ring_button_sub">Choose what each press does. You can change this later in Index settings.</string>
+    <string name="setup_app_permissions">App permissions</string>
+    <string name="setup_index_agent">Index Agent</string>
+    <string name="setup_index_agent_sub">Pick which actions Index can take, and where notes and reminders are saved.</string>
+    <string name="setup_secondary_action">Secondary action</string>
+    <string name="setup_secondary_action_sub">Click before holding to perform a secondary voice action.</string>
+    <!-- Secondary ring action option: no secondary action -->
+    <string name="setup_secondary_disabled">Disabled</string>
+    <string name="setup_backups">Backups</string>
+    <string name="setup_backups_sub">Your recordings sync to the cloud so you can restore them on a new phone. Optionally encrypt them for extra privacy.</string>
+    <string name="setup_try_it_out">Try it out</string>
+    <string name="setup_finish">Finish setup</string>
+    <string name="setup_change_later">You can change these later in settings</string>
+    <string name="setup_backup_sign_in">Sign in to back up your recordings.</string>
+    <string name="setup_cloud_backup">Cloud Backup</string>
+    <string name="setup_cloud_backup_on">Recordings sync to the cloud</string>
+    <string name="setup_cloud_backup_off">Recordings stay on this device only</string>
+    <string name="setup_encrypt_backups">Encrypt Backups</string>
+    <string name="setup_encrypt_on">Only you can read your backups</string>
+    <string name="setup_encrypt_off">Encrypt Index data so only you can read it</string>
+    <string name="setup_encrypt_needs_backup">Turn on Cloud Backup to set up encryption</string>
+    <string name="setup_stt_on_device">On-device</string>
+    <string name="setup_stt_on_device_sub">Recommended - private, stays on this iPhone</string>
+    <string name="setup_stt_cloud_only">Cloud only</string>
+    <string name="setup_stt_cloud_only_sub">Best performance, requires connection</string>
+    <string name="setup_stt_cloud_fallback">Cloud, with local fallback</string>
+    <string name="setup_stt_cloud_fallback_sub">Recommended, 400MB download</string>
+    <string name="setup_stt_local_only">Local only</string>
+    <string name="setup_stt_local_only_sub">Complete privacy, 400MB download</string>
+    <string name="setup_supported_languages">Supported languages</string>
+    <string name="sign_in_needs_restart">Sign in needs an app restart. Close and reopen the app, then try again.</string>
 </resources>

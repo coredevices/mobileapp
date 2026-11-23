@@ -70,6 +70,32 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.bug_report_creating
+import coreapp.composeapp.generated.resources.bug_report_error_auth
+import coreapp.composeapp.generated.resources.bug_report_error_describe
+import coreapp.composeapp.generated.resources.bug_report_error_email
+import coreapp.composeapp.generated.resources.bug_report_error_fill_in
+import coreapp.composeapp.generated.resources.bug_report_error_network
+import coreapp.composeapp.generated.resources.bug_report_error_no_id
+import coreapp.composeapp.generated.resources.bug_report_error_partial_upload
+import coreapp.composeapp.generated.resources.bug_report_error_prepare_connection
+import coreapp.composeapp.generated.resources.bug_report_error_prepare_later
+import coreapp.composeapp.generated.resources.bug_report_error_submit_connection
+import coreapp.composeapp.generated.resources.bug_report_error_submit_later
+import coreapp.composeapp.generated.resources.bug_report_error_submit_retry
+import coreapp.composeapp.generated.resources.bug_report_error_timeout
+import coreapp.composeapp.generated.resources.bug_report_error_unexpected
+import coreapp.composeapp.generated.resources.bug_report_error_unknown
+import coreapp.composeapp.generated.resources.bug_report_error_upload_later
+import coreapp.composeapp.generated.resources.bug_report_error_upload_network
+import coreapp.composeapp.generated.resources.bug_report_error_upload_timeout
+import coreapp.composeapp.generated.resources.bug_report_failed
+import coreapp.composeapp.generated.resources.bug_report_gathering_watch_logs_progress
+import coreapp.composeapp.generated.resources.bug_report_title
+import coreapp.composeapp.generated.resources.bug_report_uploaded
+import coreapp.composeapp.generated.resources.bug_report_uploading_attachments
+import org.jetbrains.compose.resources.getString
 
 data class BugReportGenerationParams(
     val userMessage: String,
@@ -125,7 +151,7 @@ data class AtlasCreateResponse(
 
 expect fun startForegroundService()
 
-expect fun notifyState(message: String)
+expect suspend fun notifyState(message: String)
 
 expect fun stopForegroundService()
 
@@ -146,9 +172,9 @@ class BugReportProcessor(
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
 
-    private fun notifyBugReportState(message: String) {
+    private suspend fun notifyBugReportState(message: String) {
         notifyState(message)
-        watchNotifier.send("bug_report_upload", "Bug Report", message)
+        watchNotifier.send("bug_report_upload", getString(Res.string.bug_report_title), message)
     }
 
     companion object {
@@ -270,7 +296,7 @@ class BugReportProcessor(
                 state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
             } else {
                 state.tryEmit(BugReportState.BugReportResult.Failed(
-                    uploadResult.exceptionOrNull()?.message ?: "Unknown error"
+                    uploadResult.exceptionOrNull()?.message ?: getString(Res.string.bug_report_error_unknown)
                 ))
             }
         }
@@ -291,7 +317,7 @@ class BugReportProcessor(
                 state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
             } else {
                 state.tryEmit(BugReportState.BugReportResult.Failed(
-                    uploadResult.exceptionOrNull()?.message ?: "Unknown error"
+                    uploadResult.exceptionOrNull()?.message ?: getString(Res.string.bug_report_error_unknown)
                 ))
             }
         }
@@ -379,14 +405,18 @@ class BugReportProcessor(
                     Logger.e(e) { "Failed to send bug report" }
                     // Provide user-friendly error message
                     val userMessage = when {
-                        e.message?.contains("Authentication failed") == true -> e.message!!
-                        e.message?.contains("Please fill in") == true -> e.message!!
-                        e.message?.contains("Please enter") == true -> e.message!!
-                        e.message?.contains("Please describe") == true -> e.message!!
-                        e.message?.contains("Unable to submit") == true -> e.message!!
-                        e.message?.contains("network") == true -> "Network error. Please check your connection and try again."
-                        e.message?.contains("timeout") == true -> "Request timed out. Please try again."
-                        else -> "Unable to submit bug report. Please try again later."
+                        e.message?.contains("Authentication failed") == true -> getString(Res.string.bug_report_error_auth)
+                        e.message?.contains("Please fill in") == true -> getString(Res.string.bug_report_error_fill_in)
+                        e.message?.contains("Please enter") == true -> getString(Res.string.bug_report_error_email)
+                        e.message?.contains("Please describe") == true -> getString(Res.string.bug_report_error_describe)
+                        e.message?.contains("Unable to submit") == true -> if (e.message!!.contains("check your connection")) {
+                            getString(Res.string.bug_report_error_submit_connection)
+                        } else {
+                            getString(Res.string.bug_report_error_submit_retry)
+                        }
+                        e.message?.contains("network") == true -> getString(Res.string.bug_report_error_network)
+                        e.message?.contains("timeout") == true -> getString(Res.string.bug_report_error_timeout)
+                        else -> getString(Res.string.bug_report_error_submit_later)
                     }
                     state.tryEmit(BugReportState.BugReportResult.Failed(userMessage))
                     return@processBugReport
@@ -404,7 +434,7 @@ class BugReportProcessor(
 
                 if (bugReportId == null) {
                     logger.e { "No bug report ID returned from server" }
-                    state.tryEmit(BugReportState.BugReportResult.Failed("Bug report created but no ID returned"))
+                    state.tryEmit(BugReportState.BugReportResult.Failed(getString(Res.string.bug_report_error_no_id)))
                     return@processBugReport
                 }
                 bugReportId
@@ -430,7 +460,7 @@ class BugReportProcessor(
                     state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
                 } else {
                     state.tryEmit(BugReportState.BugReportResult.Failed(
-                        uploadResult.exceptionOrNull()?.message ?: "Unknown error"
+                        uploadResult.exceptionOrNull()?.message ?: getString(Res.string.bug_report_error_unknown)
                     ))
                 }
             } else {
@@ -490,8 +520,8 @@ class BugReportProcessor(
         state.tryEmit(BugReportState.Creating)
         if (service) {
             startForegroundService()
-            notifyBugReportState("Creating bug report...")
             GlobalScope.launch {
+                notifyBugReportState(getString(Res.string.bug_report_creating))
                 try {
                     state.transformWhile {
                         emit(it)
@@ -499,10 +529,10 @@ class BugReportProcessor(
                     }.collect {
                         when (it) {
                             BugReportState.Creating -> Unit
-                            BugReportState.GatheringWatchLogs -> notifyBugReportState("Gathering watch logs...")
-                            BugReportState.UploadingAttachments -> notifyBugReportState("Uploading attachments")
-                            is BugReportState.BugReportResult.Failed -> notifyBugReportState("Bug report failed: ${it.error}")
-                            is BugReportState.BugReportResult.Success -> notifyBugReportState("Bug report successfully uploaded!")
+                            BugReportState.GatheringWatchLogs -> notifyBugReportState(getString(Res.string.bug_report_gathering_watch_logs_progress))
+                            BugReportState.UploadingAttachments -> notifyBugReportState(getString(Res.string.bug_report_uploading_attachments))
+                            is BugReportState.BugReportResult.Failed -> notifyBugReportState(getString(Res.string.bug_report_failed, it.error))
+                            is BugReportState.BugReportResult.Success -> notifyBugReportState(getString(Res.string.bug_report_uploaded))
                             is BugReportState.ReadyToShare -> Unit
                         }
                     }
@@ -528,7 +558,7 @@ class BugReportProcessor(
                 block(state, userIdToken)
             } catch (e: Exception) {
                 logger.e(e) { "Unhandled exception in bug report processing" }
-                state.tryEmit(BugReportState.BugReportResult.Failed("An unexpected error occurred"))
+                state.tryEmit(BugReportState.BugReportResult.Failed(getString(Res.string.bug_report_error_unexpected)))
             }
         }
         return state
@@ -683,13 +713,13 @@ class BugReportProcessor(
             }
             if (presignedResult.isFailure) {
                 logger.e { "Failed to get presigned URLs: ${presignedResult.exceptionOrNull()}" }
-                return@withContext Result.failure(Exception("Unable to prepare file uploads. Please check your connection and try again."))
+                return@withContext Result.failure(Exception(getString(Res.string.bug_report_error_prepare_connection)))
             }
 
             val presignedResponse = presignedResult.getOrThrow()
             if (!presignedResponse.success || presignedResponse.uploads == null) {
                 logger.e { "Failed to get presigned URLs: ${presignedResponse.error}" }
-                return@withContext Result.failure(Exception("Unable to prepare file uploads. Please try again later."))
+                return@withContext Result.failure(Exception(getString(Res.string.bug_report_error_prepare_later)))
             }
 
             // Step 3: Upload files to R2 concurrently (bounded), shrinking the window
@@ -742,15 +772,15 @@ class BugReportProcessor(
             if (uploadedCount == attachments.size) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Some attachments failed to upload ($uploadedCount of ${attachments.size} successful). The bug report was submitted but without all attachments."))
+                Result.failure(Exception(getString(Res.string.bug_report_error_partial_upload, uploadedCount, attachments.size)))
             }
         } catch (e: Exception) {
             logger.e(e) { "Failed to upload attachments" }
             val userMessage = when {
                 e.message?.contains("Unable to prepare") == true -> e.message!!
-                e.message?.contains("Network") == true -> "Network error during file upload. Please check your connection and try again."
-                e.message?.contains("timeout") == true -> "File upload timed out. Please try again with a better connection."
-                else -> "Unable to upload attachments. Please try again later."
+                e.message?.contains("Network") == true -> getString(Res.string.bug_report_error_upload_network)
+                e.message?.contains("timeout") == true -> getString(Res.string.bug_report_error_upload_timeout)
+                else -> getString(Res.string.bug_report_error_upload_later)
             }
             Result.failure(Exception(userMessage))
         }

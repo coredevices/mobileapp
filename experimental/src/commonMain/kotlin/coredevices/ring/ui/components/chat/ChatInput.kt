@@ -55,6 +55,18 @@ import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_dismiss_keyboard
+import coreapp.ring.generated.resources.feed_hold_to_record
+import coreapp.ring.generated.resources.feed_recording_in_progress
+import coreapp.ring.generated.resources.feed_send
+import coreapp.ring.generated.resources.feed_send_as_click_hold
+import coreapp.ring.generated.resources.feed_stop
+import coreapp.ring.generated.resources.feed_type_or_hold_to_record
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Pebble Index compose bar — outlined pill text field + separate red mic
@@ -135,7 +147,7 @@ fun ChatInput(
                         } else {
                             null
                         },
-                        onLongClickLabel = if (hasText) "Send as Click & Hold" else null,
+                        onLongClickLabel = if (hasText) stringResource(Res.string.feed_send_as_click_hold) else null,
                     ) {
                         when {
                             hasText -> submitText()
@@ -152,9 +164,9 @@ fun ChatInput(
                         else -> Icons.Filled.Mic
                     },
                     contentDescription = when {
-                        hasText -> "Send"
-                        showDismissKeyboard -> "Dismiss keyboard"
-                        else -> "Hold to record"
+                        hasText -> stringResource(Res.string.feed_send)
+                        showDismissKeyboard -> stringResource(Res.string.feed_dismiss_keyboard)
+                        else -> stringResource(Res.string.feed_hold_to_record)
                     },
                     tint = colors.onPrimary,
                     modifier = Modifier.size(20.dp),
@@ -196,7 +208,7 @@ private fun TextPill(
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
-                        "Type or hold to record…",
+                        stringResource(Res.string.feed_type_or_hold_to_record),
                         color = colors.onSurfaceVariant,
                         fontSize = 15.sp,
                     )
@@ -206,7 +218,7 @@ private fun TextPill(
         )
         if (value.isNotEmpty()) {
             IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Filled.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -236,7 +248,7 @@ private fun RecordingIndicator(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onCancel) {
-            Icon(Icons.Filled.Close, "Cancel", tint = colors.error)
+            Icon(Icons.Filled.Close, stringResource(UtilRes.string.cancel), tint = colors.error)
         }
 
         Row(
@@ -245,7 +257,7 @@ private fun RecordingIndicator(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Recording",
+                stringResource(Res.string.feed_recording_in_progress),
                 color = colors.error,
                 fontSize = 13.sp,
             )
@@ -267,7 +279,7 @@ private fun RecordingIndicator(
         }
 
         IconButton(onClick = onStop) {
-            Icon(Icons.Filled.Stop, "Stop", tint = colors.error)
+            Icon(Icons.Filled.Stop, stringResource(Res.string.feed_stop), tint = colors.error)
         }
     }
 }

@@ -4,6 +4,27 @@ import PlatformUiContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.encryption_vm_checking_backup
+import coreapp.ring.generated.resources.encryption_vm_disabled
+import coreapp.ring.generated.resources.encryption_vm_enabled
+import coreapp.ring.generated.resources.encryption_vm_failed
+import coreapp.ring.generated.resources.encryption_vm_imported_from_qr
+import coreapp.ring.generated.resources.encryption_vm_imported_from_text
+import coreapp.ring.generated.resources.encryption_vm_invalid_key
+import coreapp.ring.generated.resources.encryption_vm_invalid_qr_key
+import coreapp.ring.generated.resources.encryption_vm_key_generated
+import coreapp.ring.generated.resources.encryption_vm_key_generated_qr_saved
+import coreapp.ring.generated.resources.encryption_vm_key_generation_failed
+import coreapp.ring.generated.resources.encryption_vm_key_import_failed
+import coreapp.ring.generated.resources.encryption_vm_key_mismatch
+import coreapp.ring.generated.resources.encryption_vm_key_restored
+import coreapp.ring.generated.resources.encryption_vm_key_unusable
+import coreapp.ring.generated.resources.encryption_vm_no_local_key
+import coreapp.ring.generated.resources.encryption_vm_no_qr_found
+import coreapp.ring.generated.resources.encryption_vm_qr_import_failed
+import coreapp.ring.generated.resources.encryption_vm_qr_import_failed_reason
+import coreapp.ring.generated.resources.encryption_vm_verify_backup_failed
 import coredevices.ring.encryption.EnableEncryptionResult
 import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.encryption.EncryptionSetupState
@@ -14,6 +35,7 @@ import coredevices.ring.ui.components.saveQrCodeToPhotos
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 
 /** Encryption key management and the enable/disable flows. Keying ops live in [EncryptionManager]. */
 class EncryptionViewModel(
@@ -44,12 +66,12 @@ class EncryptionViewModel(
                 val qrSaved = trySaveKeyQrToPhotos(uiContext, key)
                 encryptionManager.revealGeneratedKey(key)
                 _encryptionKeyStatus.value = if (qrSaved) {
-                    "Encryption key generated — QR code saved to your photos"
+                    getString(Res.string.encryption_vm_key_generated_qr_saved)
                 } else {
-                    "Encryption key generated and saved"
+                    getString(Res.string.encryption_vm_key_generated)
                 }
             } catch (e: Exception) {
-                _encryptionKeyStatus.value = "Failed: ${e.message}"
+                _encryptionKeyStatus.value = getString(Res.string.encryption_vm_failed, e.message.toString())
             } finally {
                 _encryptionKeyLoading.value = false
             }
@@ -72,7 +94,7 @@ class EncryptionViewModel(
             _encryptionKeyLoading.value = true
             try {
                 encryptionManager.readKeyFromCloudKeychain(uiContext)
-                _encryptionKeyStatus.value = "Key restored from Password Manager"
+                _encryptionKeyStatus.value = getString(Res.string.encryption_vm_key_restored)
             } catch (e: Exception) {
                 _encryptionKeyStatus.value = e.message
             } finally {
@@ -89,7 +111,7 @@ class EncryptionViewModel(
     fun requestEnableEncryption(uiContext: PlatformUiContext) {
         viewModelScope.launch {
             _enablingEncryption.value = true
-            _encryptionStatus.value = "Checking key backup..."
+            _encryptionStatus.value = getString(Res.string.encryption_vm_checking_backup)
             try {
                 val backedUp = encryptionManager.isLocalKeyBackedUpToCloud(uiContext)
                 if (backedUp) {
@@ -100,7 +122,7 @@ class EncryptionViewModel(
                     _showKeyNotBackedUpDialog.value = true
                 }
             } catch (e: Exception) {
-                _encryptionStatus.value = "Could not verify key backup: ${e.message}"
+                _encryptionStatus.value = getString(Res.string.encryption_vm_verify_backup_failed, e.message.toString())
                 _enablingEncryption.value = false
             }
         }
@@ -119,13 +141,13 @@ class EncryptionViewModel(
         _encryptionStatus.value = try {
             when (val result = encryptionManager.enableEncryption()) {
                 EnableEncryptionResult.Enabled ->
-                    "Encryption enabled — future uploads encrypted"
+                    getString(Res.string.encryption_vm_enabled)
                 EnableEncryptionResult.NoLocalKey ->
-                    "Can't enable encryption: no key on this device"
+                    getString(Res.string.encryption_vm_no_local_key)
                 is EnableEncryptionResult.KeyFingerprintMismatch ->
-                    "Can't enable encryption: key on this device doesn't match your account key"
+                    getString(Res.string.encryption_vm_key_mismatch)
                 is EnableEncryptionResult.KeyUnusable ->
-                    "Can't enable encryption: key is unusable (${result.reason})"
+                    getString(Res.string.encryption_vm_key_unusable, result.reason)
             }
         } finally {
             _enablingEncryption.value = false
@@ -134,7 +156,7 @@ class EncryptionViewModel(
 
     fun disableEncryption() {
         encryptionManager.disableEncryption()
-        _encryptionStatus.value = "Encryption disabled — future uploads will be unencrypted"
+        viewModelScope.launch { _encryptionStatus.value = getString(Res.string.encryption_vm_disabled) }
     }
 
     // Guided setup: a single switch that walks the user through generating or
@@ -182,7 +204,7 @@ class EncryptionViewModel(
                 )
             } catch (e: Exception) {
                 _encryptionSetup.value =
-                    EncryptionSetupState.Failed(e.message ?: "Key generation failed")
+                    EncryptionSetupState.Failed(e.message ?: getString(Res.string.encryption_vm_key_generation_failed))
             }
         }
     }
@@ -201,7 +223,7 @@ class EncryptionViewModel(
                 finishSetupAndEnable()
             } else {
                 _encryptionSetup.value =
-                    EncryptionSetupState.PasteKey("That key isn't valid for this account")
+                    EncryptionSetupState.PasteKey(getString(Res.string.encryption_vm_invalid_key))
             }
         }
     }
@@ -217,19 +239,19 @@ class EncryptionViewModel(
                             finishSetupAndEnable()
                         } else {
                             _encryptionSetup.value = EncryptionSetupState.PasteKey(
-                                "That QR code isn't a valid key for this account"
+                                getString(Res.string.encryption_vm_invalid_qr_key)
                             )
                         }
                     }
                     QrPhotoPickResult.NoQrFound ->
                         _encryptionSetup.value =
-                            EncryptionSetupState.PasteKey("No QR code found in that photo")
+                            EncryptionSetupState.PasteKey(getString(Res.string.encryption_vm_no_qr_found))
                     QrPhotoPickResult.Cancelled -> {}
                 }
             } catch (e: Exception) {
                 Logger.withTag("Encryption").w(e) { "QR key import failed" }
                 _encryptionSetup.value =
-                    EncryptionSetupState.PasteKey(e.message ?: "QR import failed")
+                    EncryptionSetupState.PasteKey(e.message ?: getString(Res.string.encryption_vm_qr_import_failed))
             }
         }
     }
@@ -243,16 +265,16 @@ class EncryptionViewModel(
                     is QrPhotoPickResult.Found ->
                         _encryptionKeyStatus.value =
                             if (encryptionManager.restoreKeyFromString(result.data)) {
-                                "Key imported from QR code"
+                                getString(Res.string.encryption_vm_imported_from_qr)
                             } else {
-                                "That QR code isn't a valid key for this account"
+                                getString(Res.string.encryption_vm_invalid_qr_key)
                             }
                     QrPhotoPickResult.NoQrFound ->
-                        _encryptionKeyStatus.value = "No QR code found in that photo"
+                        _encryptionKeyStatus.value = getString(Res.string.encryption_vm_no_qr_found)
                     QrPhotoPickResult.Cancelled -> {}
                 }
             } catch (e: Exception) {
-                _encryptionKeyStatus.value = "QR import failed: ${e.message}"
+                _encryptionKeyStatus.value = getString(Res.string.encryption_vm_qr_import_failed_reason, e.message.toString())
             } finally {
                 _encryptionKeyLoading.value = false
             }
@@ -268,12 +290,12 @@ class EncryptionViewModel(
             try {
                 _encryptionKeyStatus.value =
                     if (encryptionManager.restoreKeyFromString(key)) {
-                        "Key imported from text"
+                        getString(Res.string.encryption_vm_imported_from_text)
                     } else {
-                        "That key isn't valid for this account"
+                        getString(Res.string.encryption_vm_invalid_key)
                     }
             } catch (e: Exception) {
-                _encryptionKeyStatus.value = "Key import failed: ${e.message}"
+                _encryptionKeyStatus.value = getString(Res.string.encryption_vm_key_import_failed, e.message.toString())
             } finally {
                 _encryptionKeyLoading.value = false
             }

@@ -25,10 +25,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_notion_page_description
+import coreapp.ring.generated.resources.settings_notion_page_load_failed
+import coreapp.ring.generated.resources.settings_notion_page_none
+import coreapp.ring.generated.resources.settings_notion_page_title
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.ok
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ui.M3Dialog
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res as UtilRes
 
 /**
  * Lets the user pick which Notion page to-do block is placed
@@ -48,7 +58,7 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
             selectedId = notion.selectedPageId() ?: loaded.firstOrNull()?.id
             pages = loaded
         } catch (e: Throwable) {
-            error = e.message ?: "Failed to load pages"
+            error = e.message ?: getString(Res.string.settings_notion_page_load_failed)
         }
     }
 
@@ -56,9 +66,9 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         // The page list can be long; scroll it so the buttons stay reachable.
         scrollableContent = true,
-        title = { Text("Notion Page") },
+        title = { Text(stringResource(Res.string.settings_notion_page_title)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             TextButton(
                 enabled = selectedId != null && !saving,
                 onClick = {
@@ -69,12 +79,12 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
                         onDismiss()
                     }
                 }
-            ) { Text("OK") }
+            ) { Text(stringResource(UtilRes.string.ok)) }
         }
     ) {
         Column {
             Text(
-                "Choose the page to place your notes' Reminders list in.",
+                stringResource(Res.string.settings_notion_page_description),
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(12.dp))
@@ -87,9 +97,7 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
                 ) {
                     CircularProgressIndicator()
                 }
-                loadedPages.isEmpty() -> Text(
-                    "No pages found. Give Index access to a page in Notion, then try again."
-                )
+                loadedPages.isEmpty() -> Text(stringResource(Res.string.settings_notion_page_none))
                 else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     loadedPages.forEach { page ->
                         Row(

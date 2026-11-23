@@ -28,6 +28,21 @@ import androidx.compose.ui.unit.dp
 import coredevices.pebble.services.StoreBatteryImpact
 import coredevices.pebble.services.StoreBatteryImpactMode
 import io.rebble.libpebblecommon.metadata.WatchType
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.battery_impact_mode_default
+import coreapp.pebble.generated.resources.battery_impact_mode_seconds
+import coreapp.pebble.generated.resources.battery_impact_mode_animations
+import coreapp.pebble.generated.resources.battery_impact_level_negligible
+import coreapp.pebble.generated.resources.battery_impact_level_small
+import coreapp.pebble.generated.resources.battery_impact_level_medium
+import coreapp.pebble.generated.resources.battery_impact_level_large
+import coreapp.pebble.generated.resources.battery_impact_title
+import coreapp.pebble.generated.resources.battery_impact_selected
+import coreapp.pebble.generated.resources.battery_impact_shorter_life
+import coreapp.pebble.generated.resources.battery_impact_compared
+import coreapp.pebble.generated.resources.battery_impact_compared_version
+import coreapp.pebble.generated.resources.battery_impact_dismiss
+import org.jetbrains.compose.resources.stringResource
 
 internal fun String.capitalized() = replaceFirstChar { it.uppercase() }
 
@@ -42,10 +57,20 @@ private fun batteryLifeRange(level: String) = when (level) {
     else -> null
 }
 
+@Composable
 private fun batteryImpactModeName(mode: String) = when (mode) {
-    "default" -> "Default"
-    "seconds" -> "With seconds"
-    else -> "With animations"
+    "default" -> stringResource(Res.string.battery_impact_mode_default)
+    "seconds" -> stringResource(Res.string.battery_impact_mode_seconds)
+    else -> stringResource(Res.string.battery_impact_mode_animations)
+}
+
+@Composable
+private fun batteryImpactLevelName(level: String) = when (level) {
+    "negligible" -> stringResource(Res.string.battery_impact_level_negligible)
+    "small" -> stringResource(Res.string.battery_impact_level_small)
+    "medium" -> stringResource(Res.string.battery_impact_level_medium)
+    "large" -> stringResource(Res.string.battery_impact_level_large)
+    else -> level.capitalized()
 }
 
 @Composable
@@ -58,7 +83,7 @@ fun BatteryImpactDialog(
     val impact = impacts.getValue(platform)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Battery Impact") },
+        title = { Text(stringResource(Res.string.battery_impact_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (impacts.size > 1) {
@@ -79,7 +104,7 @@ fun BatteryImpactDialog(
                                         expanded = false
                                     },
                                     leadingIcon = if (option == platform) {
-                                        { Icon(Icons.Filled.Done, contentDescription = "Selected") }
+                                        { Icon(Icons.Filled.Done, contentDescription = stringResource(Res.string.battery_impact_selected)) }
                                     } else null,
                                 )
                             }
@@ -92,27 +117,27 @@ fun BatteryImpactDialog(
                     Column {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(batteryImpactModeName(mode.mode))
-                            Text(mode.level.capitalized(), fontWeight = FontWeight.Bold)
+                            Text(batteryImpactLevelName(mode.level), fontWeight = FontWeight.Bold)
                         }
                         batteryLifeRange(mode.level)?.let {
                             Text(
-                                "$it shorter battery life",
+                                stringResource(Res.string.battery_impact_shorter_life, it),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray,
                             )
                         }
                     }
                 }
-                val versionText = impact.appVersion?.let { " (version $it)" } ?: ""
                 Text(
-                    "Compared with the TicToc watchface, measured on real watches$versionText.",
+                    impact.appVersion?.let { stringResource(Res.string.battery_impact_compared_version, it) }
+                        ?: stringResource(Res.string.battery_impact_compared),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.battery_impact_dismiss)) }
         },
     )
 }

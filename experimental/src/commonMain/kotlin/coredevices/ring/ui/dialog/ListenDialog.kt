@@ -19,10 +19,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.listen_dialog_finish
+import coreapp.ring.generated.resources.listen_dialog_processing
+import coreapp.ring.generated.resources.listen_dialog_recording
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.error
 import coredevices.ring.ui.viewmodel.ListenDialogViewModel
 import coredevices.ring.ui.viewmodel.ListenDialogViewModel.ManualTranscriptionState
 import coredevices.util.Platform
 import coredevices.util.isIOS
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
@@ -46,7 +53,7 @@ fun ListenDialog(onDismissRequest: () -> Unit) {
             ) {
                 when (val it = state) {
                     is ManualTranscriptionState.Recording -> {
-                        Text("Recording", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(Res.string.listen_dialog_recording), style = MaterialTheme.typography.titleLarge)
                         if (it.partial != null) {
                             Text(it.partial)
                         }
@@ -56,15 +63,15 @@ fun ListenDialog(onDismissRequest: () -> Unit) {
                                     listenDialogViewModel.completeManualRecording()
                                 }
                             ) {
-                                Text("Finish")
+                                Text(stringResource(Res.string.listen_dialog_finish))
                             }
                         }
                     }
                     ManualTranscriptionState.Processing -> {
-                        Text("Processing", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(Res.string.listen_dialog_processing), style = MaterialTheme.typography.titleLarge)
                     }
                     is ManualTranscriptionState.Error -> {
-                        Text("Error", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(UtilRes.string.error), style = MaterialTheme.typography.titleLarge)
                         Text(it.message)
                     }
                     else -> {

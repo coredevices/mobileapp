@@ -42,6 +42,20 @@ import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.koin.compose.koinInject
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.battery_title
+import coreapp.pebble.generated.resources.battery_not_configured
+import coreapp.pebble.generated.resources.battery_sign_in_prompt
+import coreapp.pebble.generated.resources.battery_signed_out
+import coreapp.pebble.generated.resources.battery_load_error
+import coreapp.pebble.generated.resources.battery_analytics_disabled
+import coreapp.pebble.generated.resources.battery_open_settings
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.refresh
+import coreapp.util.generated.resources.retry
+import coreapp.util.generated.resources.sign_in
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 private const val MOBILE_BATTERY_PATH = "/m/battery"
 
@@ -61,7 +75,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
-        topBarParams.title("Battery")
+        topBarParams.title(getString(Res.string.battery_title))
     }
 
     LaunchedEffect(accountEmail) {
@@ -72,7 +86,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val baseUrl = apiConfig.bugUrl
         if (baseUrl.isNullOrBlank()) {
             url = null
-            loadError = "Battery analytics service is not configured"
+            loadError = getString(Res.string.battery_not_configured)
             return@LaunchedEffect
         }
         val idToken = try {
@@ -85,7 +99,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             // Drop the previous URL too, otherwise a stale (still-rendered)
             // WebView would hide the new error from the user.
             url = null
-            loadError = "Sign in to view your battery analytics"
+            loadError = getString(Res.string.battery_sign_in_prompt)
             return@LaunchedEffect
         }
         loadError = null
@@ -168,7 +182,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(interceptor) {
         topBarParams.actions {
             IconButton(onClick = { interceptor.navigator?.reload() }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(UtilRes.string.refresh))
             }
         }
     }
@@ -212,14 +226,14 @@ private fun SignedOutBatteryContent(onSignIn: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "You must be signed into your Pebble account to view your Battery usage.",
+            stringResource(Res.string.battery_signed_out),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Box(Modifier.height(12.dp))
         PebbleElevatedButton(
             onClick = onSignIn,
-            text = "Sign in",
+            text = stringResource(UtilRes.string.sign_in),
             primaryColor = true,
         )
     }
@@ -236,14 +250,14 @@ private fun BatteryLoadErrorContent(onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "Couldn't load your Battery usage. Check your connection and try again.",
+            stringResource(Res.string.battery_load_error),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Box(Modifier.height(12.dp))
         PebbleElevatedButton(
             onClick = onRetry,
-            text = "Retry",
+            text = stringResource(UtilRes.string.retry),
             primaryColor = true,
         )
     }
@@ -260,14 +274,14 @@ private fun AnalyticsDisabledBatteryContent(onOpenSettings: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "You need 'Send watch analytics' enabled to view your Battery usage.",
+            stringResource(Res.string.battery_analytics_disabled),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Box(Modifier.height(12.dp))
         PebbleElevatedButton(
             onClick = onOpenSettings,
-            text = "Open settings",
+            text = stringResource(Res.string.battery_open_settings),
             primaryColor = true,
         )
     }

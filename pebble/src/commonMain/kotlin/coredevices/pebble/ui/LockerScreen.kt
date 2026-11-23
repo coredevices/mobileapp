@@ -87,6 +87,16 @@ import coil3.request.ImageRequest
 import com.russhwolf.settings.Settings
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
+import coreapp.pebble.generated.resources.locker_active
+import coreapp.pebble.generated.resources.locker_clear_filters
+import coreapp.pebble.generated.resources.locker_configure_feeds
+import coreapp.pebble.generated.resources.locker_from_my_apps
+import coreapp.pebble.generated.resources.locker_from_my_watchfaces
+import coreapp.pebble.generated.resources.locker_from_store
+import coreapp.pebble.generated.resources.locker_in_my_collection
+import coreapp.pebble.generated.resources.locker_loading
+import coreapp.pebble.generated.resources.locker_plugin_settings
+import coreapp.pebble.generated.resources.locker_see_all
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
@@ -129,6 +139,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -434,7 +445,7 @@ fun LockerScreen(
         val initialLockerSyncInProgress by initialLockerSync.initialLockerSync.collectAsState()
         LaunchedEffect(initialLockerSyncInProgress) {
             if (initialLockerSyncInProgress) {
-                topBarParams.showSnackbar("Loading Locker")
+                topBarParams.showSnackbar(getString(Res.string.locker_loading))
             }
         }
 
@@ -597,7 +608,7 @@ fun LockerScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                                         Text(
-                                            "Active",
+                                            stringResource(Res.string.locker_active),
                                             fontSize = 24.sp,
                                             modifier = Modifier.padding(
                                                 top = 5.dp,
@@ -659,7 +670,7 @@ fun LockerScreen(
                                     myApps.take(20)
                                 }
                                 Carousel(
-                                    viewModel.type.value.myCollectionName(),
+                                    stringResource(viewModel.type.value.myCollectionName()),
                                     myAppsToDisplay,
                                     highlightInLocker = false,
                                     nativePlugins = if (viewModel.type.value == AppType.Plugin) nativePlugins else emptyList(),
@@ -673,7 +684,7 @@ fun LockerScreen(
                                                     )
                                                 )
                                             }) {
-                                                Icon(Icons.Default.Settings, contentDescription = "Plugin settings")
+                                                Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.locker_plugin_settings))
                                             }
                                         }
                                     } else null,
@@ -709,7 +720,7 @@ fun LockerScreen(
                                         ) {
                                             Icon(
                                                 Icons.Default.Tune,
-                                                contentDescription = "Configure Feeds"
+                                                contentDescription = stringResource(Res.string.locker_configure_feeds)
                                             )
                                         }
                                     }
@@ -895,7 +906,7 @@ fun SearchResultsList(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 if (lockerEntries.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
+                    item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(stringResource(Res.string.locker_from_my_watchfaces)) }
                     items(
                         items = lockerEntries,
                         key = { "locker_${it.storeId}-${it.uuid}" },
@@ -909,7 +920,7 @@ fun SearchResultsList(
                         )
                     }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(stringResource(Res.string.locker_from_store)) }
                 items(
                     count = storeResults.itemCount,
                     key = storeResults.itemKey { "store_${it.storeId}-${it.uuid}" },
@@ -933,7 +944,7 @@ fun SearchResultsList(
                 } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         PebbleElevatedButton(
-                            text = "Clear filters for more results",
+                            text = stringResource(Res.string.locker_clear_filters),
                             onClick = {
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
@@ -949,7 +960,7 @@ fun SearchResultsList(
             if (lockerEntries.isNotEmpty()) {
                 item {
                     Text(
-                        "From my apps",
+                        stringResource(Res.string.locker_from_my_apps),
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
@@ -977,7 +988,7 @@ fun SearchResultsList(
             }
             item {
                 Text(
-                    "From the store",
+                    stringResource(Res.string.locker_from_store),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
@@ -1022,7 +1033,7 @@ fun SearchResultsList(
                 } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
                     item {
                         PebbleElevatedButton(
-                            text = "Clear filters for more results",
+                            text = stringResource(Res.string.locker_clear_filters),
                             onClick = {
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
@@ -1064,7 +1075,7 @@ fun AppCarousel(
                 Text(title, fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
                 Spacer(modifier = Modifier.width(7.dp))
                 if (onClick != null) {
-                    Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = "See all", modifier = Modifier)
+                    Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = stringResource(Res.string.locker_see_all), modifier = Modifier)
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -1266,7 +1277,7 @@ fun NativeWatchfaceMainContent(
                 if (inMyCollection) {
                     Icon(
                         Icons.AutoMirrored.Filled.PlaylistAddCheck,
-                        contentDescription = "In My Collection",
+                        contentDescription = stringResource(Res.string.locker_in_my_collection),
                         modifier = Modifier.size(19.dp)
                             .padding(top = 1.dp, bottom = 5.dp),
                         tint = coreDarkGreen,
@@ -1347,7 +1358,7 @@ fun NativeWatchfaceListItem(
                         if (inMyCollection) {
                             Icon(
                                 Icons.AutoMirrored.Filled.PlaylistAddCheck,
-                                contentDescription = "In My Collection",
+                                contentDescription = stringResource(Res.string.locker_in_my_collection),
                                 modifier = Modifier.size(16.dp)
                                     .padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
                                 tint = coreDarkGreen,

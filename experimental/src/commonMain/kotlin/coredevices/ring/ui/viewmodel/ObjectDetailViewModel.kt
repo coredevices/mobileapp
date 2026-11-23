@@ -3,8 +3,20 @@
 package coredevices.ring.ui.viewmodel
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.object_kind_action_log
+import coreapp.ring.generated.resources.object_kind_answer
+import coreapp.ring.generated.resources.object_kind_calendar_event
+import coreapp.ring.generated.resources.object_kind_checklist
+import coreapp.ring.generated.resources.object_kind_delegated
+import coreapp.ring.generated.resources.object_kind_list
+import coreapp.ring.generated.resources.object_kind_message
+import coreapp.ring.generated.resources.object_kind_note
+import coreapp.ring.generated.resources.object_kind_reminder
+import coreapp.ring.generated.resources.object_kind_scheduled
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
@@ -38,6 +50,7 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Backs [coredevices.ring.ui.screens.indexfeed.ObjectDetail]. Handles either an
@@ -509,17 +522,18 @@ class ObjectDetailViewModel(
     }
 }
 
+@Composable
 internal fun kindLabel(kind: String): String = when (kind) {
-    "reminder" -> "Reminder"
-    "scheduled" -> "Scheduled"
-    "checklist" -> "Checklist"
-    "note" -> "Note"
-    "answer" -> "Answer"
-    "message" -> "Message"
-    "action_log" -> "Action"
-    "calendar_event" -> "Event"
-    "delegated" -> "Sent"
-    "list" -> "List"
+    "reminder" -> stringResource(Res.string.object_kind_reminder)
+    "scheduled" -> stringResource(Res.string.object_kind_scheduled)
+    "checklist" -> stringResource(Res.string.object_kind_checklist)
+    "note" -> stringResource(Res.string.object_kind_note)
+    "answer" -> stringResource(Res.string.object_kind_answer)
+    "message" -> stringResource(Res.string.object_kind_message)
+    "action_log" -> stringResource(Res.string.object_kind_action_log)
+    "calendar_event" -> stringResource(Res.string.object_kind_calendar_event)
+    "delegated" -> stringResource(Res.string.object_kind_delegated)
+    "list" -> stringResource(Res.string.object_kind_list)
     else -> kind.replaceFirstChar { it.uppercase() }
 }
 

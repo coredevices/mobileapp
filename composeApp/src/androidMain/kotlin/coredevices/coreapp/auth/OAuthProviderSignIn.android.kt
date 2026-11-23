@@ -14,6 +14,9 @@ import java.security.KeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.sign_in_needs_restart
+import org.jetbrains.compose.resources.getString
 
 private val logger = Logger.withTag("OAuthProviderSignIn")
 
@@ -48,7 +51,7 @@ internal suspend fun oAuthProviderCredential(
         if (e.message?.contains(GENERIC_IDP_KEY_FAILURE) == true) {
             clearGenericIdpKeyset(context.activity)
             throw IllegalStateException(
-                "Sign in needs an app restart. Close and reopen the app, then try again.",
+                getString(Res.string.sign_in_needs_restart),
                 e,
             )
         }

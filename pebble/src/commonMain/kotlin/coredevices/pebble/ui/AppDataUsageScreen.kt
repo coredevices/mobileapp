@@ -36,6 +36,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.app_data_usage_about
+import coreapp.pebble.generated.resources.app_data_usage_any_website
+import coreapp.pebble.generated.resources.app_data_usage_empty
+import coreapp.pebble.generated.resources.app_data_usage_hide_domains
+import coreapp.pebble.generated.resources.app_data_usage_intro
+import coreapp.pebble.generated.resources.app_data_usage_last_days
+import coreapp.pebble.generated.resources.app_data_usage_legacy_info
+import coreapp.pebble.generated.resources.app_data_usage_local_network
+import coreapp.pebble.generated.resources.app_data_usage_removed_app
+import coreapp.pebble.generated.resources.app_data_usage_show_domains
+import coreapp.pebble.generated.resources.app_data_usage_title
+import coreapp.pebble.generated.resources.app_data_usage_total
+import coreapp.util.generated.resources.ok
 import coredevices.pebble.rememberLibPebble
 import coredevices.util.storage.formatDataUsage
 import io.rebble.libpebblecommon.DATA_USAGE_KEPT_DAYS
@@ -46,14 +60,15 @@ import io.rebble.libpebblecommon.permissions.domainOf
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res as UtilRes
 
-private const val LEGACY_INFO = "This app was made before apps had to declare which websites they use, so it can " +
-    "reach any website and its data usage can't be split up by website."
-
+@Composable
 private fun PermissionDataUsage.label(): String = domainOf(permission) ?: when (permission) {
-    PluginPermissions.LOCAL_NETWORK -> "Local network"
-    else -> "Any website"
+    PluginPermissions.LOCAL_NETWORK -> stringResource(Res.string.app_data_usage_local_network)
+    else -> stringResource(Res.string.app_data_usage_any_website)
 }
 
 @Composable
@@ -61,7 +76,7 @@ fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Data usage")
+        topBarParams.title(getString(Res.string.app_data_usage_title))
     }
     val libPebble = rememberLibPebble()
     val usage by remember { libPebble.appDataUsage(DATA_USAGE_KEPT_DAYS).map { it.byApp() } }.collectAsState(null)
@@ -73,9 +88,9 @@ fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         item {
             Text(
                 if (apps.isEmpty()) {
-                    "None of your apps have sent or received anything in the last $DATA_USAGE_KEPT_DAYS days."
+                    stringResource(Res.string.app_data_usage_empty, DATA_USAGE_KEPT_DAYS)
                 } else {
-                    "How much your apps have sent and received over the last $DATA_USAGE_KEPT_DAYS days."
+                    stringResource(Res.string.app_data_usage_intro, DATA_USAGE_KEPT_DAYS)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -109,12 +124,12 @@ private fun AppUsageRow(
                     entry?.let { AppImage(it, Modifier.clip(RoundedCornerShape(8.dp)), 56.dp) }
                 }
             },
-            headlineContent = { Text(entry?.title ?: if (removed) "Removed app" else "", fontWeight = FontWeight.Bold) },
+            headlineContent = { Text(entry?.title ?: if (removed) stringResource(Res.string.app_data_usage_removed_app) else "", fontWeight = FontWeight.Bold) },
             supportingContent = { Text(formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)) },
             trailingContent = {
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Hide domains" else "Show domains",
+                    contentDescription = stringResource(if (expanded) Res.string.app_data_usage_hide_domains else Res.string.app_data_usage_show_domains),
                 )
             },
         )
@@ -129,9 +144,10 @@ private fun AppUsageRow(
 @Composable
 private fun AppUsageDetails(app: AppDataUsageSummary, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        UsageDetailRow("Total", app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)
+        UsageDetailRow(stringResource(Res.string.app_data_usage_total), app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)
+        val legacyInfo = stringResource(Res.string.app_data_usage_legacy_info)
         app.byPermission.forEach {
-            val info = LEGACY_INFO.takeIf { _ -> it.permission == PluginPermissions.GLOBAL_INTERNET }
+            val info = legacyInfo.takeIf { _ -> it.permission == PluginPermissions.GLOBAL_INTERNET }
             UsageDetailRow(it.label(), it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, info)
         }
     }
@@ -148,10 +164,10 @@ fun AppDataUsageSection(appUuid: Uuid) {
     var open by rememberSaveable(appUuid.toString()) { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            SectionHeader("Data usage", open) { open = !open }
+            SectionHeader(stringResource(Res.string.app_data_usage_title), open) { open = !open }
             if (!open) {
                 Text(
-                    "Last $DATA_USAGE_KEPT_DAYS days: ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)}",
+                    stringResource(Res.string.app_data_usage_last_days, DATA_USAGE_KEPT_DAYS, formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -176,7 +192,7 @@ private fun UsageDetailRow(
             onDismissRequest = { showInfo = false },
             title = { Text(label) },
             text = { Text(info) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(stringResource(UtilRes.string.ok)) } },
         )
     }
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -184,7 +200,7 @@ private fun UsageDetailRow(
             Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             if (info != null) {
                 IconButton(onClick = { showInfo = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.Info, contentDescription = "About $label", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Info, contentDescription = stringResource(Res.string.app_data_usage_about, label), modifier = Modifier.size(18.dp))
                 }
             }
         }

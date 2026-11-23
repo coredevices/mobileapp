@@ -65,6 +65,17 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_no_matching_questions
+import coreapp.ring.generated.resources.feed_no_questions_yet
+import coreapp.ring.generated.resources.feed_you_asked
+import coreapp.ring.generated.resources.search
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.search_ellipsis
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Full-screen list of every Q&A capture, newest first. Mirrors the
@@ -94,11 +105,11 @@ fun AllAnswers(coreNav: CoreNav) {
             )
         } else {
             TopBar(
-                title = "You asked",
+                title = stringResource(Res.string.feed_you_asked),
                 coreNav = coreNav,
                 right = {
                     IconButton(onClick = { searching = true }) {
-                        Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Search, stringResource(Res.string.search), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                 },
             )
@@ -114,7 +125,7 @@ fun AllAnswers(coreNav: CoreNav) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (query.isNotBlank()) "No matching questions." else "No questions yet. Ask your Index.",
+                            stringResource(if (query.isNotBlank()) Res.string.feed_no_matching_questions else Res.string.feed_no_questions_yet),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                         )
@@ -185,7 +196,7 @@ private fun TopBar(title: String, coreNav: CoreNav, right: @Composable () -> Uni
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = coreNav::goBack) {
-            Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
+            Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(UtilRes.string.back), tint = colors.onSurface)
         }
         Text(
             title,
@@ -237,18 +248,18 @@ private fun AnswersSearchTopBar(value: String, onChange: (String) -> Unit, onCan
                     keyboard?.hide()
                 }),
                 decorationBox = { inner ->
-                    if (value.isEmpty()) Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
+                    if (value.isEmpty()) Text(stringResource(UtilRes.string.search_ellipsis), color = colors.onSurfaceVariant, fontSize = 15.sp)
                     inner()
                 },
             )
             if (value.isNotEmpty()) {
                 IconButton(onClick = { onChange("") }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
         Text(
-            "Cancel",
+            stringResource(UtilRes.string.cancel),
             color = colors.primary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,

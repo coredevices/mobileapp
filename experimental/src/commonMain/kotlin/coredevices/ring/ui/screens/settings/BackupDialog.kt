@@ -39,6 +39,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_backup_create_key
+import coreapp.ring.generated.resources.settings_backup_delete_cloud
+import coreapp.ring.generated.resources.settings_backup_delete_cloud_subtitle
+import coreapp.ring.generated.resources.settings_backup_delete_title
+import coreapp.ring.generated.resources.settings_backup_delete_warning
+import coreapp.ring.generated.resources.settings_backup_disable_encryption
+import coreapp.ring.generated.resources.settings_backup_download
+import coreapp.ring.generated.resources.settings_backup_download_subtitle
+import coreapp.ring.generated.resources.settings_backup_enable_encryption
+import coreapp.ring.generated.resources.settings_backup_enabled
+import coreapp.ring.generated.resources.settings_backup_enabled_subtitle
+import coreapp.ring.generated.resources.settings_backup_encryption
+import coreapp.ring.generated.resources.settings_backup_encryption_key
+import coreapp.ring.generated.resources.settings_backup_encryption_off
+import coreapp.ring.generated.resources.settings_backup_encryption_on
+import coreapp.ring.generated.resources.settings_backup_enter_key
+import coreapp.ring.generated.resources.settings_backup_enter_key_description
+import coreapp.ring.generated.resources.settings_backup_enter_key_subtitle
+import coreapp.ring.generated.resources.settings_backup_enter_key_title
+import coreapp.ring.generated.resources.settings_backup_generate_key
+import coreapp.ring.generated.resources.settings_backup_id
+import coreapp.ring.generated.resources.settings_backup_import
+import coreapp.ring.generated.resources.settings_backup_import_qr
+import coreapp.ring.generated.resources.settings_backup_import_qr_subtitle
+import coreapp.ring.generated.resources.settings_backup_items
+import coreapp.ring.generated.resources.settings_backup_key_exists
+import coreapp.ring.generated.resources.settings_backup_key_generated_before
+import coreapp.ring.generated.resources.settings_backup_recordings_count
+import coreapp.ring.generated.resources.settings_backup_recordings_count_unknown
+import coreapp.ring.generated.resources.settings_backup_restore_key
+import coreapp.ring.generated.resources.settings_backup_restore_key_subtitle
+import coreapp.ring.generated.resources.settings_backup_title
+import coreapp.ring.generated.resources.settings_backup_type_to_confirm
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.delete
+import coreapp.util.generated.resources.done
+import coreapp.util.generated.resources.loading
 import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.ui.viewmodel.BackupViewModel
 import coredevices.ring.ui.viewmodel.EncryptionViewModel
@@ -47,7 +85,10 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.dismissKeyboardOnTapOutside
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.util.generated.resources.Res as UtilRes
 
 @Composable
 fun BackupDialog(
@@ -119,17 +160,17 @@ fun BackupDialog(
         AlertDialog(
             onDismissRequest = { showEnterKeyDialog = false; enterKeyInput = "" },
             modifier = Modifier.dismissKeyboardOnTapOutside(),
-            title = { Text("Enter Encryption Key") },
+            title = { Text(stringResource(Res.string.settings_backup_enter_key_title)) },
             text = {
                 Column {
                     val focusManager = LocalFocusManager.current
-                    Text("Type or paste the encryption key from another device.")
+                    Text(stringResource(Res.string.settings_backup_enter_key_description))
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = enterKeyInput,
                         onValueChange = { enterKeyInput = it },
                         singleLine = true,
-                        label = { Text("Encryption key") },
+                        label = { Text(stringResource(Res.string.settings_backup_encryption_key)) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.fillMaxWidth()
@@ -145,12 +186,12 @@ fun BackupDialog(
                         enterKeyInput = ""
                     }
                 ) {
-                    Text("Import")
+                    Text(stringResource(Res.string.settings_backup_import))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEnterKeyDialog = false; enterKeyInput = "" }) {
-                    Text("Cancel")
+                    Text(stringResource(UtilRes.string.cancel))
                 }
             }
         )
@@ -160,16 +201,16 @@ fun BackupDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
             modifier = Modifier.dismissKeyboardOnTapOutside(),
-            title = { Text("Delete Backup") },
+            title = { Text(stringResource(Res.string.settings_backup_delete_title)) },
             text = {
                 Column {
                     val focusManager = LocalFocusManager.current
                     Text(
-                        "This will permanently delete all your cloud backup data. This cannot be undone.",
+                        stringResource(Res.string.settings_backup_delete_warning),
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.height(16.dp))
-                    Text("Type \"delete\" to confirm:")
+                    Text(stringResource(Res.string.settings_backup_type_to_confirm, "delete"))
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = deleteInput,
@@ -190,12 +231,12 @@ fun BackupDialog(
                         deleteInput = ""
                     }
                 ) {
-                    Text("Delete", color = if (deleteInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                    Text(stringResource(UtilRes.string.delete), color = if (deleteInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false; deleteInput = "" }) {
-                    Text("Cancel")
+                    Text(stringResource(UtilRes.string.cancel))
                 }
             }
         )
@@ -247,9 +288,9 @@ fun BackupDialog(
 
     M3Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Backup") },
+        title = { Text(stringResource(Res.string.settings_backup_title)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Done") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.done)) }
         }
     ) {
         Column(
@@ -258,15 +299,22 @@ fun BackupDialog(
         ) {
             // Backup count
             ListItem(
-                headlineContent = { Text("Items in backup") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_items)) },
                 supportingContent = {
                     if (backupLoading && backupCount == null) {
-                        Text("Loading...")
+                        Text(stringResource(UtilRes.string.loading))
                     } else {
                         Column {
-                            Text("${backupCount ?: "—"} recordings across all devices")
-                            if (userId != null) {
-                                Text("ID: $userId", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val count = backupCount
+                            Text(
+                                if (count == null) {
+                                    stringResource(Res.string.settings_backup_recordings_count_unknown)
+                                } else {
+                                    pluralStringResource(Res.plurals.settings_backup_recordings_count, count, count)
+                                }
+                            )
+                            userId?.let { id ->
+                                Text(stringResource(Res.string.settings_backup_id, id), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -282,8 +330,8 @@ fun BackupDialog(
             // Backup enabled toggle
             ListItem(
                 modifier = Modifier.clickable { backupViewModel.setBackupEnabled(!backupEnabled) },
-                headlineContent = { Text("Backup enabled") },
-                supportingContent = { Text("Automatically sync recordings to cloud") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_enabled)) },
+                supportingContent = { Text(stringResource(Res.string.settings_backup_enabled_subtitle)) },
                 trailingContent = {
                     Switch(
                         checked = backupEnabled,
@@ -298,9 +346,9 @@ fun BackupDialog(
                 modifier = Modifier.clickable(enabled = !backupDownloading && uiContext != null) {
                     uiContext?.let { backupViewModel.downloadFullBackup(it) }
                 },
-                headlineContent = { Text("Download Full Backup") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_download)) },
                 supportingContent = {
-                    Text(backupDownloadStatus ?: "Download all recordings and data as a zip file")
+                    Text(backupDownloadStatus ?: stringResource(Res.string.settings_backup_download_subtitle))
                 },
                 trailingContent = {
                     if (backupDownloading) {
@@ -340,17 +388,17 @@ fun BackupDialog(
                     showDeleteConfirm = true
                 },
                 headlineContent = {
-                    Text("Delete cloud backup", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(Res.string.settings_backup_delete_cloud), color = MaterialTheme.colorScheme.error)
                 },
                 supportingContent = {
-                    Text(backupStatus ?: "Permanently delete all cloud data")
+                    Text(backupStatus ?: stringResource(Res.string.settings_backup_delete_cloud_subtitle))
                 }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // --- Encryption section ---
             Text(
-                "Encryption",
+                stringResource(Res.string.settings_backup_encryption),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -368,23 +416,23 @@ fun BackupDialog(
                         uiContext?.let { encryptionViewModel.generateAndStoreKey(it) }
                     }
                 },
-                headlineContent = { Text("Generate Encryption Key") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_generate_key)) },
                 supportingContent = {
                     Text(
                         encryptionKeyStatus?.let { AnnotatedString(it) } ?: when (keyStorageStatus) {
                             KeyStorageStatus.KeyLocallyAvailable -> buildAnnotatedString {
-                                append("Key exists")
+                                append(stringResource(Res.string.settings_backup_key_exists))
                                 if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
                                     append(" — tap to regenerate")
                                 }
                             }
                             KeyStorageStatus.KeyGeneratedBefore -> buildAnnotatedString {
-                                append("A key was generated before but isn't on this device — restore it instead")
+                                append(stringResource(Res.string.settings_backup_key_generated_before))
                                 if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
                                     append(", or tap to regenerate")
                                 }
                             }
-                            KeyStorageStatus.NoKeyStored -> AnnotatedString("Create encryption key")
+                            KeyStorageStatus.NoKeyStored -> AnnotatedString(stringResource(Res.string.settings_backup_create_key))
                         }
                     )
                 },
@@ -400,9 +448,9 @@ fun BackupDialog(
                 modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
                     uiContext?.let { encryptionViewModel.readKeyFromCloudKeychain(it) }
                 },
-                headlineContent = { Text("Restore Key from Password Manager") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_restore_key)) },
                 supportingContent = {
-                    Text("Read key from Google Password Manager or iCloud Keychain")
+                    Text(stringResource(Res.string.settings_backup_restore_key_subtitle))
                 }
             )
 
@@ -411,9 +459,9 @@ fun BackupDialog(
                 modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
                     uiContext?.let { encryptionViewModel.importKeyFromQrPhoto(it) }
                 },
-                headlineContent = { Text("Import Key from QR Code") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_import_qr)) },
                 supportingContent = {
-                    Text("Pick your key's QR code from your photos")
+                    Text(stringResource(Res.string.settings_backup_import_qr_subtitle))
                 }
             )
 
@@ -423,9 +471,9 @@ fun BackupDialog(
                     enterKeyInput = ""
                     showEnterKeyDialog = true
                 },
-                headlineContent = { Text("Enter Key Manually") },
+                headlineContent = { Text(stringResource(Res.string.settings_backup_enter_key)) },
                 supportingContent = {
-                    Text("Type or paste your encryption key as text")
+                    Text(stringResource(Res.string.settings_backup_enter_key_subtitle))
                 }
             )
 
@@ -445,13 +493,20 @@ fun BackupDialog(
                         }
                     },
                     headlineContent = {
-                        Text(if (useEncryption) "Disable Encryption" else "Enable Encryption")
+                        Text(
+                            stringResource(
+                                if (useEncryption) Res.string.settings_backup_disable_encryption
+                                else Res.string.settings_backup_enable_encryption
+                            )
+                        )
                     },
                     supportingContent = {
                         Text(
                             encryptionStatus
-                                ?: if (useEncryption) "All new uploads are encrypted"
-                                else "Encrypt all recordings before uploading to cloud"
+                                ?: stringResource(
+                                    if (useEncryption) Res.string.settings_backup_encryption_on
+                                    else Res.string.settings_backup_encryption_off
+                                )
                         )
                     },
                     trailingContent = {

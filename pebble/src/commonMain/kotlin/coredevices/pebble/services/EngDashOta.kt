@@ -8,6 +8,9 @@ import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlin.time.Instant
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.firmware_check_failed
+import org.jetbrains.compose.resources.getString
 
 /**
  * OTA update check against eng-dash (`/ota/latest`), an alternative to Memfault OTA for
@@ -28,10 +31,10 @@ class EngDashOta(
                 } else null
             )
         } catch (e: IllegalStateException) {
-            return FirmwareUpdateCheckResult.UpdateCheckFailed(e.message ?: "Failed to check for PebbleOS update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(e.message ?: getString(Res.string.firmware_check_failed))
         } catch (e: Exception) {
             logger.w(e) { "Error checking for updates from eng-dash: ${e.message}" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_failed))
         }
         if (result == null) {
             logger.i("No new firmware available")
@@ -47,7 +50,7 @@ class EngDashOta(
             isSlot0 = false, // not used from here
         )
         return if (fwVersion == null) {
-            FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
+            FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_failed))
         } else {
             FirmwareUpdateCheckResult.FoundUpdate(
                 version = fwVersion,

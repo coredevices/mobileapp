@@ -26,6 +26,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.web_sign_in_title
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import org.jetbrains.compose.resources.getString
 
 // Android WebViews share one process-global cookie jar, so the sign-in runs in a dedicated WebView
 // profile with its own jar instead. Without multi-profile support the feature is disabled upstream
@@ -41,10 +46,12 @@ internal actual suspend fun performWebSignIn(
     uiContext: PlatformUiContext,
     request: WebSignInRequest,
 ): Map<String, String>? = mutex.withLock {
-    withContext(Dispatchers.Main) { capture(uiContext.activity, request) }
+    val title = getString(Res.string.web_sign_in_title, request.domain)
+    val cancelLabel = getString(UtilRes.string.cancel)
+    withContext(Dispatchers.Main) { capture(uiContext.activity, request, title, cancelLabel) }
 }
 
-private suspend fun capture(activity: Activity, request: WebSignInRequest): Map<String, String>? =
+private suspend fun capture(activity: Activity, request: WebSignInRequest, title: String, cancelLabel: String): Map<String, String>? =
     suspendCancellableCoroutine { cont ->
         var completed = false
         lateinit var view: WebSignInView
@@ -59,7 +66,7 @@ private suspend fun capture(activity: Activity, request: WebSignInRequest): Map<
             if (cont.isActive) cont.resume(value)
         }
 
-        view = WebSignInView(activity, request, onCaptured = { finish(it) }, onCancelled = { finish(null) })
+        view = WebSignInView(activity, request, title, cancelLabel, onCaptured = { finish(it) }, onCancelled = { finish(null) })
         dialog.setContentView(view.rootView)
         dialog.setOnCancelListener { finish(null) }
         dialog.show()
@@ -70,6 +77,8 @@ private suspend fun capture(activity: Activity, request: WebSignInRequest): Map<
 private class WebSignInView(
     private val activity: Activity,
     private val request: WebSignInRequest,
+    private val title: String,
+    private val cancelLabel: String,
     private val onCaptured: (Map<String, String>) -> Unit,
     private val onCancelled: () -> Unit,
 ) {
@@ -141,9 +150,9 @@ private class WebSignInView(
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.WHITE)
             setPadding(24, 16, 24, 16)
-            addView(Button(activity).apply { text = "Cancel"; setOnClickListener { cancel() } })
+            addView(Button(activity).apply { text = cancelLabel; setOnClickListener { cancel() } })
             addView(TextView(activity).apply {
-                text = "Sign in to ${request.domain}"
+                text = title
                 textSize = 16f
                 setTextColor(Color.BLACK)
                 setPadding(24, 0, 0, 0)

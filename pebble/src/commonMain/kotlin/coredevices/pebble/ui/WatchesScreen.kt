@@ -124,6 +124,123 @@ import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.devices
+import coreapp.pebble.generated.resources.watches_about_item
+import coreapp.pebble.generated.resources.watches_add_classic_watch
+import coreapp.pebble.generated.resources.watches_add_index
+import coreapp.pebble.generated.resources.watches_add_pebble
+import coreapp.pebble.generated.resources.watches_add_watch
+import coreapp.pebble.generated.resources.watches_are_you_sure
+import coreapp.pebble.generated.resources.watches_battery
+import coreapp.pebble.generated.resources.watches_battery_life
+import coreapp.pebble.generated.resources.watches_bluetooth_disabled
+import coreapp.pebble.generated.resources.watches_bug_report
+import coreapp.pebble.generated.resources.watches_cant_connect_body
+import coreapp.pebble.generated.resources.watches_cant_connect_title
+import coreapp.pebble.generated.resources.watches_cant_find_index
+import coreapp.pebble.generated.resources.watches_cant_find_watch
+import coreapp.pebble.generated.resources.watches_cant_find_watch_body
+import coreapp.pebble.generated.resources.watches_cdm_crash_hint
+import coreapp.pebble.generated.resources.watches_check_updates
+import coreapp.pebble.generated.resources.watches_checking_updates
+import coreapp.pebble.generated.resources.watches_classic_watch
+import coreapp.pebble.generated.resources.watches_connected_cloudpebble
+import coreapp.pebble.generated.resources.watches_connection_failing
+import coreapp.pebble.generated.resources.watches_dev_connection
+import coreapp.pebble.generated.resources.watches_dev_connection_active
+import coreapp.pebble.generated.resources.watches_dev_connection_failed
+import coreapp.pebble.generated.resources.watches_enable_background_access
+import coreapp.pebble.generated.resources.watches_enable_bluetooth_banner
+import coreapp.pebble.generated.resources.watches_enable_bluetooth_snackbar
+import coreapp.pebble.generated.resources.watches_error_pairing
+import coreapp.pebble.generated.resources.watches_error_pairing_body
+import coreapp.pebble.generated.resources.watches_error_restart_button
+import coreapp.pebble.generated.resources.watches_fab_classic_watch_info
+import coreapp.pebble.generated.resources.watches_fab_watch_info
+import coreapp.pebble.generated.resources.watches_fw_error_download
+import coreapp.pebble.generated.resources.watches_fw_error_parse
+import coreapp.pebble.generated.resources.watches_index_already_paired_body
+import coreapp.pebble.generated.resources.watches_index_already_paired_title
+import coreapp.pebble.generated.resources.watches_index_reset_after_unpair
+import coreapp.pebble.generated.resources.watches_index_unpair_android
+import coreapp.pebble.generated.resources.watches_index_unpair_ios
+import coreapp.pebble.generated.resources.watches_install_pebbleos
+import coreapp.pebble.generated.resources.watches_language
+import coreapp.pebble.generated.resources.watches_language_installed
+import coreapp.pebble.generated.resources.watches_limited_background_access
+import coreapp.pebble.generated.resources.watches_more_options
+import coreapp.pebble.generated.resources.watches_need_more_help
+import coreapp.pebble.generated.resources.watches_no_watches_found
+import coreapp.pebble.generated.resources.watches_open_bt_settings
+import coreapp.pebble.generated.resources.watches_other_apps_installed
+import coreapp.pebble.generated.resources.watches_press_index_button
+import coreapp.pebble.generated.resources.watches_remove_device_title
+import coreapp.pebble.generated.resources.watches_remove_nickname
+import coreapp.pebble.generated.resources.watches_rename
+import coreapp.pebble.generated.resources.watches_restart_body
+import coreapp.pebble.generated.resources.watches_restart_title
+import coreapp.pebble.generated.resources.watches_ring_available_to_pair
+import coreapp.pebble.generated.resources.watches_ring_bluetooth_sync_disabled
+import coreapp.pebble.generated.resources.watches_ring_device_already_paired
+import coreapp.pebble.generated.resources.watches_ring_failsafe_mode
+import coreapp.pebble.generated.resources.watches_ring_ios_step1
+import coreapp.pebble.generated.resources.watches_ring_ios_step2
+import coreapp.pebble.generated.resources.watches_ring_ios_step3
+import coreapp.pebble.generated.resources.watches_ring_ios_step4
+import coreapp.pebble.generated.resources.watches_ring_ios_trouble_pairing
+import coreapp.pebble.generated.resources.watches_ring_pair
+import coreapp.pebble.generated.resources.watches_ring_paired_to_other_phone
+import coreapp.pebble.generated.resources.watches_ring_pairing
+import coreapp.pebble.generated.resources.watches_ring_pairing_failure
+import coreapp.pebble.generated.resources.watches_ring_pairing_issue_detected
+import coreapp.pebble.generated.resources.watches_ring_production_test_mode
+import coreapp.pebble.generated.resources.watches_ring_ready
+import coreapp.pebble.generated.resources.watches_ring_reset_and_retry
+import coreapp.pebble.generated.resources.watches_ring_restore_firmware
+import coreapp.pebble.generated.resources.watches_ring_restoring
+import coreapp.pebble.generated.resources.watches_ring_sync_disabled_body
+import coreapp.pebble.generated.resources.watches_ring_updating
+import coreapp.pebble.generated.resources.watches_scan
+import coreapp.pebble.generated.resources.watches_scan_again
+import coreapp.pebble.generated.resources.watches_scanning_for_devices
+import coreapp.pebble.generated.resources.watches_screenshot
+import coreapp.pebble.generated.resources.watches_serial
+import coreapp.pebble.generated.resources.watches_share
+import coreapp.pebble.generated.resources.watches_sos_pattern
+import coreapp.pebble.generated.resources.watches_sos_success
+import coreapp.pebble.generated.resources.watches_state_connected
+import coreapp.pebble.generated.resources.watches_state_connected_factory
+import coreapp.pebble.generated.resources.watches_state_connecting
+import coreapp.pebble.generated.resources.watches_state_detail
+import coreapp.pebble.generated.resources.watches_state_disconnected
+import coreapp.pebble.generated.resources.watches_state_disconnecting
+import coreapp.pebble.generated.resources.watches_state_downloading_language
+import coreapp.pebble.generated.resources.watches_state_error_starting
+import coreapp.pebble.generated.resources.watches_state_installing_language
+import coreapp.pebble.generated.resources.watches_state_negotiating
+import coreapp.pebble.generated.resources.watches_state_rebooting_after_update
+import coreapp.pebble.generated.resources.watches_state_rebooting_finish
+import coreapp.pebble.generated.resources.watches_state_rebooting_recovery_install
+import coreapp.pebble.generated.resources.watches_state_rebooting_recovery_update
+import coreapp.pebble.generated.resources.watches_state_updating
+import coreapp.pebble.generated.resources.watches_state_updating_progress
+import coreapp.pebble.generated.resources.watches_state_waiting
+import coreapp.pebble.generated.resources.watches_stop_scanning
+import coreapp.pebble.generated.resources.watches_uninstall_other_apps
+import coreapp.pebble.generated.resources.watches_unpair_other_phones
+import coreapp.pebble.generated.resources.watches_update_pebbleos
+import coreapp.pebble.generated.resources.watches_watch
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.close
+import coreapp.util.generated.resources.connect
+import coreapp.util.generated.resources.disconnect
+import coreapp.util.generated.resources.error
+import coreapp.util.generated.resources.install
+import coreapp.util.generated.resources.ok
+import coreapp.util.generated.resources.remove
+import coreapp.util.generated.resources.save
+import org.jetbrains.compose.resources.StringResource
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.libindex.IndexDevices
@@ -318,13 +435,14 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
     }
 
+    val enableBluetoothMessage = stringResource(Res.string.watches_enable_bluetooth_snackbar)
     Scaffold(
         floatingActionButton = {
             if (!bluetoothEnabled.enabled()) {
                 FloatingActionButton(
-                    onClick = { topBarParams.showSnackbar("Enable Bluetooth to connect a Pebble") }
+                    onClick = { topBarParams.showSnackbar(enableBluetoothMessage) }
                 ) {
-                    Icon(Icons.Filled.BluetoothDisabled, "Bluetooth is disabled")
+                    Icon(Icons.Filled.BluetoothDisabled, stringResource(Res.string.watches_bluetooth_disabled))
                 }
             } else if (scanningStatus != ScanningStatus.NotScanning) {
                 FloatingActionButton(
@@ -334,7 +452,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         libIndex.stopScan()
                     }
                 ) {
-                    Icon(Icons.Filled.Stop, "Stop Scanning")
+                    Icon(Icons.Filled.Stop, stringResource(Res.string.watches_stop_scanning))
                 }
             } else {
                 FloatingActionButtonMenu(
@@ -347,7 +465,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         ) {
                             Icon(
                                 imageVector = if (addFabExpanded) Icons.Filled.Close else Icons.Filled.Add,
-                                contentDescription = "Add a Pebble",
+                                contentDescription = stringResource(Res.string.watches_add_pebble),
                                 tint = Color.White,
                             )
                         }
@@ -361,10 +479,10 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 scan(uiContext)
                             }
                         },
-                        icon = { Icon(Icons.Default.Watch, contentDescription = "Watch") },
+                        icon = { Icon(Icons.Default.Watch, contentDescription = stringResource(Res.string.watches_watch)) },
                         text = {
                             FabMenuItemLabel(
-                                text = "Add Watch",
+                                text = stringResource(Res.string.watches_add_watch),
                                 onInfoClick = { fabInfoDialog = FabInfo.Watch },
                             )
                         },
@@ -386,8 +504,8 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 }
                             }
                         },
-                        icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },
-                        text = { Text("Add Index 01") },
+                        icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = stringResource(Res.string.watches_scan)) },
+                        text = { Text(stringResource(Res.string.watches_add_index)) },
                     )
                     if (pebbleFeatures.supportsBtClassic()) {
                         FloatingActionButtonMenuItem(
@@ -397,10 +515,10 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     scanClassic(uiContext)
                                 }
                             },
-                            icon = { Icon(Icons.Default.Watch, contentDescription = "Classic Watch") },
+                            icon = { Icon(Icons.Default.Watch, contentDescription = stringResource(Res.string.watches_classic_watch)) },
                             text = {
                                 FabMenuItemLabel(
-                                    text = "Add Classic Watch",
+                                    text = stringResource(Res.string.watches_add_classic_watch),
                                     onInfoClick = { fabInfoDialog = FabInfo.ClassicWatch },
                                 )
                             },
@@ -476,7 +594,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     ) {
                         Text(
-                            text = "Enable bluetooth to connect to your watch.",
+                            text = stringResource(Res.string.watches_enable_bluetooth_banner),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(15.dp)
@@ -494,8 +612,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     ) {
                         val otherAppNames = otherPebbleAppsInstalled.joinToString { it.name }
                         Text(
-                            text = "One or more other PebbleOS companions apps are installed. Please " +
-                                    "uninstall them ($otherAppNames) to avoid connectivity problems.",
+                            text = stringResource(Res.string.watches_other_apps_installed, otherAppNames),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(15.dp)
@@ -512,8 +629,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     ) {
                         Text(
-                            text = "If the app crashes every time you press Connect, try checking" +
-                                    " \"Disable Companion Device Manager\" in Settings",
+                            text = stringResource(Res.string.watches_cdm_crash_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(15.dp)
@@ -522,11 +638,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
                 if (scanningStatus == ScanningStatus.ScanningRing && !ringPairing) {
                     Text(
-                        text = "Scanning for devices...",
+                        text = stringResource(Res.string.watches_scanning_for_devices),
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
                     Text(
-                        text = "Press the button on your Index 01 to wake it.",
+                        text = stringResource(Res.string.watches_press_index_button),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 16.dp)
@@ -544,7 +660,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             )
                         ) {
                             Text(
-                                text = "Can't find your Index 01? Press the button on the ring to wake it up.",
+                                text = stringResource(Res.string.watches_cant_find_index),
                                 modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
                                 textAlign = TextAlign.Center,
                             )
@@ -562,8 +678,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 )
                             ) {
                                 Text(
-                                    text = "If you have any other Pebble apps installed on your phone, please uninstall them - " +
-                                            "connection to the watch will not work while they are installed.",
+                                    text = stringResource(Res.string.watches_uninstall_other_apps),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(15.dp)
@@ -648,16 +763,16 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     if (showIndexAlreadyPairedDialog) {
         AlertDialog(
             onDismissRequest = { showIndexAlreadyPairedDialog = false },
-            title = { Text("Index 01 already paired") },
+            title = { Text(stringResource(Res.string.watches_index_already_paired_title)) },
             text = {
                 Column {
-                    Text("An Index 01 is already paired to this phone. To pair a different Index 01, first unpair the existing one.")
+                    Text(stringResource(Res.string.watches_index_already_paired_body))
                     if (platform.isIOS) {
-                        Text("To unpair, first remove it from this app using the 3-dot menu, then go to Settings > Bluetooth, find the Index 01 in the list of devices, tap the info icon and choose \"Forget This Device\".")
-                        Text("After unpairing, reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                        Text(stringResource(Res.string.watches_index_unpair_ios))
+                        Text(stringResource(Res.string.watches_index_reset_after_unpair))
                     } else {
-                        Text("To unpair, find the Index 01 in your Bluetooth settings and choose to forget/unpair it.")
-                        Text("After unpairing, reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                        Text(stringResource(Res.string.watches_index_unpair_android))
+                        Text(stringResource(Res.string.watches_index_reset_after_unpair))
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     PressPatternDot(
@@ -666,11 +781,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                     Text(
-                        "Short (3 times) LONG (1 second, 3 times) short (3 times)",
+                        stringResource(Res.string.watches_sos_pattern),
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
                     )
                     Text(
-                        "You'll see the light flash red green blue repeatedly when successful.",
+                        stringResource(Res.string.watches_sos_success),
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
                     )
                     val uriHandler = LocalUriHandler.current
@@ -678,24 +793,24 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) {
-                        Text("Need more help? View detailed instructions")
+                        Text(stringResource(Res.string.watches_need_more_help))
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showIndexAlreadyPairedDialog = false }) { Text("OK") }
+                TextButton(onClick = { showIndexAlreadyPairedDialog = false }) { Text(stringResource(UtilRes.string.ok)) }
             },
         )
     }
     fabInfoDialog?.let { info ->
         M3Dialog(
             onDismissRequest = { fabInfoDialog = null },
-            title = { Text(info.title) },
+            title = { Text(stringResource(info.title)) },
             buttons = {
-                TextButton(onClick = { fabInfoDialog = null }) { Text("Close") }
+                TextButton(onClick = { fabInfoDialog = null }) { Text(stringResource(UtilRes.string.close)) }
             },
         ) {
-            Text(info.body)
+            Text(stringResource(info.body))
         }
     }
 }
@@ -713,18 +828,18 @@ private fun DiscoveredWatchesDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Watch") },
+        title = { Text(stringResource(Res.string.watches_add_watch)) },
         text = {
             Column {
                 Text(
-                    "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
+                    stringResource(Res.string.watches_unpair_other_phones),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(16.dp))
                 if (scanning) {
                     CoreLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else if (watches.isEmpty()) {
-                    Text("No watches found", modifier = Modifier.padding(vertical = 16.dp))
+                    Text(stringResource(Res.string.watches_no_watches_found), modifier = Modifier.padding(vertical = 16.dp))
                 }
                 LazyColumn {
                     items(watches, key = { it.identifier.asString }) { watch ->
@@ -754,26 +869,23 @@ private fun DiscoveredWatchesDialog(
         },
         confirmButton = {
             if (!scanning) {
-                TextButton(onClick = onScanAgain) { Text("Scan again") }
+                TextButton(onClick = onScanAgain) { Text(stringResource(Res.string.watches_scan_again)) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
         },
     )
 }
 
-private enum class FabInfo(val title: String, val body: String) {
+private enum class FabInfo(val title: StringResource, val body: StringResource) {
     Watch(
-        title = "Add Watch",
-        body = "Use this for any modern Pebble that connects over Bluetooth Low Energy:\n\n" +
-                "Pebble Time 2, Core 2 Duo, Pebble Round 2 & Pebble 2.",
+        title = Res.string.watches_add_watch,
+        body = Res.string.watches_fab_watch_info,
     ),
     ClassicWatch(
-        title = "Add Classic Watch",
-        body = "Use this for legacy Pebbles that connect over Bluetooth Classic:\n\n" +
-                "Original Pebble, Pebble Steel, Pebble Time, Pebble Time Steel, and " +
-                "Pebble Time Round.",
+        title = Res.string.watches_add_classic_watch,
+        body = Res.string.watches_fab_classic_watch_info,
     ),
 }
 
@@ -782,7 +894,7 @@ private fun FabMenuItemLabel(text: String, onInfoClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(text)
         IconButton(onClick = onInfoClick) {
-            Icon(Icons.Outlined.Info, contentDescription = "About $text")
+            Icon(Icons.Outlined.Info, contentDescription = stringResource(Res.string.watches_about_item, text))
         }
     }
 }
@@ -894,13 +1006,13 @@ fun RingItem(
         supportingContent = {
             val stateText = when {
                 ring is DiscoveredIndexDevice -> when (ring.currentImage) {
-                    IndexImage.Failsafe -> "Failsafe mode"
-                    IndexImage.ProductionTest -> "Production test mode"
-                    IndexImage.Primary -> "Available to pair"
+                    IndexImage.Failsafe -> stringResource(Res.string.watches_ring_failsafe_mode)
+                    IndexImage.ProductionTest -> stringResource(Res.string.watches_ring_production_test_mode)
+                    IndexImage.Primary -> stringResource(Res.string.watches_ring_available_to_pair)
                 }
-                ring is InterviewedIndexDevice && ring.updating -> "Updating..."
-                coreConfig.disableRingBluetoothSync -> "Bluetooth Sync Disabled"
-                else -> "Ready"
+                ring is InterviewedIndexDevice && ring.updating -> stringResource(Res.string.watches_ring_updating)
+                coreConfig.disableRingBluetoothSync -> stringResource(Res.string.watches_ring_bluetooth_sync_disabled)
+                else -> stringResource(Res.string.watches_ring_ready)
             }
             Column {
                 Text(
@@ -915,7 +1027,7 @@ fun RingItem(
                     is PairableIndexDevice -> {
                         when (ring.pairingState) {
                             is IndexPairingState.Error -> Text(
-                                text = "Pairing failure",
+                                text = stringResource(Res.string.watches_ring_pairing_failure),
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 14.sp,
                                 modifier = Modifier.padding(vertical = 3.dp),
@@ -931,7 +1043,7 @@ fun RingItem(
                                         strokeWidth = 2.dp,
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Pairing...")
+                                    Text(stringResource(Res.string.watches_ring_pairing))
                                 }
                             }
 
@@ -989,7 +1101,7 @@ fun RingItem(
                                 },
                                 modifier = Modifier.padding(top = 5.dp)
                             ) {
-                                Text("Pair")
+                                Text(stringResource(Res.string.watches_ring_pair))
                             }
                         }
                     }
@@ -1014,7 +1126,7 @@ fun RingItem(
                             },
                             modifier = Modifier.padding(top = 5.dp)
                         ) {
-                            Text("Restore firmware")
+                            Text(stringResource(Res.string.watches_ring_restore_firmware))
                         }
                     }
 
@@ -1027,13 +1139,13 @@ fun RingItem(
                     }
 
                     is DiscoveredIndexDevice if ring.currentImage == IndexImage.Failsafe -> {
-                        Text("Restoring - please wait...")
+                        Text(stringResource(Res.string.watches_ring_restoring))
                     }
                     else -> {}
                 }
                 if (ring is KnownIndexDevice && !companionApproved && !coreConfig.disableRingBluetoothSync) {
                     Text(
-                        text = "Limited background access",
+                        text = stringResource(Res.string.watches_limited_background_access),
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(top = 6.dp),
@@ -1049,7 +1161,7 @@ fun RingItem(
                         },
                         modifier = Modifier.padding(top = 5.dp),
                     ) {
-                        Text("Enable background access")
+                        Text(stringResource(Res.string.watches_enable_background_access))
                     }
                 }
             }
@@ -1065,16 +1177,12 @@ fun RingItem(
         M3Dialog(
             onDismissRequest = { showSyncDisabledDialog = false },
             icon = { Icon(Icons.Default.SwitchAccount, null) },
-            title = { Text("Bluetooth Sync Disabled") },
+            title = { Text(stringResource(Res.string.watches_ring_bluetooth_sync_disabled)) },
             buttons = {
-                TextButton(onClick = { showSyncDisabledDialog = false }) { Text("OK") }
+                TextButton(onClick = { showSyncDisabledDialog = false }) { Text(stringResource(UtilRes.string.ok)) }
             },
         ) {
-            Text(
-                "Bluetooth sync is disabled for this profile, so an Index 01 can't be paired here.\n\n" +
-                        "Switch to your primary profile to pair, or if you're not using multiple profiles " +
-                        "on this phone, turn off \"Disable Bluetooth Sync\" in Index settings."
-            )
+            Text(stringResource(Res.string.watches_ring_sync_disabled_body))
         }
     }
 
@@ -1084,15 +1192,15 @@ fun RingItem(
             onDismissRequest = { showRingAlreadyPairedDialog = false },
             title = {
                 if (platform.isIOS) {
-                    Text("Pairing issue detected")
+                    Text(stringResource(Res.string.watches_ring_pairing_issue_detected))
                 } else {
-                    Text("Device already paired")
+                    Text(stringResource(Res.string.watches_ring_device_already_paired))
                 }
             },
             icon = {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = "Error",
+                    contentDescription = stringResource(UtilRes.string.error),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(40.dp)
                 )
@@ -1102,16 +1210,16 @@ fun RingItem(
                     horizontalAlignment = Alignment.Start,
                 ) {
                     if (platform.isIOS) {
-                        Text("This device is having trouble pairing. Please follow the instructions below to recover it:")
+                        Text(stringResource(Res.string.watches_ring_ios_trouble_pairing))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("1. Go to Settings > Bluetooth")
-                        Text("2. Find e.g. 'Pebble Index ABC' in the list of devices")
-                        Text("3. If it's there, tap the info icon and choose \"Forget This Device\". If it's not there, continue.")
-                        Text("4. Reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                        Text(stringResource(Res.string.watches_ring_ios_step1))
+                        Text(stringResource(Res.string.watches_ring_ios_step2))
+                        Text(stringResource(Res.string.watches_ring_ios_step3))
+                        Text(stringResource(Res.string.watches_ring_ios_step4))
                     } else {
-                        Text("This device is already paired to another phone.")
+                        Text(stringResource(Res.string.watches_ring_paired_to_other_phone))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Please reset the ring by pressing the button in an 'SOS' sequence as shown below, then try pairing again.")
+                        Text(stringResource(Res.string.watches_ring_reset_and_retry))
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     PressPatternDot(
@@ -1119,19 +1227,19 @@ fun RingItem(
                         size = 30.dp,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
-                    Text("Short (3 times) LONG (1 second, 3 times) short (3 times)", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
-                    Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                    Text(stringResource(Res.string.watches_sos_pattern), modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                    Text(stringResource(Res.string.watches_sos_success), modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
                     val uriHandler = LocalUriHandler.current
                     TextButton(
                         onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) {
-                        Text("Need more help? View detailed instructions")
+                        Text(stringResource(Res.string.watches_need_more_help))
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showRingAlreadyPairedDialog = false }) { Text("OK") }
+                TextButton(onClick = { showRingAlreadyPairedDialog = false }) { Text(stringResource(UtilRes.string.ok)) }
             },
         )
     }
@@ -1147,7 +1255,7 @@ private fun RingMenu(ring: KnownIndexDevice) {
 
     Box {
         IconButton(onClick = { showMenu = !showMenu }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+            Icon(Icons.Default.MoreVert, contentDescription = stringResource(Res.string.watches_more_options))
         }
         DropdownMenu(
             expanded = showMenu,
@@ -1167,16 +1275,16 @@ private fun RingMenu(ring: KnownIndexDevice) {
     if (showRemoveDialog) {
         AlertDialog(
             onDismissRequest = { showRemoveDialog = false },
-            title = { Text("Remove ${ring.name}?") },
-            text = { Text("Are you sure?") },
+            title = { Text(stringResource(Res.string.watches_remove_device_title, ring.name)) },
+            text = { Text(stringResource(Res.string.watches_are_you_sure)) },
             confirmButton = {
                 TextButton(onClick = {
                     ring.remove()
                     showRemoveDialog = false
-                }) { Text("Remove") }
+                }) { Text(stringResource(UtilRes.string.remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { showRemoveDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showRemoveDialog = false }) { Text(stringResource(UtilRes.string.cancel)) }
             },
         )
     }
@@ -1208,7 +1316,7 @@ private fun NicknameDialog(watch: KnownPebbleDevice, onDismissRequest: () -> Uni
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("Rename") },
+        title = { Text(stringResource(Res.string.watches_rename)) },
         text = {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1232,7 +1340,7 @@ private fun NicknameDialog(watch: KnownPebbleDevice, onDismissRequest: () -> Uni
                                 textFieldValue = TextFieldValue(watch.name)
                             },
                         ) {
-                            Icon(Icons.Default.Cancel, contentDescription = "Remove Nickname")
+                            Icon(Icons.Default.Cancel, contentDescription = stringResource(Res.string.watches_remove_nickname))
                         }
                     }
                 }
@@ -1246,12 +1354,12 @@ private fun NicknameDialog(watch: KnownPebbleDevice, onDismissRequest: () -> Uni
                 },
                 enabled = nickname != watch.nickname
             ) {
-                Text("Save")
+                Text(stringResource(UtilRes.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Back")
+                Text(stringResource(UtilRes.string.back))
             }
         }
     )
@@ -1302,21 +1410,27 @@ fun PebbleDevice.stateText(
     val installingState = when (firmwareUpdateState) {
         is FirmwareUpdater.FirmwareUpdateStatus.InProgress -> {
             val progress by firmwareUpdateState.progress.collectAsState()
-            " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion} (${(progress * 100).toInt()}%)"
+            stringResource(Res.string.watches_state_updating_progress, firmwareUpdateState.update.version.stringVersion, (progress * 100).toInt())
         }
 
-        is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.ErrorStarting -> " - Error starting update: ${firmwareUpdateState.error.message()}"
+        is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.ErrorStarting -> {
+            val error = when (firmwareUpdateState.error) {
+                FirmwareUpdateErrorStarting.ErrorDownloading -> stringResource(Res.string.watches_fw_error_download)
+                FirmwareUpdateErrorStarting.ErrorParsingPbz -> stringResource(Res.string.watches_fw_error_parse)
+            }
+            stringResource(Res.string.watches_state_error_starting, error)
+        }
         is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle -> when (languagePackInstallState) {
-            is LanguagePackInstallState.Installing -> " - installing language pack: ${languagePackInstallState.language}"
-            is LanguagePackInstallState.Idle -> ""
-            is LanguagePackInstallState.Downloading -> " - downloading language pack: ${languagePackInstallState.language}"
+            is LanguagePackInstallState.Installing -> stringResource(Res.string.watches_state_installing_language, languagePackInstallState.language)
+            is LanguagePackInstallState.Idle -> null
+            is LanguagePackInstallState.Downloading -> stringResource(Res.string.watches_state_downloading_language, languagePackInstallState.language)
         }
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> if (firmwareUpdateState.viaPrf) {
-            " - Rebooting watch into recovery to install ${firmwareUpdateState.update.version.stringVersion}"
+            stringResource(Res.string.watches_state_rebooting_recovery_install, firmwareUpdateState.update.version.stringVersion)
         } else {
-            " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
+            stringResource(Res.string.watches_state_rebooting_finish, firmwareUpdateState.update.version.stringVersion)
         }
-        is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion}"
+        is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> stringResource(Res.string.watches_state_updating, firmwareUpdateState.update.version.stringVersion)
     }
     val reversePpogState = when {
         !coreConfig.showWatchConnectionDebugInfo -> ""
@@ -1324,28 +1438,32 @@ fun PebbleDevice.stateText(
         else -> ""
     }
     val stateText = when (this) {
-        is ConnectedPebbleDevice -> "Connected$reversePpogState$installingState"
-        is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$reversePpogState$installingState"
+        is ConnectedPebbleDevice -> withDetail(stringResource(Res.string.watches_state_connected) + reversePpogState, installingState)
+        is ConnectedPebbleDeviceInRecovery -> withDetail(stringResource(Res.string.watches_state_connected_factory) + reversePpogState, installingState)
         is ConnectingPebbleDevice -> {
             val reboot = rebootingForFirmwareUpdate
             val connectingState =
                 when {
                 reboot != null -> {
-                    val rebooting = if (reboot.viaPrf) "Rebooting into recovery to update" else "Rebooting after update"
-                    "$rebooting - ${if (negotiating) "Negotiating" else "Waiting"}"
+                    val rebooting = if (reboot.viaPrf) stringResource(Res.string.watches_state_rebooting_recovery_update) else stringResource(Res.string.watches_state_rebooting_after_update)
+                    withDetail(rebooting, if (negotiating) stringResource(Res.string.watches_state_negotiating) else stringResource(Res.string.watches_state_waiting))
                 }
 
-                negotiating -> "Negotiating"
-                else -> "Connecting"
+                negotiating -> stringResource(Res.string.watches_state_negotiating)
+                else -> stringResource(Res.string.watches_state_connecting)
             }
             "$connectingState$reversePpogState"
         }
 
-        is KnownPebbleDevice, is DiscoveredPebbleDevice -> "Disconnected"
-        is DisconnectingPebbleDevice -> "Disconnecting"
+        is KnownPebbleDevice, is DiscoveredPebbleDevice -> stringResource(Res.string.watches_state_disconnected)
+        is DisconnectingPebbleDevice -> stringResource(Res.string.watches_state_disconnecting)
     }
     return stateText
 }
+
+@Composable
+private fun withDetail(state: String, detail: String?): String =
+    if (detail == null) state else stringResource(Res.string.watches_state_detail, state, detail)
 
 private fun PebbleDevice.reversePpogVersion(): ReversePpogVersion? =
     when (this) {
@@ -1406,7 +1524,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
 
     Box {
         IconButton(onClick = { showMenu = !showMenu }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+            Icon(Icons.Default.MoreVert, contentDescription = stringResource(Res.string.watches_more_options))
         }
         DropdownMenu(
             expanded = showMenu,
@@ -1452,7 +1570,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                     )
 
                     DropdownMenuItem(
-                        text = { Text("Checking for updates...") },
+                        text = { Text(stringResource(Res.string.watches_checking_updates)) },
                         leadingIcon = {
                             Icon(
                                 Icons.Outlined.Autorenew,
@@ -1465,7 +1583,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                     )
                 } else {
                     DropdownMenuItem(
-                        text = { Text("Check for Updates") },
+                        text = { Text(stringResource(Res.string.watches_check_updates)) },
                         leadingIcon = {
                             Icon(Icons.Outlined.Autorenew, contentDescription = null)
                         },
@@ -1482,8 +1600,8 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                 val languagePackRepository: LanguagePackRepository = koinInject()
                 val languagePackInstalled = watch.languagePackInstalled(languagePackRepository)
                 val languageText = when  {
-                    languagePackInstalled.isNullOrBlank() -> "Language"
-                    else -> "Language: $languagePackInstalled"
+                    languagePackInstalled.isNullOrBlank() -> stringResource(Res.string.watches_language)
+                    else -> stringResource(Res.string.watches_language_installed, languagePackInstalled)
                 }
                 DropdownMenuItem(
                     text = { Text(languageText) },
@@ -1500,7 +1618,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                 )
 
                 DropdownMenuItem(
-                    text = { Text("Screenshot") },
+                    text = { Text(stringResource(Res.string.watches_screenshot)) },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.Image,
@@ -1515,7 +1633,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
 
                 if (watch.watchInfo.platform.isCoreDevice()) {
                     DropdownMenuItem(
-                        text = { Text("Battery Life") },
+                        text = { Text(stringResource(Res.string.watches_battery_life)) },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.BatteryFull,
@@ -1533,7 +1651,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
 
             if (watch is KnownPebbleDevice) {
                 DropdownMenuItem(
-                    text = { Text("Rename") },
+                    text = { Text(stringResource(Res.string.watches_rename)) },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.DriveFileRenameOutline,
@@ -1547,7 +1665,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                 )
 
                 DropdownMenuItem(
-                    text = { Text("Remove") },
+                    text = { Text(stringResource(UtilRes.string.remove)) },
                     leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -1566,7 +1684,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                 val active by watch.devConnectionActive.collectAsState()
                 val canUseDevConnection = user?.isAnonymousUser == false || config.watchConfig.lanDevConnection
                 DropdownMenuItem(
-                    text = { Text("Dev Connection") },
+                    text = { Text(stringResource(Res.string.watches_dev_connection)) },
                     leadingIcon = { Icon(Icons.Outlined.DeveloperBoard, contentDescription = null) },
                     trailingIcon = { Switch(
                         checked = active,
@@ -1587,7 +1705,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                 val error by watch.devConnectionError.collectAsState()
                 if (!active && error != null) {
                     Text(
-                        text = "Dev connection failed: $error",
+                        text = stringResource(Res.string.watches_dev_connection_failed, error.toString()),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
@@ -1628,7 +1746,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                                 .fillMaxWidth()
                         ) {
                             Text(
-                                text = "Connected to CloudPebble",
+                                text = stringResource(Res.string.watches_connected_cloudpebble),
                                 style = MaterialTheme.typography.labelMedium,
                             )
                         }
@@ -1784,7 +1902,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         .fillMaxWidth()
                 ) {
                     Text(
-                        text = "Serial: $serial",
+                        text = stringResource(Res.string.watches_serial, serial),
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -1842,19 +1960,19 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
     if (showForgetDialog && watch is KnownPebbleDevice) {
         AlertDialog(
             onDismissRequest = { showForgetDialog = false },
-            title = { Text("Remove ${watch.displayName()}?") },
-            text = { Text("Are you sure?") },
+            title = { Text(stringResource(Res.string.watches_remove_device_title, watch.displayName())) },
+            text = { Text(stringResource(Res.string.watches_are_you_sure)) },
             confirmButton = {
                 TextButton(onClick = {
                     logger.d { "forget: ${watch.identifier}" }
                     watch.forget()
                     showForgetDialog = false
-                }) { Text("Remove") }
+                }) { Text(stringResource(UtilRes.string.remove)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showForgetDialog = false
-                }) { Text("Cancel") }
+                }) { Text(stringResource(UtilRes.string.cancel)) }
             }
         )
     }
@@ -1964,7 +2082,7 @@ private fun NotificationDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
         }
     )
@@ -1989,7 +2107,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("Screenshot") },
+        title = { Text(stringResource(Res.string.watches_screenshot)) },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2014,7 +2132,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
                         val width = height / screenshot.height * screenshot.width
                         Image(
                             bitmap = screenshot,
-                            contentDescription = "Screenshot",
+                            contentDescription = stringResource(Res.string.watches_screenshot),
                             modifier = Modifier.height(height).width(width),
                         )
                     }
@@ -2024,7 +2142,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         PebbleElevatedButton(
-                            text = "Bug Report",
+                            text = stringResource(Res.string.watches_bug_report),
                             onClick = {
                                 nextBugReportContext.nextContext = null
                                 scope.launch {
@@ -2053,7 +2171,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
 
                         val platformShareLauncher = koinInject<PlatformShareLauncher>()
                         PebbleElevatedButton(
-                            text = "Share",
+                            text = stringResource(Res.string.watches_share),
                             onClick = {
                                 platformShareLauncher.shareImage(
                                     screenshot,
@@ -2070,7 +2188,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
         },
         confirmButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Back")
+                Text(stringResource(UtilRes.string.back))
             }
         },
     )
@@ -2166,7 +2284,7 @@ fun WatchDetails(
             if (devConnectionActive) {
                 Icon(
                     imageVector = Icons.Outlined.DeveloperBoard,
-                    contentDescription = "Developer connection active",
+                    contentDescription = stringResource(Res.string.watches_dev_connection_active),
                     modifier = Modifier.size(18.dp).padding(end = 5.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2190,7 +2308,7 @@ fun WatchDetails(
                 ) {
                     Icon(
                         imageVector = batteryLevel.batteryIcon(),
-                        contentDescription = "Battery",
+                        contentDescription = stringResource(Res.string.watches_battery),
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2218,7 +2336,7 @@ fun WatchDetails(
         if (showFirmwareUpdateConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showFirmwareUpdateConfirmDialog = false },
-                title = { Text("Install PebbleOS ${firmwareUpdateAvailable.version.stringVersion}") },
+                title = { Text(stringResource(Res.string.watches_install_pebbleos, firmwareUpdateAvailable.version.stringVersion)) },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Text(firmwareUpdateAvailable.notes)
@@ -2228,20 +2346,20 @@ fun WatchDetails(
                     TextButton(onClick = {
                         showFirmwareUpdateConfirmDialog = false
                         firmwareUpdater.updateFirmware(firmwareUpdateAvailable, FirmwareUpdateTrigger.Ui)
-                    }) { Text("Install") }
+                    }) { Text(stringResource(UtilRes.string.install)) }
                 },
-                dismissButton = { TextButton(onClick = { showFirmwareUpdateConfirmDialog = false }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { showFirmwareUpdateConfirmDialog = false }) { Text(stringResource(UtilRes.string.cancel)) } }
             )
         }
         PebbleElevatedButton(
-            text = "Update PebbleOS",
+            text = stringResource(Res.string.watches_update_pebbleos),
             onClick = {
                 logger.d { "Starting firmware update from watches screen" }
                 showFirmwareUpdateConfirmDialog = true
             },
             enabled = bluetoothState.enabled(),
             icon = Icons.Default.SystemUpdateAlt,
-            contentDescription = "Update PebbleOS",
+            contentDescription = stringResource(Res.string.watches_update_pebbleos),
             primaryColor = true,
             modifier = Modifier.padding(vertical = 5.dp),
         )
@@ -2266,7 +2384,7 @@ fun WatchDetails(
     if (watch is KnownPebbleDevice && !companionApproved && !coreConfig.disableCompanionDeviceManager) {
         val uiContext = rememberUiContext()
         PebbleElevatedButton(
-            text = "Enable background access",
+            text = stringResource(Res.string.watches_enable_background_access),
             onClick = {
                 if (uiContext == null) return@PebbleElevatedButton
                 scope.launch {
@@ -2291,42 +2409,36 @@ fun WatchDetails(
         ConnectionFailureGuidanceButton(
             appContext = appContext,
             pebbleFeatures = pebbleFeatures,
-            buttonText = "Error Pairing",
-            dialogTitle = "Error Pairing",
-            dialogText = "Please go to system bluetooth settings, and unpair this device.",
+            buttonText = stringResource(Res.string.watches_error_pairing),
+            dialogTitle = stringResource(Res.string.watches_error_pairing),
+            dialogText = stringResource(Res.string.watches_error_pairing_body),
         )
     }
     if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.ClassicConnectionFailed && failureInfo.times >= 5) {
         ConnectionFailureGuidanceButton(
             appContext = appContext,
             pebbleFeatures = pebbleFeatures,
-            buttonText = "Connection failing",
-            dialogTitle = "Can't connect to watch",
-            dialogText = "Make sure your watch is powered on and nearby. " +
-                    "If it still won't connect, open Bluetooth settings, " +
-                    "remove (\"Forget\") this watch, and also unpair the phone " +
-                    "in watch settings (Settings > Bluetooth), then accept the new pairing request.",
+            buttonText = stringResource(Res.string.watches_connection_failing),
+            dialogTitle = stringResource(Res.string.watches_cant_connect_title),
+            dialogText = stringResource(Res.string.watches_cant_connect_body),
         )
     }
     if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.PeripheralNotFound && failureInfo.times >= PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS) {
         ConnectionFailureGuidanceButton(
             appContext = appContext,
             pebbleFeatures = pebbleFeatures,
-            buttonText = "Can't find watch",
-            dialogTitle = "Can't find watch",
-            dialogText = "Your phone can't find this watch. Forget it in this app, remove (\"Forget\") it " +
-                    "in your phone's Bluetooth settings, then pair it again.",
+            buttonText = stringResource(Res.string.watches_cant_find_watch),
+            dialogTitle = stringResource(Res.string.watches_cant_find_watch),
+            dialogText = stringResource(Res.string.watches_cant_find_watch_body),
         )
     }
     if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.MalformedConnectivityStatus) {
         ConnectionFailureGuidanceButton(
             appContext = appContext,
             pebbleFeatures = pebbleFeatures,
-            buttonText = "Error Connecting - Restart Your Watch",
-            dialogTitle = "Restart your watch",
-            dialogText = "Your watch needs to be restarted before it can connect. " +
-                    "Press and hold the back button (top-left) for about 15 seconds " +
-                    "until the watch restarts, then try connecting again.",
+            buttonText = stringResource(Res.string.watches_error_restart_button),
+            dialogTitle = stringResource(Res.string.watches_restart_title),
+            dialogText = stringResource(Res.string.watches_restart_body),
             showBluetoothSettingsLink = false,
         )
     }
@@ -2334,7 +2446,7 @@ fun WatchDetails(
         Box(modifier = Modifier.weight(1f)) {
             if (watch is ActiveDevice) {
                 PebbleElevatedButton(
-                    text = "Disconnect",
+                    text = stringResource(UtilRes.string.disconnect),
                     onClick = { watch.disconnect() },
                     enabled = bluetoothState.enabled() && !firmwareUpdateInProgress,
                     primaryColor = false,
@@ -2344,7 +2456,7 @@ fun WatchDetails(
                 val uiContext = rememberUiContext()
                 if (uiContext != null) {
                     PebbleElevatedButton(
-                        text = "Connect",
+                        text = stringResource(UtilRes.string.connect),
                         onClick = {
                             scope.launch {
                                 companionDevice.registerDevice(watch.identifier, uiContext)
@@ -2383,13 +2495,13 @@ private fun ConnectionFailureGuidanceButton(
                     TextButton(onClick = {
                         openSystemBluetoothSettings(appContext)
                         showDialog = false
-                    }) { Text("Open Bluetooth settings") }
+                    }) { Text(stringResource(Res.string.watches_open_bt_settings)) }
                 } else {
-                    TextButton(onClick = { showDialog = false }) { Text("OK") }
+                    TextButton(onClick = { showDialog = false }) { Text(stringResource(UtilRes.string.ok)) }
                 }
             },
             dismissButton = if (canDeepLink) {
-                { TextButton(onClick = { showDialog = false }) { Text("Cancel") } }
+                { TextButton(onClick = { showDialog = false }) { Text(stringResource(UtilRes.string.cancel)) } }
             } else null,
         )
     }

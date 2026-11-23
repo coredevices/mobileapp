@@ -30,6 +30,12 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.misc_app_update_channel_description
+import coreapp.util.generated.resources.misc_app_update_channel_name
+import coreapp.util.generated.resources.misc_app_update_text
+import coreapp.util.generated.resources.misc_app_update_title
+import org.jetbrains.compose.resources.getString
 
 actual data class AppUpdatePlatformContent(
     val androidUpdate: AppUpdateInfo
@@ -111,7 +117,7 @@ class AndroidAppUpdate(
         null
     }
 
-    private fun createNotification(context: Context) {
+    private suspend fun createNotification(context: Context) {
         val playStoreIntent = getPlayStoreMarketIntent(context, context.packageName)
         if (playStoreIntent == null) {
             logger.w { "Failed to create play store intent for notification" }
@@ -131,11 +137,11 @@ class AndroidAppUpdate(
             pendingIntentFlags
         )
 
-        context.createChannel()
+        context.createChannel(getString(Res.string.misc_app_update_channel_name), getString(Res.string.misc_app_update_channel_description))
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Pebble App Update Available")
-            .setContentText("Please update the Pebble app!")
+            .setContentTitle(getString(Res.string.misc_app_update_title))
+            .setContentText(getString(Res.string.misc_app_update_text))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -156,13 +162,13 @@ class AndroidAppUpdate(
         }
     }
 
-    private fun Context.createChannel() {
+    private fun Context.createChannel(name: String, channelDescription: String) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "App Updates",
+            name,
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Pebble App Updates"
+            description = channelDescription
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)

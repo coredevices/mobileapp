@@ -73,6 +73,18 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.dsl.module
 import theme.onboardingScheme
+import androidx.compose.ui.text.buildAnnotatedString
+import coreapp.composeapp.generated.resources.onboarding_connect_pebble
+import coreapp.composeapp.generated.resources.onboarding_device_both
+import coreapp.composeapp.generated.resources.onboarding_device_watch
+import coreapp.composeapp.generated.resources.onboarding_get_started
+import coreapp.composeapp.generated.resources.onboarding_i_have_a
+import coreapp.composeapp.generated.resources.onboarding_sign_in_body
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.ok
+import coreapp.util.generated.resources.sign_in
+import coreapp.util.generated.resources.skip
+import org.jetbrains.compose.resources.stringResource
 
 
 enum class OnboardingStage {
@@ -168,13 +180,13 @@ fun OnboardingScreen(
                     ) {
                         Image(
                             painter = painterResource(Res.drawable.pebble_logo),
-                            contentDescription = "description",
+                            contentDescription = null,
                             colorFilter = ColorFilter.tint(Color.White),
                             modifier = Modifier.height(50.dp),
                         )
                         Spacer(modifier = Modifier.height(15.dp))
                         PebbleElevatedButton(
-                            text = "Get Started",
+                            text = stringResource(Res.string.onboarding_get_started),
                             onClick = {
                                 viewModel.stage.value = OnboardingStage.DeviceSelection
                             },
@@ -190,7 +202,7 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = "I have a:",
+                            text = stringResource(Res.string.onboarding_i_have_a),
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -200,7 +212,7 @@ fun OnboardingScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                         ) {
                             DeviceChoiceCard(
-                                label = "Watch",
+                                label = stringResource(Res.string.onboarding_device_watch),
                                 icon = Icons.Default.Watch,
                                 onClick = {
                                     viewModel.deviceChoice.value = DeviceChoice.Watch
@@ -215,7 +227,7 @@ fun OnboardingScreen(
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         DeviceChoiceCard(
-                            label = "Both",
+                            label = stringResource(Res.string.onboarding_device_both),
                             icon = Icons.Default.Devices,
                             onClick = { chooseIndexDevice(DeviceChoice.Both) },
                         )
@@ -262,7 +274,7 @@ fun OnboardingScreen(
                                 if (warnBeforeFullScreenRequest) {
                                     Spacer(modifier = Modifier.height(10.dp))
                                     PebbleElevatedButton(
-                                        text = "OK",
+                                        text = stringResource(UtilRes.string.ok),
                                         onClick = {
                                             scope.launch {
                                                 requestPermission(
@@ -287,12 +299,12 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = "Sign In",
+                            text = stringResource(UtilRes.string.sign_in),
                             fontSize = 35.sp,
                             modifier = Modifier.padding(bottom = 25.dp),
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("Sign in to backup your Pebble account to backup apps, settings, etc", textAlign = TextAlign.Center)
+                        Text(stringResource(Res.string.onboarding_sign_in_body), textAlign = TextAlign.Center)
                         SignInButtons(
                             onDismiss = { viewModel.stage.value = OnboardingStage.Done },
                             primaryColor = true,
@@ -302,7 +314,7 @@ fun OnboardingScreen(
                         )
                         if (!coreConfig.enableIndex) {
                             PebbleElevatedButton(
-                                text = "Skip",
+                                text = stringResource(UtilRes.string.skip),
                                 onClick = { viewModel.stage.value = OnboardingStage.Done },
                                 primaryColor = true,
                             )
@@ -317,7 +329,7 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         PebbleElevatedButton(
-                            text = "Connect a Pebble!",
+                            text = stringResource(Res.string.onboarding_connect_pebble),
                             onClick = ::exitOnboarding,
                             primaryColor = true,
                         )
@@ -369,6 +381,13 @@ val HighlightStyle = SpanStyle(
     fontStyle = FontStyle.Italic
 )
 
+@Composable
 expect fun Permission.descriptionOnboarding(): AnnotatedString
+
+fun highlighted(text: String, highlight: String): AnnotatedString = buildAnnotatedString {
+    append(text)
+    val start = text.indexOf(highlight)
+    if (start >= 0) addStyle(HighlightStyle, start, start + highlight.length)
+}
 
 const val SHOWN_ONBOARDING = "shown_onboarding"

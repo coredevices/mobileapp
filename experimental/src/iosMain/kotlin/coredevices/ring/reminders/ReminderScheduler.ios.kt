@@ -1,5 +1,10 @@
 package coredevices.ring.reminders
 
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.reminder_notif_at_place
+import coreapp.ring.generated.resources.reminder_notif_done
+import coreapp.ring.generated.resources.reminder_notif_title
+import coreapp.ring.generated.resources.reminder_notif_upcoming
 import coredevices.util.setWatchNotificationActionHandler
 import coredevices.util.sha256
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -33,6 +38,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import org.jetbrains.compose.resources.getString
 
 actual class ReminderScheduler(
     private val libPebble: LibPebble,
@@ -79,7 +85,7 @@ actual class ReminderScheduler(
         // UserNotifications only forward-declares CLRegion, so cinterop sees a different type.
         @Suppress("UNCHECKED_CAST_TO_FORWARD_DECLARATION")
         val trigger = UNLocationNotificationTrigger.triggerWithRegion(region as CLRegion, repeats = true)
-        addNotification(itemId, identifier, title = "Reminder: $placeName", message, trigger)
+        addNotification(itemId, identifier, title = getString(Res.string.reminder_notif_at_place, placeName), message, trigger)
     }
 
     actual suspend fun cancelReminder(itemId: String) {
@@ -112,7 +118,7 @@ actual class ReminderScheduler(
         if (alreadyRegistered) return
         val doneAction = UNNotificationAction.actionWithIdentifier(
             identifier = REMINDER_ACTION_DONE,
-            title = "Done",
+            title = getString(Res.string.reminder_notif_done),
             options = 0u, // background action: marks done without bringing the app to the foreground
         )
         val category = UNNotificationCategory.categoryWithIdentifier(
@@ -140,7 +146,7 @@ actual class ReminderScheduler(
         addNotification(
             itemId,
             identifier,
-            title = if (isPreNotification) "Upcoming reminder" else "Reminder",
+            title = getString(if (isPreNotification) Res.string.reminder_notif_upcoming else Res.string.reminder_notif_title),
             message,
             trigger,
         )

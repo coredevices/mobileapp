@@ -1,5 +1,7 @@
 package coredevices.pebble.ui
 
+import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,5 +25,14 @@ class WatchPrefLayoutTest {
             if (runs.lastOrNull() == group) runs else runs + group
         }
         assertEquals(runs.distinct(), runs, "a group's prefs are split up")
+    }
+
+    @Test
+    fun everyOptionIsLabelled() {
+        val unitSymbols = setOf("km/h", "mph", "m/s", "°C", "°F")
+        val options = EnumWatchPref.entries.flatMap { it.options }.map { it.displayName }.toSet() - unitSymbols
+        assertEquals(emptySet(), options - WATCH_PREF_OPTION_LABELS.keys, "missing from WATCH_PREF_OPTION_LABELS")
+        val presets = RgbColorWatchPref.entries.flatMap { it.presets }.map { it.displayName }.toSet()
+        assertEquals(emptySet(), presets - WATCH_PREF_COLOR_LABELS.keys, "missing from WATCH_PREF_COLOR_LABELS")
     }
 }

@@ -57,6 +57,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.notif_collapse
+import coreapp.pebble.generated.resources.notif_expand
+import coreapp.pebble.generated.resources.notif_sort_options
+import coreapp.pebble.generated.resources.notif_show_system_apps
+import coreapp.pebble.generated.resources.notif_all_apps
+import coreapp.pebble.generated.resources.notif_mute_all
+import coreapp.pebble.generated.resources.notif_enable_all
+import coreapp.pebble.generated.resources.notif_new_app_default
+import coreapp.pebble.generated.resources.notif_app_notified_only
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.done
+import org.jetbrains.compose.resources.stringResource
 
 class NotificationAppsScreenViewModel : ViewModel() {
     val onlyNotified = mutableStateOf(false)
@@ -193,7 +206,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                 }
                             },
                             label = {
-                                Text("Notified only")
+                                Text(stringResource(Res.string.notif_app_notified_only))
                             },
                             selected = viewModel.onlyNotified.value,
                             enabled = notifiedOnlyEnabled,
@@ -201,7 +214,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                 {
                                     Icon(
                                         imageVector = Icons.Filled.Done,
-                                        contentDescription = "Done icon",
+                                        contentDescription = stringResource(UtilRes.string.done),
                                         modifier = Modifier.size(FilterChipDefaults.IconSize)
                                     )
                                 }
@@ -218,12 +231,12 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         Box(modifier = Modifier.padding(horizontal = 4.dp)) {
                             ElevatedFilterChip(
                                 onClick = { filterExpanded.value = !filterExpanded.value },
-                                label = { Text(viewModel.enabledFilter.value.label) },
+                                label = { Text(stringResource(viewModel.enabledFilter.value.label)) },
                                 selected = viewModel.enabledFilter.value != EnabledFilter.All,
                                 trailingIcon = {
                                     Icon(
                                         imageVector = if (filterExpanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = if (filterExpanded.value) "Collapse" else "Expand",
+                                        contentDescription = if (filterExpanded.value) stringResource(Res.string.notif_collapse) else stringResource(Res.string.notif_expand),
                                     )
                                 },
                                 elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
@@ -241,11 +254,11 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                             viewModel.enabledFilter.value = filterOption
                                             filterExpanded.value = false
                                         },
-                                        text = { Text(filterOption.label) },
+                                        text = { Text(stringResource(filterOption.label)) },
                                         leadingIcon = {
                                             if (viewModel.enabledFilter.value == filterOption) Icon(
                                                 imageVector = Icons.Filled.Done,
-                                                contentDescription = "Done"
+                                                contentDescription = stringResource(UtilRes.string.done)
                                             )
                                         }
                                     )
@@ -259,13 +272,13 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                     expanded.value = !expanded.value
                                 },
                                 label = {
-                                    Text(viewModel.sortBy.value.name)
+                                    Text(stringResource(viewModel.sortBy.value.label))
                                 },
                                 selected = false,
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.Sort,
-                                        contentDescription = "Sort Options",
+                                        contentDescription = stringResource(Res.string.notif_sort_options),
                                         modifier = Modifier
                                             .size(FilterChipDefaults.IconSize)
                                             .graphicsLayer {
@@ -277,7 +290,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                 trailingIcon = {
                                     Icon(
                                         imageVector = if (expanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = if (expanded.value) "Collapse" else "Expand",
+                                        contentDescription = if (expanded.value) stringResource(Res.string.notif_collapse) else stringResource(Res.string.notif_expand),
                                     )
                                 },
                                 elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
@@ -303,11 +316,11 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                             }
                                             expanded.value = false
                                         },
-                                        text = { Text(sortOption.name) },
+                                        text = { Text(stringResource(sortOption.label)) },
                                         leadingIcon = {
                                             if (viewModel.sortBy.value == sortOption) Icon(
                                                 imageVector = Icons.Filled.Done,
-                                                contentDescription = "Done"
+                                                contentDescription = stringResource(UtilRes.string.done)
                                             )
                                         }
                                     )
@@ -320,13 +333,13 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                     viewModel.showSystemApps.value =
                                         !viewModel.showSystemApps.value
                                 },
-                                label = { Text("Show system apps") },
+                                label = { Text(stringResource(Res.string.notif_show_system_apps)) },
                                 selected = viewModel.showSystemApps.value,
                                 leadingIcon = if (viewModel.showSystemApps.value) {
                                     {
                                         Icon(
                                             imageVector = Icons.Filled.Done,
-                                            contentDescription = "Done icon",
+                                            contentDescription = stringResource(UtilRes.string.done),
                                             modifier = Modifier.size(FilterChipDefaults.IconSize)
                                         )
                                     }
@@ -349,13 +362,13 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                     ListItem(
                         headlineContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("All Apps", fontSize = 17.sp)
+                                Text(stringResource(Res.string.notif_all_apps), fontSize = 17.sp)
                             }
                         },
                         trailingContent = {
                             Row {
                                 PebbleElevatedButton(
-                                    text = "Mute All",
+                                    text = stringResource(Res.string.notif_mute_all),
                                     onClick = {
                                         libPebble.updateNotificationAppMuteState(
                                             packageName = null,
@@ -366,7 +379,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                     modifier = Modifier.padding(horizontal = 5.dp),
                                 )
                                 PebbleElevatedButton(
-                                    text = "Enable All",
+                                    text = stringResource(Res.string.notif_enable_all),
                                     onClick = {
                                         libPebble.updateNotificationAppMuteState(
                                             packageName = null,
@@ -386,7 +399,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         ListItem(
                             headlineContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("New app default", fontSize = 17.sp)
+                                    Text(stringResource(Res.string.notif_new_app_default), fontSize = 17.sp)
                                 }
                             },
                             trailingContent = {

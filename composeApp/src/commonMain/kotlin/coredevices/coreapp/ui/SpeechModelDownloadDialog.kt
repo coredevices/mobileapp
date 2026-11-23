@@ -30,6 +30,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.speech_download_downloaded
+import coreapp.composeapp.generated.resources.speech_download_downloading
+import coreapp.composeapp.generated.resources.speech_download_model
+import coreapp.composeapp.generated.resources.speech_download_needed
+import coreapp.composeapp.generated.resources.speech_download_not_needed
+import coreapp.composeapp.generated.resources.speech_download_required
+import coreapp.composeapp.generated.resources.speech_download_scheduled
+import coreapp.composeapp.generated.resources.speech_download_with_size
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.close
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Offers to download the on-device speech model the configured engine is missing. Reached via
@@ -46,7 +59,7 @@ fun SpeechModelDownloadDialog(onDismiss: () -> Unit) {
         config.sttConfig.mode.usesLocalCactus() ->
             CactusModelDownloadDialog(config.sttConfig.modelName, onDismiss)
         else -> ModelDownloadDialog(
-            message = "The current speech engine doesn't need a download.",
+            message = stringResource(Res.string.speech_download_not_needed),
             downloadLabel = null,
             progress = null,
             onDownload = {},
@@ -64,7 +77,7 @@ private fun PlatformModelDownloadDialog(spokenLanguage: String?, onDismiss: () -
     }
     ModelDownloadDialog(
         message = platformModelDialogMessage(spokenLanguage, availability, download),
-        downloadLabel = "Download speech model".takeIf { platformModelNeedsDownload(availability, download) },
+        downloadLabel = stringResource(Res.string.speech_download_model).takeIf { platformModelNeedsDownload(availability, download) },
         progress = (download as? ModelDownloadStatus.Downloading)?.progress,
         onDownload = { recognizer.downloadModel(spokenLanguage) },
         onDismiss = onDismiss,
@@ -90,15 +103,13 @@ private fun CactusModelDownloadDialog(modelName: String?, onDismiss: () -> Unit)
     ModelDownloadDialog(
         message = when {
             download is ModelDownloadStatus.Scheduled -> {
-                "The download is scheduled. Make sure you're on a stable non-metered connection for it to begin."
+                stringResource(Res.string.speech_download_scheduled)
             }
-            downloading -> "Downloading the offline speech model. Recordings can't be transcribed " +
-                "on this phone until it finishes."
-            downloaded -> "The offline speech model is downloaded."
-            else -> "To use offline speech recognition, you need to download a model first. " +
-                "Data charges may apply, Wi-Fi is recommended."
+            downloading -> stringResource(Res.string.speech_download_downloading)
+            downloaded -> stringResource(Res.string.speech_download_downloaded)
+            else -> stringResource(Res.string.speech_download_needed)
         },
-        downloadLabel = model?.let { "Download (${it.sizeInMB}MB)" }
+        downloadLabel = model?.let { stringResource(Res.string.speech_download_with_size, it.sizeInMB.toString()) }
             ?.takeUnless { downloading || downloaded || download is ModelDownloadStatus.Scheduled },
         progress = when (val d = download) {
             is ModelDownloadStatus.Downloading -> {
@@ -134,9 +145,9 @@ private fun ModelDownloadDialog(
     M3Dialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.CloudDownload, contentDescription = null) },
-        title = { Text("Download Required") },
+        title = { Text(stringResource(Res.string.speech_download_required)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text(if (downloadLabel == null) "Close" else "Cancel") }
+            TextButton(onClick = onDismiss) { Text(if (downloadLabel == null) stringResource(UtilRes.string.close) else stringResource(UtilRes.string.cancel)) }
             if (downloadLabel != null) {
                 TextButton(onClick = onDownload) { Text(downloadLabel) }
             }

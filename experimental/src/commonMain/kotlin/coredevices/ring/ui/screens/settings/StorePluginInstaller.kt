@@ -9,6 +9,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.sp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_store_plugin_add_failed
+import coreapp.ring.generated.resources.settings_store_plugin_check_connection
+import coreapp.util.generated.resources.ok
 import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.ui.theme.IndexTheme
@@ -16,8 +20,10 @@ import coredevices.ui.M3Dialog
 import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
+import coreapp.util.generated.resources.Res as UtilRes
 
 /**
  * Installs a store plugin picked from a destination sheet: the permission review first, then
@@ -61,11 +67,11 @@ internal class StorePluginInstaller(
         failed?.let { plugin ->
             M3Dialog(
                 onDismissRequest = { failed = null },
-                title = { Text("Couldn't add ${plugin.title}") },
-                buttons = { TextButton(onClick = { failed = null }) { Text("OK") } },
+                title = { Text(stringResource(Res.string.settings_store_plugin_add_failed, plugin.title)) },
+                buttons = { TextButton(onClick = { failed = null }) { Text(stringResource(UtilRes.string.ok)) } },
             ) {
                 Text(
-                    "Check your connection and try again.",
+                    stringResource(Res.string.settings_store_plugin_check_connection),
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                     color = IndexTheme.colors.onSurfaceVariant,

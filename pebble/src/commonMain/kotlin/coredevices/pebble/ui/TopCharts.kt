@@ -63,20 +63,38 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
 import kotlin.coroutines.cancellation.CancellationException
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.top_charts_empty
+import coreapp.pebble.generated.resources.top_charts_hearted_any_time
+import coreapp.pebble.generated.resources.top_charts_hearted_last_30_days
+import coreapp.pebble.generated.resources.top_charts_hearted_last_7_days
+import coreapp.pebble.generated.resources.top_charts_hearted_since_oct_2025
+import coreapp.pebble.generated.resources.top_charts_most_hearted
+import coreapp.pebble.generated.resources.top_charts_most_used
+import coreapp.pebble.generated.resources.top_charts_see_all
+import coreapp.pebble.generated.resources.top_charts_selected
+import coreapp.pebble.generated.resources.top_charts_title
+import coreapp.pebble.generated.resources.top_charts_updated_any_time
+import coreapp.pebble.generated.resources.top_charts_updated_last_30_days
+import coreapp.pebble.generated.resources.top_charts_updated_last_7_days
+import coreapp.pebble.generated.resources.top_charts_updated_since_oct_2025
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.StringResource
 
 private const val TOP_CHART_LIMIT = 50
 private const val TOP_CHART_CAROUSEL_SIZE = 10
 
-enum class TopChartSort(val slug: String, val label: String) {
-    MostUsed("top-used", "Most used"),
-    MostHearted("top-hearted", "Most hearted"),
+enum class TopChartSort(val slug: String, val label: StringResource) {
+    MostUsed("top-used", Res.string.top_charts_most_used),
+    MostHearted("top-hearted", Res.string.top_charts_most_hearted),
 }
 
-enum class TopChartPeriod(val value: String, val label: String) {
-    SinceOct2025("2025-10", "since Oct 2025"),
-    Last30Days("30d", "in the last 30 days"),
-    Last7Days("7d", "in the last 7 days"),
-    AllTime("all", "any time"),
+enum class TopChartPeriod(val value: String, val updatedLabel: StringResource, val heartedLabel: StringResource) {
+    SinceOct2025("2025-10", Res.string.top_charts_updated_since_oct_2025, Res.string.top_charts_hearted_since_oct_2025),
+    Last30Days("30d", Res.string.top_charts_updated_last_30_days, Res.string.top_charts_hearted_last_30_days),
+    Last7Days("7d", Res.string.top_charts_updated_last_7_days, Res.string.top_charts_hearted_last_7_days),
+    AllTime("all", Res.string.top_charts_updated_any_time, Res.string.top_charts_hearted_any_time),
 }
 
 /** Usage is only measured for watchfaces. */
@@ -84,7 +102,8 @@ private fun AppType.topChartSorts(): List<TopChartSort> =
     if (this == AppType.Watchface) TopChartSort.entries else listOf(TopChartSort.MostHearted)
 
 /** Faces are filtered by latest release; apps rank by hearts received in the period. */
-private fun AppType.topChartPeriodVerb(): String = if (this == AppType.Watchface) "Updated" else "Hearted"
+private fun AppType.topChartPeriodLabel(period: TopChartPeriod): StringResource =
+    if (this == AppType.Watchface) period.updatedLabel else period.heartedLabel
 
 data class TopChartSelection(val sort: TopChartSort, val period: TopChartPeriod)
 
@@ -178,13 +197,13 @@ private fun TopChartControls(type: AppType, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (sorts.size > 1) {
-            TopChartDropdown(selection.sort, sorts, { it.label }) {
+            TopChartDropdown(selection.sort, sorts, { stringResource(it.label) }) {
                 viewModel.select(type, selection.copy(sort = it))
             }
         } else {
-            Text(selection.sort.label, color = Color.Gray)
+            Text(stringResource(selection.sort.label), color = Color.Gray)
         }
-        TopChartDropdown(selection.period, TopChartPeriod.entries, { "${type.topChartPeriodVerb()} ${it.label}" }) {
+        TopChartDropdown(selection.period, TopChartPeriod.entries, { stringResource(type.topChartPeriodLabel(it)) }) {
             viewModel.select(type, selection.copy(period = it))
         }
     }
@@ -205,9 +224,9 @@ fun TopChartsSection(
             },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Top Charts", fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
+            Text(stringResource(Res.string.top_charts_title), fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
             Spacer(modifier = Modifier.width(7.dp))
-            Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = "See all")
+            Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = stringResource(Res.string.top_charts_see_all))
         }
         TopChartControls(type, modifier = Modifier.padding(horizontal = 16.dp))
         TopChartContent(apps) { visibleApps ->
@@ -234,7 +253,7 @@ fun TopChartsScreen(
     val sharedViewModel: SharedLockerViewModel = koinInject()
     sharedViewModel.Init()
     LaunchedEffect(Unit) {
-        topBarParams.title("Top Charts")
+        topBarParams.title(getString(Res.string.top_charts_title))
         topBarParams.actions {}
         topBarParams.searchAvailable(null)
     }
@@ -305,7 +324,7 @@ private fun TopChartContent(apps: List<CommonApp>?, content: @Composable (List<C
         }
 
         apps.isEmpty() -> Text(
-            "Nothing here yet",
+            stringResource(Res.string.top_charts_empty),
             color = Color.Gray,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
@@ -348,7 +367,7 @@ private fun RankedWatchfaceCard(
 private fun <T> TopChartDropdown(
     selected: T,
     options: List<T>,
-    label: (T) -> String,
+    label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -368,7 +387,7 @@ private fun <T> TopChartDropdown(
                         expanded = false
                     },
                     leadingIcon = if (option == selected) {
-                        { Icon(Icons.Filled.Done, contentDescription = "Selected") }
+                        { Icon(Icons.Filled.Done, contentDescription = stringResource(Res.string.top_charts_selected)) }
                     } else null,
                 )
             }

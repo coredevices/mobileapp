@@ -21,6 +21,10 @@ import io.rebble.libpebblecommon.connection.AppContext
 import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
 import org.koin.compose.koinInject
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.pairing_forget
+import coreapp.pebble.generated.resources.pairing_remove_in_android_settings
+import org.jetbrains.compose.resources.stringResource
 
 actual fun ImageBitmap.toPngBytes(): ByteArray {
     val out = ByteArrayOutputStream()
@@ -73,7 +77,7 @@ actual fun RemovePairingMenuItem(
     val companionDevice = koinInject<CompanionDevice>()
     val canForget = remember(ring.identifier) { companionDevice.canRemoveBond(ring.identifier) }
     DropdownMenuItem(
-        text = { Text(if (canForget) "Forget" else "Remove in Android settings") },
+        text = { Text(if (canForget) stringResource(Res.string.pairing_forget) else stringResource(Res.string.pairing_remove_in_android_settings)) },
         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
         onClick = {
             if (canForget && companionDevice.removeBond(ring.identifier)) {

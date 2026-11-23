@@ -1,5 +1,7 @@
 package coredevices.util
 
+import kotlinx.datetime.LocalDate
+
 expect fun isLocale24HourFormat(): Boolean
 
 fun formatTimeOfDay(hour: Int, minute: Int, is24Hour: Boolean = isLocale24HourFormat()): String {
@@ -15,3 +17,6 @@ fun formatHourOfDay(hour: Int, is24Hour: Boolean = isLocale24HourFormat()): Stri
 private fun hour12(hour: Int) = if (hour % 12 == 0) 12 else hour % 12
 
 private fun amPm(hour: Int) = if (hour < 12) "AM" else "PM"
+
+/** Formats [date] for the current locale from a CLDR skeleton, e.g. "yMMMd" -> "Mar 4, 2026" / "4 mar 2026". */
+expect fun formatDate(date: LocalDate, skeleton: String): String

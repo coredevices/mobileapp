@@ -66,6 +66,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import org.koin.compose.koinInject
 import kotlin.time.Clock
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.ring_demo_downloading_model
+import coreapp.composeapp.generated.resources.ring_demo_no_action
+import coreapp.composeapp.generated.resources.ring_demo_not_working
+import coreapp.composeapp.generated.resources.ring_demo_open_bug_report
+import coreapp.composeapp.generated.resources.ring_demo_receiving
+import coreapp.composeapp.generated.resources.ring_demo_thinking
+import coreapp.composeapp.generated.resources.ring_demo_too_short
+import coreapp.composeapp.generated.resources.ring_demo_transfer_failed
+import coreapp.composeapp.generated.resources.ring_demo_try_it
+import coreapp.composeapp.generated.resources.ring_demo_wait_download
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun RingDemo(nav: CoreNav) {
@@ -142,14 +154,14 @@ internal fun RingDemo(nav: CoreNav) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Not working? Report a bug",
+                stringResource(Res.string.ring_demo_not_working),
                 fontSize = 11.sp,
                 color = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
             )
             Spacer(Modifier.width(4.dp))
             Icon(
                 Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = "Open bug report",
+                contentDescription = stringResource(Res.string.ring_demo_open_bug_report),
                 modifier = Modifier.size(14.dp),
                 tint = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
             )
@@ -172,7 +184,7 @@ internal fun RingDemo(nav: CoreNav) {
                     val isLocalOnly = coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly
                     if (isLocalOnly && downloadStatus.inProgress) {
                         Text(
-                            "Downloading speech model\u2026",
+                            stringResource(Res.string.ring_demo_downloading_model),
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                         )
@@ -188,7 +200,7 @@ internal fun RingDemo(nav: CoreNav) {
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Please wait for the download to complete before trying.",
+                            stringResource(Res.string.ring_demo_wait_download),
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             color = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
@@ -206,7 +218,7 @@ internal fun RingDemo(nav: CoreNav) {
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Try it out! Hold the button and speak into the ring, then release.",
+                                stringResource(Res.string.ring_demo_try_it),
                                 fontSize = 14.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.weight(1f),
@@ -217,7 +229,7 @@ internal fun RingDemo(nav: CoreNav) {
                 }
 
                 transfer.status == RingTransferStatus.Started -> {
-                    Text("Receiving recording...", fontSize = 14.sp)
+                    Text(stringResource(Res.string.ring_demo_receiving), fontSize = 14.sp)
                     Spacer(Modifier.height(8.dp))
                     val progress = (latestRingEvent as? RingEvent.Transfer.InProgress)
                         ?.takeIf { it.transferId == transfer.id }
@@ -247,7 +259,7 @@ internal fun RingDemo(nav: CoreNav) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Recording too short! Try holding the button a bit longer.",
+                            stringResource(Res.string.ring_demo_too_short),
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.weight(1f),
@@ -263,7 +275,7 @@ internal fun RingDemo(nav: CoreNav) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Transfer failed",
+                        stringResource(Res.string.ring_demo_transfer_failed),
                         color = LocalPalette.current.error,
                         fontSize = 14.sp,
                     )
@@ -319,9 +331,9 @@ internal fun RingDemo(nav: CoreNav) {
                                 feedItem?.semanticResult != null ->
                                     SemanticResultActionTaken(feedItem.semanticResult!!)
                                 entryStatus == RecordingEntryStatus.transcription_error ->
-                                    Text("No action taken")
+                                    Text(stringResource(Res.string.ring_demo_no_action))
                                 else ->
-                                    Text("Thinking...")
+                                    Text(stringResource(Res.string.ring_demo_thinking))
                             }
                         }
                     }

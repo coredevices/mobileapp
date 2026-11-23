@@ -40,6 +40,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.timers_alarms_alarms
+import coreapp.ring.generated.resources.timers_alarms_duration_timer
+import coreapp.ring.generated.resources.timers_alarms_empty
+import coreapp.ring.generated.resources.timers_alarms_timer
+import coreapp.ring.generated.resources.timers_alarms_timer_subtitle
+import coreapp.ring.generated.resources.timers_alarms_timers
+import coreapp.ring.generated.resources.timers_alarms_title
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
 import coredevices.ring.data.entity.room.clock.LocalClockEntry
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.theme.IndexTheme
@@ -48,6 +59,7 @@ import coredevices.ring.ui.viewmodel.formatDuration
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -70,10 +82,10 @@ fun TimersAndAlarms(coreNav: CoreNav) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = coreNav::goBack) {
-                Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
+                Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(UtilRes.string.back), tint = colors.onSurface)
             }
             Text(
-                "Timers & alarms",
+                stringResource(Res.string.timers_alarms_title),
                 color = colors.onSurface,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -91,7 +103,7 @@ fun TimersAndAlarms(coreNav: CoreNav) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "No timers or alarms. Ask your Index to set one.",
+                            stringResource(Res.string.timers_alarms_empty),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                         )
@@ -99,7 +111,7 @@ fun TimersAndAlarms(coreNav: CoreNav) {
                 }
             }
             if (state.timers.isNotEmpty()) {
-                item("timers") { SectionHeader("Timers") }
+                item("timers") { SectionHeader(stringResource(Res.string.timers_alarms_timers)) }
                 items(items = state.timers, key = { it.entry.id }) { row ->
                     ClockRow(
                         glyph = Icons.Outlined.Timer,
@@ -110,7 +122,7 @@ fun TimersAndAlarms(coreNav: CoreNav) {
                 }
             }
             if (state.alarms.isNotEmpty()) {
-                item("alarms") { SectionHeader("Alarms") }
+                item("alarms") { SectionHeader(stringResource(Res.string.timers_alarms_alarms)) }
                 items(items = state.alarms, key = { it.id }) { entry ->
                     ClockRow(
                         glyph = Icons.Outlined.Alarm,
@@ -129,9 +141,9 @@ fun TimersAndAlarms(coreNav: CoreNav) {
 private fun timerSubtitle(entry: LocalClockEntry): String {
     val ends = fireTimeText(entry.fireAt, withDate = false)
     val what = entry.label
-        ?: entry.durationMillis?.let { "${formatDuration(it.milliseconds)} timer" }
-        ?: "Timer"
-    return "$what · Ends $ends"
+        ?: entry.durationMillis?.let { stringResource(Res.string.timers_alarms_duration_timer, formatDuration(it.milliseconds)) }
+        ?: stringResource(Res.string.timers_alarms_timer)
+    return stringResource(Res.string.timers_alarms_timer_subtitle, what, ends)
 }
 
 @Composable
@@ -200,7 +212,7 @@ private fun ClockRow(glyph: ImageVector, primary: String, secondary: String, onC
             }
         }
         IconButton(onClick = onCancel) {
-            Icon(Icons.Default.Close, "Cancel", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.Close, stringResource(UtilRes.string.cancel), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }

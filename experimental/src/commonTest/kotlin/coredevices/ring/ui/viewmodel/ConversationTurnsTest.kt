@@ -2,6 +2,11 @@
 
 package coredevices.ring.ui.viewmodel
 
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.tool_call_reading_sources
+import coreapp.ring.generated.resources.tool_call_read_sources
+import coreapp.ring.generated.resources.tool_call_loading_mcp
+import coreapp.ring.generated.resources.tool_call_loaded_mcp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import coredevices.indexai.data.entity.ConversationMessageDocument
@@ -19,6 +24,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -198,33 +204,20 @@ class ConversationTurnsTest {
 
     @Test
     fun customToolLabels() {
-        assertEquals(ToolCallLabel("Reading data sources", "Read data sources"), toolCallLabel(ReadSourceTool.TOOL_NAME))
-        assertEquals(ToolCallLabel("Loading MCP plugin", "Loaded MCP plugin"), toolCallLabel(LazyLoadingMcpSession.LOAD_TOOLS_NAME))
-        assertEquals(
-            ToolCallLabel("Loading MCP plugin", "Loaded MCP plugin"),
-            toolCallLabel("${LazyLoadingMcpSession.LOADER_INTEGRATION_NAME}__${LazyLoadingMcpSession.LOAD_TOOLS_NAME}"),
-        )
-        assertEquals(ToolCallLabel("Calling search contacts", "Called search contacts"), toolCallLabel("search_contacts"))
-        assertEquals(ToolCallLabel("Calling tool", "Called tool"), toolCallLabel(null))
-    }
-
-    @Test
-    fun groupLabelUsesSingleStepLabelThenCount() {
-        val one = listOf(ToolCallStep("c1", ReadSourceTool.TOOL_NAME, done = false))
-        assertEquals("Reading data sources", toolCallsLabel(one, active = true))
-        assertEquals("Read data sources", toolCallsLabel(one, active = false))
-
-        val many = one + ToolCallStep("c2", "search_contacts", done = true) + ToolCallStep("c3", "get_time", done = false)
-        assertEquals("Calling 3 tools", toolCallsLabel(many, active = true))
-        assertEquals("Called 3 tools", toolCallsLabel(many, active = false))
+        val readSources = Res.string.tool_call_reading_sources to Res.string.tool_call_read_sources
+        val loadMcp = Res.string.tool_call_loading_mcp to Res.string.tool_call_loaded_mcp
+        assertEquals(readSources, customToolCallLabel(ReadSourceTool.TOOL_NAME))
+        assertEquals(loadMcp, customToolCallLabel(LazyLoadingMcpSession.LOAD_TOOLS_NAME))
+        assertEquals(loadMcp, customToolCallLabel("${LazyLoadingMcpSession.LOADER_INTEGRATION_NAME}__${LazyLoadingMcpSession.LOAD_TOOLS_NAME}"))
+        assertNull(customToolCallLabel("search_contacts"))
+        assertNull(customToolCallLabel(null))
     }
 
     @Test
     fun stepSummaryReplacesTheDoneLabel() {
-        val step = ToolCallStep("c1", ReadSourceTool.TOOL_NAME, done = true, summary = "Read weather/location from Weather")
-        assertEquals(ToolCallLabel("Reading data sources", "Read weather/location from Weather"), toolCallLabel(step))
-        assertEquals("Read weather/location from Weather", toolCallsLabel(listOf(step), active = false))
-        assertEquals("Reading data sources", toolCallsLabel(listOf(step), active = true))
+        val label = ToolCallLabel("Reading data sources", "Read data sources")
+        assertEquals(ToolCallLabel("Reading data sources", "Read weather/location from Weather"), label.withSummary("Read weather/location from Weather"))
+        assertEquals(label, label.withSummary(null))
     }
 
     @Test

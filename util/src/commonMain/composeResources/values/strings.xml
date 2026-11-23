@@ -6,4 +6,126 @@
     <string name="dark">Dark</string>
     <string name="black">Black</string>
     <string name="system">System</string>
+
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="save">Save</string>
+    <string name="done">Done</string>
+    <string name="delete">Delete</string>
+    <string name="remove">Remove</string>
+    <string name="search">Search</string>
+    <string name="search_ellipsis">Search…</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="close">Close</string>
+    <string name="retry">Retry</string>
+    <string name="continue_action">Continue</string>
+    <string name="add">Add</string>
+    <string name="select">Select</string>
+    <string name="error">Error</string>
+    <string name="install">Install</string>
+    <string name="download">Download</string>
+    <string name="refresh">Refresh</string>
+    <string name="none">None</string>
+    <string name="sign_in">Sign in</string>
+    <string name="sign_out">Sign out</string>
+    <string name="name">Name</string>
+    <string name="edit">Edit</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="enable">Enable</string>
+    <string name="disable">Disable</string>
+    <string name="next">Next</string>
+    <string name="skip">Skip</string>
+    <string name="loading">Loading…</string>
+    <string name="automatic">Automatic</string>
+
+    <string name="misc_report_a_bug">Report a bug</string>
+
+    <!-- Model download dialog -->
+    <string name="misc_model_download_required">Download Required</string>
+    <string name="misc_model_downloading">Downloading Models</string>
+    <string name="misc_model_download_body">This feature requires downloading additional machine learning models. Please avoid downloading over a metered connection.</string>
+    <string name="misc_model_download_slow">This might take a few minutes on a slow connection...</string>
+
+    <!-- Secondary (work/private) Android profile warning -->
+    <string name="misc_secondary_profile_title">Secondary Profile</string>
+    <string name="misc_secondary_profile_disable_sync">Disable sync</string>
+    <string name="misc_secondary_profile_keep_sync">Keep sync on</string>
+    <!-- %1$s is misc_secondary_profile_body_bold, shown in bold -->
+    <string name="misc_secondary_profile_body">This app is running in a secondary profile on this phone, such as a work profile, Secure Folder, or Private Space. If you already have the app set up in another profile, %1$s\n\nDo you want to disable Bluetooth sync for this profile to avoid conflicts?</string>
+    <string name="misc_secondary_profile_body_bold">this will break communication with your Index 01.</string>
+
+    <!-- Sign in -->
+    <string name="misc_sign_in_unknown_error">Unknown error</string>
+    <string name="misc_sign_in_network_error">Network error during sign in</string>
+    <string name="misc_sign_in_existing_title">Sign in to existing account?</string>
+    <string name="misc_sign_in_existing_body">This account already exists. Signing in will switch to it, and any apps or settings saved as a guest on this device won't carry over.</string>
+    <string name="misc_sign_in_anyway">Sign in anyway</string>
+    <!-- %1$s is a sign-in provider name, e.g. Google -->
+    <string name="misc_sign_in_unavailable">%1$s login disabled within this build</string>
+    <string name="misc_sign_in_google">Sign in with Google</string>
+    <string name="misc_sign_in_apple">Sign in with Apple</string>
+    <string name="misc_sign_in_github">Sign in with GitHub</string>
+
+    <!-- Android app update notification -->
+    <string name="misc_app_update_title">Pebble App Update Available</string>
+    <string name="misc_app_update_text">Please update the Pebble app!</string>
+    <string name="misc_app_update_channel_name">App Updates</string>
+    <string name="misc_app_update_channel_description">Pebble App Updates</string>
+
+    <string name="misc_webview_stopped_responding">The page stopped responding</string>
+
+
+    <!-- Permission names and why the app needs them -->
+    <string name="permission_name_location">Location</string>
+    <string name="permission_name_background_location">Background Location</string>
+    <string name="permission_name_post_notifications">Show Notifications</string>
+    <string name="permission_name_bluetooth">Bluetooth</string>
+    <string name="permission_name_read_call_log">Missed Calls</string>
+    <string name="permission_name_calendar">Calendar</string>
+    <string name="permission_name_contacts">Contacts</string>
+    <string name="permission_name_read_phone_state">Phone Calls</string>
+    <string name="permission_name_read_notifications">Read Notifications</string>
+    <string name="permission_name_record_audio">Record Audio</string>
+    <string name="permission_name_speech_recognizer">Speech Recognizer</string>
+    <string name="permission_name_external_storage">External Storage</string>
+    <string name="permission_name_set_alarms">Set Alarms</string>
+    <string name="permission_name_battery_optimization">Exempt from Battery Optimizations</string>
+    <string name="permission_name_beeper">Access Beeper</string>
+    <string name="permission_name_reminders">Access Reminders</string>
+    <string name="permission_name_alarm_kit">Timers &amp; Alarms</string>
+    <string name="permission_description_location">To power watchfaces using location for e.g. weather</string>
+    <string name="permission_description_background_location">To power watchfaces using location for e.g. weather, while the Pebble app is running in the background</string>
+    <string name="permission_description_post_notifications">Get a notification when there is a new software update for your Pebble and show connection status</string>
+    <string name="permission_description_bluetooth">Connect to your Pebble</string>
+    <string name="permission_description_read_call_log">To access the call log - to show missed calls on the watch</string>
+    <string name="permission_description_calendar">To show calendar events on the watch, and respond to invitations</string>
+    <string name="permission_description_contacts">To show who is calling, and filter notifications by contact</string>
+    <string name="permission_description_read_phone_state">To show phone calls on the watch</string>
+    <string name="permission_description_read_notifications">To display notifications on the watch</string>
+    <string name="permission_description_record_audio">To record manual local notes</string>
+    <string name="permission_description_speech_recognizer">To transcribe recordings on this device</string>
+    <string name="permission_description_external_storage">To store recordings</string>
+    <string name="permission_description_set_alarms">To notify when a reminder is triggered</string>
+    <string name="permission_description_battery_optimization">To handle recordings in the background</string>
+    <string name="permission_description_beeper">To send messages via Beeper</string>
+    <string name="permission_description_reminders">To create reminders</string>
+    <string name="permission_description_alarm_kit">To set timers and alarms</string>
+
+    <string name="relative_time_just_now">just now</string>
+    <plurals name="relative_time_minutes_ago">
+        <item quantity="one">%1$d min ago</item>
+        <item quantity="other">%1$d min ago</item>
+    </plurals>
+    <!-- Short form, e.g. "3h ago" -->
+    <plurals name="relative_time_hours_ago">
+        <item quantity="one">%1$dh ago</item>
+        <item quantity="other">%1$dh ago</item>
+    </plurals>
+    <!-- Short form, e.g. "2d ago" -->
+    <plurals name="relative_time_days_ago">
+        <item quantity="one">%1$dd ago</item>
+        <item quantity="other">%1$dd ago</item>
+    </plurals>
 </resources>

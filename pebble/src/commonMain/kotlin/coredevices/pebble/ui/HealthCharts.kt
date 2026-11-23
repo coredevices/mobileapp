@@ -38,6 +38,14 @@ import coredevices.util.formatHourOfDay
 import coredevices.util.formatTimeOfDay
 import coredevices.util.isLocale24HourFormat
 import io.rebble.libpebblecommon.health.OverlayType
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.health_light_sleep
+import coreapp.pebble.generated.resources.health_awake
+import coreapp.pebble.generated.resources.health_time_and_state
+import coreapp.pebble.generated.resources.health_legend_light
+import coreapp.pebble.generated.resources.health_legend_deep
+import coreapp.pebble.generated.resources.health_deep_sleep
+import org.jetbrains.compose.resources.stringResource
 
 internal val ActivityHeaderColor = Color(0xFF00A982)
 internal val ActivityBgColor = Color(0xFF009579)
@@ -269,7 +277,7 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (scrubTime != null) {
             Text(
-                "$scrubTime · ${if (scrubInSegment?.isDeep == true) "Deep sleep" else if (scrubInSegment != null) "Light sleep" else "Awake"}",
+                stringResource(Res.string.health_time_and_state, scrubTime, stringResource(if (scrubInSegment?.isDeep == true) Res.string.health_deep_sleep else if (scrubInSegment != null) Res.string.health_light_sleep else Res.string.health_awake)),
                 style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f),
             )
             Spacer(Modifier.height(4.dp))
@@ -305,8 +313,8 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(24.dp)) {
-            LegendDot(LightSleepBarColor, "Light ${formatHours(totalH - deepH)}")
-            LegendDot(DeepSleepBarColor, "Deep ${formatHours(deepH)}")
+            LegendDot(LightSleepBarColor, stringResource(Res.string.health_legend_light, formatHours(totalH - deepH)))
+            LegendDot(DeepSleepBarColor, stringResource(Res.string.health_legend_deep, formatHours(deepH)))
         }
     }
 }

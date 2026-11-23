@@ -66,6 +66,23 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.appstore_add_source
+import coreapp.pebble.generated.resources.appstore_add_source_title
+import coreapp.pebble.generated.resources.appstore_couldnt_open_login
+import coreapp.pebble.generated.resources.appstore_delete_source
+import coreapp.pebble.generated.resources.appstore_plugin_collections
+import coreapp.pebble.generated.resources.appstore_refresh_collections
+import coreapp.pebble.generated.resources.appstore_source_url
+import coreapp.pebble.generated.resources.appstore_sources_title
+import coreapp.pebble.generated.resources.appstore_watchapp_collections
+import coreapp.pebble.generated.resources.appstore_watchface_collections
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.add
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.name
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 class AppstoreSettingsScreenViewModel(
     private val sourceDao: AppstoreSourceDao,
@@ -141,10 +158,10 @@ fun AppstoreSettingsScreen(
                     viewModel.updateCollections()
                 },
                 icon = Icons.Filled.Refresh,
-                description = "Refresh Collections",
+                description = stringResource(Res.string.appstore_refresh_collections),
             )
         }
-        topBarParams.title("Appstore Sources")
+        topBarParams.title(getString(Res.string.appstore_sources_title))
     }
 
     AppstoreSettingsScreen(
@@ -158,7 +175,7 @@ fun AppstoreSettingsScreen(
                         parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false
                     }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
                         if (!uriHandler.open(REBBLE_LOGIN_URI)) {
-                            topBarParams.showSnackbar("Couldn't open login page")
+                            topBarParams.showSnackbar(getString(Res.string.appstore_couldnt_open_login))
                         }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
@@ -193,7 +210,7 @@ fun AppstoreSettingsScreen(
                     createSourceOpen = true
                 }
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add Source")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.appstore_add_source))
             }
         }
     ) { insets ->
@@ -261,7 +278,7 @@ fun AppstoreSourceItem(
                                     onRemove(source.id)
                                 }
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete Source")
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.appstore_delete_source))
                             }
                         }
                         Checkbox(
@@ -281,11 +298,13 @@ fun AppstoreSourceItem(
                     collections.forEach { (appType, cols) ->
                         if (cols.isNotEmpty()) {
                             CardGroup(
-                                title = when (appType) {
-                                    AppType.Watchapp -> "Watchapp Collections"
-                                    AppType.Watchface -> "Watchface Collections"
-                                    AppType.Plugin -> "Plugin Collections"
-                                },
+                                title = stringResource(
+                                    when (appType) {
+                                        AppType.Watchapp -> Res.string.appstore_watchapp_collections
+                                        AppType.Watchface -> Res.string.appstore_watchface_collections
+                                        AppType.Plugin -> Res.string.appstore_plugin_collections
+                                    }
+                                ),
                                 items = cols,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             ) { col ->
@@ -342,13 +361,13 @@ fun CreateAppstoreSourceDialog(
             Icon(Icons.Filled.Link, contentDescription = null)
         },
         title = {
-            Text("Add Appstore Source")
+            Text(stringResource(Res.string.appstore_add_source_title))
         },
         buttons = {
             TextButton(
                 onClick = onDismissRequest
             ) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
             TextButton(
                 onClick = {
@@ -356,14 +375,14 @@ fun CreateAppstoreSourceDialog(
                 },
                 enabled = title.isNotBlank() && urlValid
             ) {
-                Text("Add")
+                Text(stringResource(UtilRes.string.add))
             }
         }
     ) {
         Column {
-            TextField(title, onValueChange = { title = it }, label = { Text("Name") })
+            TextField(title, onValueChange = { title = it }, label = { Text(stringResource(UtilRes.string.name)) })
             Spacer(Modifier.height(8.dp))
-            TextField(url, onValueChange = { url = it }, label = { Text("Source URL") })
+            TextField(url, onValueChange = { url = it }, label = { Text(stringResource(Res.string.appstore_source_url)) })
         }
     }
 }

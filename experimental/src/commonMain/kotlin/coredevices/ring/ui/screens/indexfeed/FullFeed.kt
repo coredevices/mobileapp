@@ -95,6 +95,25 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.today
+import coreapp.ring.generated.resources.yesterday
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_index_feed_title
+import coreapp.ring.generated.resources.feed_index_recording
+import coreapp.ring.generated.resources.feed_no_matches
+import coreapp.ring.generated.resources.feed_no_recordings_yet
+import coreapp.ring.generated.resources.feed_no_speech_detected
+import coreapp.ring.generated.resources.feed_processing
+import coreapp.ring.generated.resources.feed_retry_transcription
+import coreapp.ring.generated.resources.feed_transferring
+import coreapp.ring.generated.resources.search
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.search_ellipsis
+import coredevices.util.formatDate
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Chronological recordings stream — pixel-mirror of the JSX prototype's
@@ -208,7 +227,7 @@ fun FullFeed(coreNav: CoreNav) {
             state.entries.forEach { entry ->
                 when (entry) {
                     is FullFeedViewModel.Entry.DayDivider -> stickyHeader(key = entry.uniqueKey) {
-                        DayDivider(entry.label, sticky = true)
+                        DayDivider(dayLabel(entry), sticky = true)
                     }
                     is FullFeedViewModel.Entry.RecordingRow -> item(key = entry.uniqueKey) {
                         ImessageRecordingRow(
@@ -239,7 +258,7 @@ fun FullFeed(coreNav: CoreNav) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (query.isNotBlank()) "No matches." else "No recordings yet.",
+                            stringResource(if (query.isNotBlank()) Res.string.feed_no_matches else Res.string.feed_no_recordings_yet),
                             color = IndexTheme.colors.onSurfaceVariant,
                         )
                     }
@@ -268,17 +287,17 @@ private fun FullFeedTopBar(coreNav: CoreNav, onSearch: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = coreNav::goBack) {
-            Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
+            Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(UtilRes.string.back), tint = colors.onSurface)
         }
         Text(
-            "Index feed",
+            stringResource(Res.string.feed_index_feed_title),
             color = colors.onSurface,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
         )
         IconButton(onClick = onSearch) {
-            Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.Search, stringResource(Res.string.search), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -326,18 +345,18 @@ private fun FeedSearchTopBar(
                     keyboard?.hide()
                 }),
                 decorationBox = { inner ->
-                    if (value.isEmpty()) Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
+                    if (value.isEmpty()) Text(stringResource(UtilRes.string.search_ellipsis), color = colors.onSurfaceVariant, fontSize = 15.sp)
                     inner()
                 },
             )
             if (value.isNotEmpty()) {
                 IconButton(onClick = { onChange("") }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
         Text(
-            "Cancel",
+            stringResource(UtilRes.string.cancel),
             color = colors.primary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
@@ -347,6 +366,14 @@ private fun FeedSearchTopBar(
 }
 
 // ── Day divider (centered, no lines per prototype) ─────────────────────
+
+@Composable
+private fun dayLabel(divider: FullFeedViewModel.Entry.DayDivider): String = when (divider.daysAgo) {
+    0 -> stringResource(Res.string.today)
+    1 -> stringResource(Res.string.yesterday)
+    in 2..6 -> formatDate(divider.day, "EEEE")
+    else -> formatDate(divider.day, "MMMMd")
+}
 
 @Composable
 private fun DayDivider(label: String, sticky: Boolean = false) {
@@ -386,7 +413,7 @@ private fun PendingTransferRow(transfer: RingTransfer) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(
-                if (transfer.status == RingTransferStatus.Completed) "Processing…" else "Transferring…",
+                stringResource(if (transfer.status == RingTransferStatus.Completed) Res.string.feed_processing else Res.string.feed_transferring),
                 color = colors.onPrimary,
                 fontSize = 15.sp,
                 lineHeight = 20.sp,
@@ -420,9 +447,9 @@ private fun ImessageRecordingRow(
             text = transcription.takeIf { it.isNotBlank() }
                 ?: recording.assistantTitle?.takeIf { it.isNotBlank() }
                 ?: if (retryEntry?.errorType == RecordingEntryErrorType.no_speech) {
-                    "No speech detected"
+                    stringResource(Res.string.feed_no_speech_detected)
                 } else {
-                    "Index Recording"
+                    stringResource(Res.string.feed_index_recording)
                 },
             timestamp = recording.localTimestamp,
             revealState = timestampRevealState,
@@ -607,7 +634,7 @@ private fun SwipeRevealRecordingBubble(
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Retry transcription",
+                            contentDescription = stringResource(Res.string.feed_retry_transcription),
                             tint = colors.onPrimary,
                             modifier = Modifier.size(17.dp),
                         )

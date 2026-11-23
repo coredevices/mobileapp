@@ -1,25 +1,25 @@
 package coredevices.coreapp.ui.screens
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.onboarding_ios_background_location
+import coreapp.composeapp.generated.resources.onboarding_ios_background_location_highlight
+import coreapp.composeapp.generated.resources.onboarding_ios_location
+import coreapp.composeapp.generated.resources.onboarding_ios_location_highlight
 import coredevices.util.Permission
 import coredevices.util.description
+import org.jetbrains.compose.resources.stringResource
 
+@Composable
 actual fun Permission.descriptionOnboarding(): AnnotatedString = when (this) {
-    Permission.Location -> buildAnnotatedString {
-        append("Tap ")
-        withStyle(HighlightStyle) {
-            append("Allow While Using App")
-        }
-        append(" to get accurate weather and other info")
+    Permission.Location -> {
+        val highlight = stringResource(Res.string.onboarding_ios_location_highlight)
+        highlighted(stringResource(Res.string.onboarding_ios_location, highlight), highlight)
     }
-    Permission.BackgroundLocation -> buildAnnotatedString {
-        append("Tap ")
-        withStyle(HighlightStyle) {
-            append("Change to Always Allow")
-        }
-        append(" to keep Pebble working correctly while the app is in the background")
+    Permission.BackgroundLocation -> {
+        val highlight = stringResource(Res.string.onboarding_ios_background_location_highlight)
+        highlighted(stringResource(Res.string.onboarding_ios_background_location, highlight), highlight)
     }
     else -> AnnotatedString(description())
 }

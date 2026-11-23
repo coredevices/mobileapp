@@ -2,6 +2,36 @@ package coredevices.ring.service
 
 import CommonRoutes
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.index_notif_action_error
+import coreapp.ring.generated.resources.index_notif_agent_error
+import coreapp.ring.generated.resources.index_notif_alarm_set
+import coreapp.ring.generated.resources.index_notif_answered
+import coreapp.ring.generated.resources.index_notif_assistant_complete
+import coreapp.ring.generated.resources.index_notif_calendar_added
+import coreapp.ring.generated.resources.index_notif_email_to_me
+import coreapp.ring.generated.resources.index_notif_evicted_text
+import coreapp.ring.generated.resources.index_notif_evicted_title
+import coreapp.ring.generated.resources.index_notif_legacy_text
+import coreapp.ring.generated.resources.index_notif_legacy_title
+import coreapp.ring.generated.resources.index_notif_no_audio_text
+import coreapp.ring.generated.resources.index_notif_no_audio_title
+import coreapp.ring.generated.resources.index_notif_pairing_text
+import coreapp.ring.generated.resources.index_notif_pairing_title
+import coreapp.ring.generated.resources.index_notif_recovering_text
+import coreapp.ring.generated.resources.index_notif_recovering_title
+import coreapp.ring.generated.resources.index_notif_reminder_set
+import coreapp.ring.generated.resources.index_notif_send_to
+import coreapp.ring.generated.resources.index_notif_speech_model_pending_text
+import coreapp.ring.generated.resources.index_notif_speech_model_pending_title
+import coreapp.ring.generated.resources.index_notif_speech_model_required_text
+import coreapp.ring.generated.resources.index_notif_speech_model_required_title
+import coreapp.ring.generated.resources.index_notif_timer_set
+import coreapp.ring.generated.resources.index_notif_timer_set_no_duration
+import coreapp.ring.generated.resources.index_notif_transcribe_failed
+import coreapp.ring.generated.resources.index_notif_transfer_failed
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.error
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryErrorType
@@ -67,6 +97,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
+import org.jetbrains.compose.resources.getString
 
 data class GenericNotification(
     val id: Int,
@@ -163,7 +194,7 @@ class IndexNotificationManager(
                 return InflightIndexNotification.Discarded(notifId, timestamp)
             }
             RingTransferStatus.Failed -> {
-                return InflightIndexNotification.Error(notifId, timestamp, "Transfer failed")
+                return InflightIndexNotification.Error(notifId, timestamp, getString(Res.string.index_notif_transfer_failed))
             }
             else -> {} // Continue to process
         }
@@ -183,13 +214,13 @@ class IndexNotificationManager(
                 )
             }
             RecordingEntryStatus.agent_error -> {
-                return InflightIndexNotification.Error(notifId, timestamp, entry.error ?: "Agent processing error")
+                return InflightIndexNotification.Error(notifId, timestamp, entry.error ?: getString(Res.string.index_notif_agent_error))
             }
             RecordingEntryStatus.transcription_error -> {
                 return if (entry.errorType == RecordingEntryErrorType.no_speech) {
                     InflightIndexNotification.NoSpeech(notifId, timestamp)
                 } else {
-                    InflightIndexNotification.Error(notifId, timestamp, "Unable to transcribe Index recording")
+                    InflightIndexNotification.Error(notifId, timestamp, getString(Res.string.index_notif_transcribe_failed))
                 }
             }
             RecordingEntryStatus.completed -> {} // Continue to process
@@ -374,7 +405,7 @@ class IndexNotificationManager(
                                                     if (lastAction.userErrorMessage != null) {
                                                         appendLine(lastAction.userErrorMessage)
                                                     } else {
-                                                        appendLine("Error performing action")
+                                                        appendLine(getString(Res.string.index_notif_action_error))
                                                     }
                                                 }
                                                 is SemanticResult.TaskCreation if (lastAction.deadline != null) -> {
@@ -384,13 +415,13 @@ class IndexNotificationManager(
                                                     val humanDate = UITimeUtil.humanDate(dateTime.date)
                                                     val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
 
-                                                    appendLine("Reminder set for ${humanDate}, ${humanTime}")
+                                                    appendLine(getString(Res.string.index_notif_reminder_set, humanDate, humanTime))
                                                     appendLine()
                                                     appendLine(lastAction.title)
                                                 }
                                                 is SemanticResult.AlarmCreation -> {
                                                     val time = lastAction.fireTime
-                                                    appendLine("Alarm set for ${time.format(UITimeUtil.timeFormat())}")
+                                                    appendLine(getString(Res.string.index_notif_alarm_set, time.format(UITimeUtil.timeFormat())))
                                                 }
                                                 is SemanticResult.CalendarEventCreation -> {
                                                     val dateTime = lastAction.startTime.toLocalDateTime(
@@ -398,7 +429,7 @@ class IndexNotificationManager(
                                                     )
                                                     val humanDate = UITimeUtil.humanDate(dateTime.date)
                                                     val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
-                                                    appendLine("Added to calendar for ${humanDate}, ${humanTime}")
+                                                    appendLine(getString(Res.string.index_notif_calendar_added, humanDate, humanTime))
                                                     appendLine()
                                                     appendLine(lastAction.title)
                                                 }
@@ -406,9 +437,9 @@ class IndexNotificationManager(
                                                     val requested = lastAction.requestedDuration
                                                     val time = lastAction.fireTime.toLocalDateTime(TimeZone.currentSystemDefault())
                                                     if (requested != null) {
-                                                        appendLine("$requested timer set, ending at ${time.time.format(UITimeUtil.timeFormat())}")
+                                                        appendLine(getString(Res.string.index_notif_timer_set, requested.toString(), time.time.format(UITimeUtil.timeFormat())))
                                                     } else {
-                                                        appendLine("Timer set to end at ${time.time.format(UITimeUtil.timeFormat())}")
+                                                        appendLine(getString(Res.string.index_notif_timer_set_no_duration, time.time.format(UITimeUtil.timeFormat())))
                                                     }
                                                 }
                                                 is SemanticResult.MessageSent -> {
@@ -425,9 +456,9 @@ class IndexNotificationManager(
                                     id = notification.id,
                                     title = when {
                                         prefs.debugDetailsEnabled.value -> notification.userText
-                                        notification.answer != null -> "Answered"
+                                        notification.answer != null -> getString(Res.string.index_notif_answered)
                                         else -> notification.actionsTaken.lastOrNull()?.actionText()
-                                            ?: "Assistant complete"
+                                            ?: getString(Res.string.index_notif_assistant_complete)
                                     },
                                     contentText = contentText,
                                     inProgress = null,
@@ -443,15 +474,15 @@ class IndexNotificationManager(
                                         notification.shortcutAction.let { action ->
                                             when (action) {
                                                 NoteShortcutType.SendToMe -> NotificationAction(
-                                                    "Email to me",
+                                                    getString(Res.string.index_notif_email_to_me),
                                                     "pebblecore://index-link/send-to-me?recordingId=${notification.recordingId}"
                                                 )
                                                 is NoteShortcutType.SendToNoteProvider -> NotificationAction(
-                                                    "Send to ${providers.shortcutDestinationTitle(action)}",
+                                                    getString(Res.string.index_notif_send_to, providers.shortcutDestinationTitle(action).orEmpty()),
                                                     "pebblecore://index-link/send-to-note-provider?recordingId=${notification.recordingId}&provider=${action.providerId}"
                                                 )
                                                 is NoteShortcutType.SendToReminderProvider -> NotificationAction(
-                                                    "Send to ${providers.shortcutDestinationTitle(action)}",
+                                                    getString(Res.string.index_notif_send_to, providers.shortcutDestinationTitle(action).orEmpty()),
                                                     "pebblecore://index-link/send-to-reminder-provider?recordingId=${notification.recordingId}&provider=${action.providerId}"
                                                 )
                                             }
@@ -462,8 +493,8 @@ class IndexNotificationManager(
                             is InflightIndexNotification.NoSpeech -> {
                                 GenericNotification(
                                     id = notification.id,
-                                    title = "No audio detected",
-                                    contentText = "No speech was detected in your Index 01 recording.",
+                                    title = getString(Res.string.index_notif_no_audio_title),
+                                    contentText = getString(Res.string.index_notif_no_audio_text),
                                     inProgress = null,
                                     localOnly = false,
                                     deepLink = DEEP_LINK_URI
@@ -472,7 +503,7 @@ class IndexNotificationManager(
                             is InflightIndexNotification.Error -> {
                                 GenericNotification(
                                     id = notification.id,
-                                    title = "Error",
+                                    title = getString(UtilRes.string.error),
                                     contentText = notification.message,
                                     inProgress = null,
                                     localOnly = false,
@@ -630,8 +661,8 @@ class IndexNotificationManager(
                 platformIndexNotificationManager.notify(
                     GenericNotification(
                         id = nextNotificationId(),
-                        title = "Index 01 Pairing Issue",
-                        contentText = "Your Index 01 requires re-pairing to function correctly. Tap for info.",
+                        title = getString(Res.string.index_notif_pairing_title),
+                        contentText = getString(Res.string.index_notif_pairing_text),
                         inProgress = null,
                         localOnly = false,
                         deepLink = RESET_URL
@@ -646,9 +677,8 @@ class IndexNotificationManager(
                 platformIndexNotificationManager.notify(
                     GenericNotification(
                         id = COLLECTIONS_EVICTED_NOTIFICATION_ID,
-                        title = "Some Index 01 recordings were lost",
-                        contentText = "Your Index 01's storage filled up before it could sync with your phone, " +
-                            "so the oldest recordings were overwritten.",
+                        title = getString(Res.string.index_notif_evicted_title),
+                        contentText = getString(Res.string.index_notif_evicted_text),
                         deepLink = FAQ_URL
                     )
                 )
@@ -665,8 +695,8 @@ class IndexNotificationManager(
                         if (it.isFailsafe) {
                             val notif = GenericNotification(
                                 id = notifId,
-                                title = "Recovering your Index 01",
-                                contentText = "Your Index 01 ran into a problem and is being restored.",
+                                title = getString(Res.string.index_notif_recovering_title),
+                                contentText = getString(Res.string.index_notif_recovering_text),
                                 inProgress = NotificationProgress.Indeterminate,
                                 localOnly = true
                             )
@@ -688,27 +718,24 @@ class IndexNotificationManager(
     }
 }
 
-internal fun legacyDestinationNotification(provider: IntegrationProvider): GenericNotification = GenericNotification(
+internal suspend fun legacyDestinationNotification(provider: IntegrationProvider): GenericNotification = GenericNotification(
     id = LEGACY_DESTINATION_NOTIFICATION_ID,
-    title = "${provider.title} needs relinking",
-    contentText = "The built-in ${provider.title} integration will be removed soon. " +
-        "Tap to relink it as a plugin in Index settings.",
+    title = getString(Res.string.index_notif_legacy_title, provider.title),
+    contentText = getString(Res.string.index_notif_legacy_text, provider.title),
     deepLink = RingRoutes.SETTINGS_DEEP_LINK,
 )
 
-internal fun speechModelPromptNotification(prompt: SpeechModelPrompt): GenericNotification = when (prompt) {
+internal suspend fun speechModelPromptNotification(prompt: SpeechModelPrompt): GenericNotification = when (prompt) {
     is SpeechModelPrompt.DownloadRequired -> GenericNotification(
         id = SPEECH_MODEL_PROMPT_NOTIFICATION_ID,
-        title = "Speech model download required",
-        contentText = "Recordings can't be transcribed on this phone until the speech model is " +
-            "downloaded. Tap to download it.",
+        title = getString(Res.string.index_notif_speech_model_required_title),
+        contentText = getString(Res.string.index_notif_speech_model_required_text),
         deepLink = CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK,
     )
     is SpeechModelPrompt.DownloadPending -> GenericNotification(
         id = SPEECH_MODEL_PROMPT_NOTIFICATION_ID,
-        title = "Speech model still downloading",
-        contentText = "Recordings can't be transcribed until the download finishes. Check you " +
-            "aren't on a metered connection, or switch to cloud speech recognition until it completes.",
+        title = getString(Res.string.index_notif_speech_model_pending_title),
+        contentText = getString(Res.string.index_notif_speech_model_pending_text),
         deepLink = CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK,
     )
 }

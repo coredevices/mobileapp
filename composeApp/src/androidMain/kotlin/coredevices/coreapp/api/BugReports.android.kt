@@ -14,8 +14,11 @@ import com.eygraber.uri.toAndroidUri
 import coredevices.coreapp.MainActivity
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler.Companion.asUri
 import coredevices.util.R
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.support_chat_channel_name
+import org.jetbrains.compose.resources.getString
 
-actual fun createNotification(
+actual suspend fun createNotification(
     platformContext: PlatformContext,
     title: String,
     message: String,
@@ -41,10 +44,10 @@ actual fun createNotification(
         getPendingIntent(0, pendingIntentFlags)
     }
 
-    platformContext.context.createChannel()
+    platformContext.context.createChannel(getString(Res.string.support_chat_channel_name))
     val builder = NotificationCompat.Builder(platformContext.context, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_notification)
-        .setContentTitle("Pebble Support message")
+        .setContentTitle(title)
         .setContentText(message)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         .setContentIntent(deepLinkPendingIntent)
@@ -53,13 +56,13 @@ actual fun createNotification(
     manager.notify(NOTIFICATION_ID, builder.build())
 }
 
-private fun Context.createChannel() {
+private fun Context.createChannel(name: String) {
     val channel = NotificationChannel(
         CHANNEL_ID,
-        "Support Chat",
+        name,
         NotificationManager.IMPORTANCE_DEFAULT
     ).apply {
-        description = "Support Chat"
+        description = name
     }
     val manager = getSystemService(NotificationManager::class.java)
     manager.createNotificationChannel(channel)

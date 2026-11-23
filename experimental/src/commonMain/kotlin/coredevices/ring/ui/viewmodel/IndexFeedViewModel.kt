@@ -2,6 +2,9 @@
 
 package coredevices.ring.ui.viewmodel
 
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.index_new_list_name
+import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.LocalRecording
@@ -117,7 +120,7 @@ class IndexFeedViewModel(
     fun newList(onCreated: (String) -> Unit) {
         if (newListJob?.isActive == true) return
         newListJob = viewModelScope.launch(Dispatchers.IO) {
-            val newId = listRepo.createList("New list")
+            val newId = listRepo.createList(getString(Res.string.index_new_list_name))
             withContext(Dispatchers.Main) { onCreated(newId) }
         }
     }

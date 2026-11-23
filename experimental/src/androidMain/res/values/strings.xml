@@ -8,4 +8,13 @@
     <string name="share_target_index_reminder">Index reminder</string>
     <string name="share_to_index_note_done">Note added to Index</string>
     <string name="share_to_index_reminder_done">Reminder added to Index</string>
+    <string name="reminder_notification_done">Done</string>
+    <string name="reminder_notification_channel">Reminders</string>
+    <string name="reminder_notification_upcoming">Upcoming reminder</string>
+    <string name="reminder_notification_at_place">Reminder: %1$s</string>
+    <string name="reminder_notification_title">Reminder</string>
+    <string name="inference_channel_name">Speech Processing</string>
+    <string name="inference_notification_title">Processing speech…</string>
+    <string name="index_transfer_channel_name">Index Recordings</string>
+    <string name="index_action_channel_name">Index Action</string>
 </resources>

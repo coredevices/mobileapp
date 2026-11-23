@@ -28,6 +28,14 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.settings_bottom_bar
+import coreapp.pebble.generated.resources.settings_navbar_in_bar
+import coreapp.pebble.generated.resources.settings_navbar_items_in_bar
+import coreapp.pebble.generated.resources.settings_navbar_reorder
+import coreapp.pebble.generated.resources.settings_navbar_start_on_first
+import coreapp.pebble.generated.resources.settings_navbar_start_on_first_desc
+import coreapp.pebble.generated.resources.settings_navbar_under_more
 import coredevices.pebble.rememberLibPebble
 import coredevices.util.CoreConfigHolder
 import org.jetbrains.compose.resources.stringResource
@@ -38,10 +46,11 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 fun NavBarTabsScreen(topBarParams: TopBarParams) {
+    val screenTitle = stringResource(Res.string.settings_bottom_bar)
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Bottom Bar")
+        topBarParams.title(screenTitle)
     }
     val healthSettings by rememberLibPebble().healthSettings.collectAsState(null)
     val healthEnabled = healthSettings?.trackingEnabled ?: return
@@ -62,16 +71,16 @@ fun NavBarTabsScreen(topBarParams: TopBarParams) {
     }
     val save = { coreConfigHolder.update(coreConfigHolder.config.value.copy(navBarTabs = allTabs.map { it.name })) }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-        item(key = "barHeader") { SectionHeader("In bar") }
+        item(key = "barHeader") { SectionHeader(stringResource(Res.string.settings_navbar_in_bar)) }
         tabItems(barTabs, reorderState, save)
         if (tabs.size > barTabs.size) {
-            item(key = "moreHeader") { SectionHeader("Under More") }
+            item(key = "moreHeader") { SectionHeader(stringResource(Res.string.settings_navbar_under_more)) }
         }
         tabItems(tabs.drop(barTabs.size), reorderState, save)
         item(key = "gap") { Spacer(Modifier.height(16.dp)) }
         item(key = "count") {
             basicSettingsDropdownItem(
-                title = "Items in bar",
+                title = SettingsText(Res.string.settings_navbar_items_in_bar),
                 topLevelType = TopLevelType.Phone,
                 section = Section.Appearance,
                 items = (2..WatchHomeNavTab.MAX_BAR_SLOTS).toList(),
@@ -82,8 +91,8 @@ fun NavBarTabsScreen(topBarParams: TopBarParams) {
         }
         item(key = "startOnFirst") {
             basicSettingsToggleItem(
-                title = "Start on first tab",
-                description = "Otherwise the app opens to the most useful tab for your devices",
+                title = SettingsText(Res.string.settings_navbar_start_on_first),
+                description = SettingsText(Res.string.settings_navbar_start_on_first_desc),
                 topLevelType = TopLevelType.Phone,
                 section = Section.Appearance,
                 checked = coreConfig.startOnFirstNavBarTab,
@@ -130,7 +139,7 @@ private fun LazyListScope.tabItems(
                     trailingContent = {
                         Icon(
                             Icons.Default.DragHandle,
-                            contentDescription = "Reorder",
+                            contentDescription = stringResource(Res.string.settings_navbar_reorder),
                             modifier = Modifier.draggableHandle(onDragStopped = { onDragStopped() }),
                         )
                     },

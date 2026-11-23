@@ -1,5 +1,14 @@
 package coredevices.ring.ui.screens.settings
 
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_actions_capture_type_note
+import coreapp.ring.generated.resources.settings_actions_capture_type_reminder
+import coreapp.ring.generated.resources.settings_destination_hold_to_reconfigure
+import coreapp.ring.generated.resources.settings_destination_not_connected
+import coreapp.ring.generated.resources.settings_actions_grant_actions
+import coreapp.ring.generated.resources.settings_actions_grant_sources
+import coreapp.ring.generated.resources.settings_actions_plugin_actions_count
+import coreapp.ring.generated.resources.settings_actions_plugin_sources_count
 import coredevices.ring.agent.DefaultCaptureType
 import androidx.compose.ui.state.ToggleableState
 import coredevices.ring.agent.IndexAction
@@ -79,8 +88,8 @@ class IndexActionsSectionTest {
 
     @Test
     fun `capture sentence labels follow the capture type`() {
-        assertEquals("note", captureTypeLabel(DefaultCaptureType.Note))
-        assertEquals("reminder", captureTypeLabel(DefaultCaptureType.Reminder))
+        assertEquals(Res.string.settings_actions_capture_type_note, captureTypeLabel(DefaultCaptureType.Note))
+        assertEquals(Res.string.settings_actions_capture_type_reminder, captureTypeLabel(DefaultCaptureType.Reminder))
         assertEquals(
             Notion.title,
             captureDestinationLabel(DefaultCaptureType.Note, Notion, GoogleTasks)
@@ -108,13 +117,6 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `contacts badge pluralises`() {
-        assertEquals("1 contact", contactsBadge(1))
-        assertEquals("2 contacts", contactsBadge(2))
-        assertEquals("0 contacts", contactsBadge(0))
-    }
-
-    @Test
     fun `a destination is configurable once connected with a locker page or its own dialog`() {
         val notion = DestinationItem.Installed(Notion, "Notion", connected = true, hasLockerPage = false)
         val plugin = DestinationItem.Installed(Tasker, "Tasker", connected = true, hasLockerPage = true)
@@ -134,9 +136,9 @@ class IndexActionsSectionTest {
         val inStore = DestinationItem.InStore(StorePlugin(FakePlugin(name = "Things").metadata, configurable = false))
 
         assertNull(connected.rowSubtitle(configurable = false))
-        assertEquals("Hold to reconfigure", connected.rowSubtitle(configurable = true))
-        assertEquals("Not connected", connected.copy(connected = false).rowSubtitle(configurable = false))
-        assertEquals("Not connected", inStore.rowSubtitle(configurable = false))
+        assertEquals(Res.string.settings_destination_hold_to_reconfigure, connected.rowSubtitle(configurable = true))
+        assertEquals(Res.string.settings_destination_not_connected, connected.copy(connected = false).rowSubtitle(configurable = false))
+        assertEquals(Res.string.settings_destination_not_connected, inStore.rowSubtitle(configurable = false))
     }
 
     @Test
@@ -273,13 +275,16 @@ class IndexActionsSectionTest {
 
     @Test
     fun `plugin summary counts each grant`() {
-        assertEquals("2 actions · 1 data source", pluginSummary(plugin()))
-        assertEquals("1 action", pluginSummary(plugin(actions = PluginGrantState(listOf("next"), true), sources = null)))
-        assertEquals(
-            "2 data sources",
-            pluginSummary(plugin(actions = null, sources = PluginGrantState(listOf("a/b", "a/c"), true))),
-        )
-        assertEquals("Use actions", grantLabel(PluginGrant.Actions))
-        assertEquals("Use data sources", grantLabel(PluginGrant.Sources))
+        val actions = Res.plurals.settings_actions_plugin_actions_count
+        val sources = Res.plurals.settings_actions_plugin_sources_count
+        assertEquals(listOf(actions to 2, sources to 1), pluginGrantCounts(plugin()))
+        assertEquals(listOf(actions to 1), pluginGrantCounts(plugin(actions = PluginGrantState(listOf("next"), true), sources = null)))
+        assertEquals(listOf(sources to 2), pluginGrantCounts(plugin(actions = null, sources = PluginGrantState(listOf("a/b", "a/c"), true))))
+    }
+
+    @Test
+    fun `grant labels`() {
+        assertEquals(Res.string.settings_actions_grant_actions, grantLabel(PluginGrant.Actions))
+        assertEquals(Res.string.settings_actions_grant_sources, grantLabel(PluginGrant.Sources))
     }
 }

@@ -34,6 +34,9 @@ import platform.posix.IFF_UP
 import platform.posix.NI_MAXHOST
 import platform.posix.NI_NUMERICHOST
 import platform.posix.getnameinfo
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.remove
+import org.jetbrains.compose.resources.stringResource
 
 actual fun ImageBitmap.toPngBytes(): ByteArray {
     val skiaBitmap = asSkiaBitmap()
@@ -128,7 +131,7 @@ actual fun RemovePairingMenuItem(
     onHideMenu: () -> Unit
 ) {
     DropdownMenuItem(
-        text = { Text("Remove") },
+        text = { Text(stringResource(UtilRes.string.remove)) },
         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
         onClick = {
             onShowRemoveDialog()

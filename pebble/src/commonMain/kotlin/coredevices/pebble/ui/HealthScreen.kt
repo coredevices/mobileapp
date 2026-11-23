@@ -47,6 +47,51 @@ import io.rebble.libpebblecommon.health.HealthTimeRange
 import kotlinx.datetime.LocalDate
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.health_settings
+import coreapp.pebble.generated.resources.health_range_day
+import coreapp.pebble.generated.resources.health_range_week
+import coreapp.pebble.generated.resources.health_range_month
+import coreapp.pebble.generated.resources.health_previous
+import coreapp.pebble.generated.resources.health_typical
+import coreapp.pebble.generated.resources.health_today
+import coreapp.pebble.generated.resources.health_average
+import coreapp.pebble.generated.resources.health_total
+import coreapp.pebble.generated.resources.health_at_time
+import coreapp.pebble.generated.resources.health_daily_avg_at
+import coreapp.pebble.generated.resources.health_steps
+import coreapp.pebble.generated.resources.health_loading
+import coreapp.pebble.generated.resources.health_no_activity
+import coreapp.pebble.generated.resources.health_no_activity_hint
+import coreapp.pebble.generated.resources.health_distance
+import coreapp.pebble.generated.resources.health_calories
+import coreapp.pebble.generated.resources.health_active
+import coreapp.pebble.generated.resources.health_avg_distance
+import coreapp.pebble.generated.resources.health_avg_calories
+import coreapp.pebble.generated.resources.health_avg_active
+import coreapp.pebble.generated.resources.health_sleep
+import coreapp.pebble.generated.resources.health_deep_sleep
+import coreapp.pebble.generated.resources.health_no_sleep
+import coreapp.pebble.generated.resources.health_no_sleep_hint
+import coreapp.pebble.generated.resources.health_avg_deep
+import coreapp.pebble.generated.resources.health_avg_fall_asleep
+import coreapp.pebble.generated.resources.health_avg_wake_up
+import coreapp.pebble.generated.resources.health_minutes_short
+import coreapp.pebble.generated.resources.health_bpm_at
+import coreapp.pebble.generated.resources.health_no_data_at
+import coreapp.pebble.generated.resources.health_latest_bpm
+import coreapp.pebble.generated.resources.health_avg_bpm
+import coreapp.pebble.generated.resources.health_resting_at
+import coreapp.pebble.generated.resources.health_resting
+import coreapp.pebble.generated.resources.health_heart_rate
+import coreapp.pebble.generated.resources.health_no_heart_rate
+import coreapp.pebble.generated.resources.health_no_heart_rate_hint
+import coreapp.pebble.generated.resources.health_no_data_hint
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.next
+import coreapp.pebble.generated.resources.health
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 @Composable
 fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
@@ -59,7 +104,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val hasHrmWatch by vm.hasHrmWatch.collectAsState()
 
     LaunchedEffect(Unit) {
-        topBarParams.title("Health")
+        topBarParams.title(getString(Res.string.health))
         topBarParams.actions {}
         topBarParams.searchAvailable(null)
     }
@@ -89,7 +134,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             ) {
                 Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Health Settings")
+                Text(stringResource(Res.string.health_settings))
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -101,7 +146,7 @@ private fun TimeRangeSelector(sel: HealthTimeRange, onSel: (HealthTimeRange) -> 
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         HealthTimeRange.entries.forEachIndexed { i, r ->
             SegmentedButton(sel == r, { onSel(r) }, SegmentedButtonDefaults.itemShape(i, HealthTimeRange.entries.size),
-                label = { Text(when (r) { HealthTimeRange.Daily -> "Day"; HealthTimeRange.Weekly -> "Week"; HealthTimeRange.Monthly -> "Month" }) })
+                label = { Text(when (r) { HealthTimeRange.Daily -> stringResource(Res.string.health_range_day); HealthTimeRange.Weekly -> stringResource(Res.string.health_range_week); HealthTimeRange.Monthly -> stringResource(Res.string.health_range_month) }) })
         }
     }
 }
@@ -109,10 +154,10 @@ private fun TimeRangeSelector(sel: HealthTimeRange, onSel: (HealthTimeRange) -> 
 @Composable
 private fun DateNavigator(label: String, offset: Int, onBack: () -> Unit, onFwd: () -> Unit) {
     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous") }
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(Res.string.health_previous)) }
         Text(label, style = MaterialTheme.typography.titleSmall)
         IconButton(onClick = onFwd, enabled = offset < 0) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next",
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(UtilRes.string.next),
                 tint = if (offset < 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
         }
     }
@@ -137,7 +182,7 @@ private fun CardHeader(color: Color, cardName: String, label: String, subtitle: 
                 if (typicalValue != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "TYPICAL $typicalValue",
+                        stringResource(Res.string.health_typical, typicalValue),
                         color = TypicalBadgeColor,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -164,9 +209,9 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
     val sl = if (idx != null && idx < st.barLabels.size) st.barLabels[idx] else null
 
     val headerLabel = when (range) {
-        HealthTimeRange.Daily -> "Today"
-        HealthTimeRange.Weekly -> "Average"
-        HealthTimeRange.Monthly -> "Average"
+        HealthTimeRange.Daily -> stringResource(Res.string.health_today)
+        HealthTimeRange.Weekly -> stringResource(Res.string.health_average)
+        HealthTimeRange.Monthly -> stringResource(Res.string.health_average)
     }
     val headerVal = when {
         sv != null && range == HealthTimeRange.Monthly -> "${sv / 7}"
@@ -176,8 +221,8 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
         else -> "${st.averageSteps}"
     }
     val headerSub = when {
-        sl != null && range == HealthTimeRange.Daily -> "at $sl"
-        sl != null && range == HealthTimeRange.Monthly -> "daily avg · $sl"
+        sl != null && range == HealthTimeRange.Daily -> stringResource(Res.string.health_at_time, sl)
+        sl != null && range == HealthTimeRange.Monthly -> stringResource(Res.string.health_daily_avg_at, sl)
         sl != null -> sl
         else -> ""
     }
@@ -193,14 +238,14 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
     HealthCard(ActivityBgColor) {
         CardHeader(
             color = ActivityHeaderColor,
-            cardName = "Steps",
+            cardName = stringResource(Res.string.health_steps),
             label = headerLabel,
             subtitle = headerSub,
             mainValue = if (sessionInfo != null) sessionInfo.label else headerVal,
             typicalValue = typicalStr,
         )
-        if (st.isLoading) { ChartPlaceholder("Loading...", "") }
-        else if (st.barValues.all { it == 0L }) { ChartPlaceholder("No activity data", "Wear your watch to start tracking steps") }
+        if (st.isLoading) { ChartPlaceholder(stringResource(Res.string.health_loading), "") }
+        else if (st.barValues.all { it == 0L }) { ChartPlaceholder(stringResource(Res.string.health_no_activity), stringResource(Res.string.health_no_activity_hint)) }
         else {
             val tm = rememberTextMeasurer()
             if (range == HealthTimeRange.Daily) {
@@ -216,11 +261,11 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
                 }
                 BarChart(st.barValues, st.barLabels, ActivityBarColor, scrub, tm, averageLine = avgLine)
             }
-            val prefix = if (range == HealthTimeRange.Daily) "" else "Avg "
+            val daily = range == HealthTimeRange.Daily
             StatsRow(ActivityBgColor,
-                "${prefix}Distance" to formatDistance(st.totalDistanceM, imperial),
-                "${prefix}Calories" to "${st.totalCaloriesKcal}",
-                "${prefix}Active" to "${st.totalActiveMinutes / 60}:${(st.totalActiveMinutes % 60).toString().padStart(2, '0')}",
+                stringResource(if (daily) Res.string.health_distance else Res.string.health_avg_distance) to formatDistance(st.totalDistanceM, imperial),
+                stringResource(if (daily) Res.string.health_calories else Res.string.health_avg_calories) to "${st.totalCaloriesKcal}",
+                stringResource(if (daily) Res.string.health_active else Res.string.health_avg_active) to "${st.totalActiveMinutes / 60}:${(st.totalActiveMinutes % 60).toString().padStart(2, '0')}",
             )
         }
     }
@@ -235,8 +280,8 @@ private fun SleepCard(st: SleepUiState, range: HealthTimeRange) {
     val dd = scrubEntry?.deepHours ?: st.deepSleepHours
 
     val sleepLabel = when (range) {
-        HealthTimeRange.Daily -> "Total"
-        else -> "Average"
+        HealthTimeRange.Daily -> stringResource(Res.string.health_total)
+        else -> stringResource(Res.string.health_average)
     }
     val sub = scrubEntry?.label ?: ""
     val typicalStr = if (st.typicalSleepHours > 0f) formatHours(st.typicalSleepHours) else null
@@ -244,16 +289,16 @@ private fun SleepCard(st: SleepUiState, range: HealthTimeRange) {
     HealthCard(SleepBgColor) {
         CardHeader(
             color = SleepHeaderColor,
-            cardName = "Sleep",
+            cardName = stringResource(Res.string.health_sleep),
             label = sleepLabel,
             subtitle = sub,
             mainValue = formatHours(dh),
-            secondLabel = "Deep sleep",
+            secondLabel = stringResource(Res.string.health_deep_sleep),
             secondValue = formatHours(dd),
             typicalValue = typicalStr,
         )
-        if (st.isLoading) { ChartPlaceholder("Loading...", "") }
-        else if (st.totalSleepHours == 0f) { ChartPlaceholder("No sleep data", "Wear your watch to bed to track sleep") }
+        if (st.isLoading) { ChartPlaceholder(stringResource(Res.string.health_loading), "") }
+        else if (st.totalSleepHours == 0f) { ChartPlaceholder(stringResource(Res.string.health_no_sleep), stringResource(Res.string.health_no_sleep_hint)) }
         else {
             when (range) {
                 HealthTimeRange.Daily -> DailySleepTimeline(st.segments, st.totalSleepHours, st.deepSleepHours)
@@ -267,9 +312,9 @@ private fun SleepCard(st: SleepUiState, range: HealthTimeRange) {
 @Composable
 private fun SleepStatsRow(st: SleepUiState) {
     Row(Modifier.fillMaxWidth().background(SleepBgColor).padding(horizontal = 16.dp, vertical = 8.dp), Arrangement.SpaceEvenly) {
-        StatItem("Avg Deep", "${st.avgDeepSleepMins}m")
-        if (st.avgFallAsleep.isNotEmpty()) StatItem("Avg Fall Asleep", st.avgFallAsleep)
-        if (st.avgWakeUp.isNotEmpty()) StatItem("Avg Wake Up", st.avgWakeUp)
+        StatItem(stringResource(Res.string.health_avg_deep), stringResource(Res.string.health_minutes_short, st.avgDeepSleepMins))
+        if (st.avgFallAsleep.isNotEmpty()) StatItem(stringResource(Res.string.health_avg_fall_asleep), st.avgFallAsleep)
+        if (st.avgWakeUp.isNotEmpty()) StatItem(stringResource(Res.string.health_avg_wake_up), st.avgWakeUp)
     }
 }
 
@@ -295,18 +340,18 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
 
     val hv = when { sv != null -> "$sv"; st.latestHR != null -> "${st.latestHR}"; st.averageHR != null -> "${st.averageHR}"; else -> "--" }
     val hs = when {
-        sv != null && idx != null -> "bpm at $tStr"
-        idx != null -> "no data at $tStr"
-        st.latestHR != null -> "latest bpm"
-        else -> "avg bpm"
+        sv != null && idx != null -> stringResource(Res.string.health_bpm_at, tStr)
+        idx != null -> stringResource(Res.string.health_no_data_at, tStr)
+        st.latestHR != null -> stringResource(Res.string.health_latest_bpm)
+        else -> stringResource(Res.string.health_avg_bpm)
     }
 
     val rhrIdx = rhrScrub.scrubIndex
         ?.takeIf { range == HealthTimeRange.Weekly && it < st.restingHRSeries.size }
     val rhrValue = if (rhrIdx != null) st.restingHRSeries[rhrIdx] else st.restingHR
     val rhrLabel = when {
-        rhrIdx != null && rhrIdx < st.restingHRLabels.size -> "Resting · ${st.restingHRLabels[rhrIdx]}"
-        rhrValue != null -> "Resting"
+        rhrIdx != null && rhrIdx < st.restingHRLabels.size -> stringResource(Res.string.health_resting_at, st.restingHRLabels[rhrIdx])
+        rhrValue != null -> stringResource(Res.string.health_resting)
         else -> null
     }
     val rhrDisplayValue = when {
@@ -318,15 +363,15 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
     HealthCard(HRBgColor) {
         CardHeader(
             color = HRHeaderColor,
-            cardName = "Heart Rate",
+            cardName = stringResource(Res.string.health_heart_rate),
             label = "",
             subtitle = hs,
             mainValue = hv,
             secondLabel = rhrLabel,
             secondValue = rhrDisplayValue,
         )
-        if (st.isLoading) { ChartPlaceholder("Loading...", "") }
-        else if (st.averageHR == null) { ChartPlaceholder("No heart rate data", "Heart rate is measured automatically by your watch") }
+        if (st.isLoading) { ChartPlaceholder(stringResource(Res.string.health_loading), "") }
+        else if (st.averageHR == null) { ChartPlaceholder(stringResource(Res.string.health_no_heart_rate), stringResource(Res.string.health_no_heart_rate_hint)) }
         else {
             if (range == HealthTimeRange.Daily && st.hrSamples.any { it != null }) {
                 val tm = rememberTextMeasurer(); HRLineChart(st.hrSamples, scrub, tm)
@@ -341,7 +386,7 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
 }
 
 @Composable
-private fun ChartPlaceholder(title: String, subtitle: String = "Wear your watch to start tracking") {
+private fun ChartPlaceholder(title: String, subtitle: String = stringResource(Res.string.health_no_data_hint)) {
     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(title, color = Color.White, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))

@@ -32,6 +32,12 @@ import androidx.compose.ui.unit.dp
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import io.rebble.libpebblecommon.locker.AppType
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_help_dont_show_again
+import coreapp.pebble.generated.resources.plugin_help_intro
+import coreapp.pebble.generated.resources.plugin_help_local
+import coreapp.pebble.generated.resources.plugin_help_title
+import org.jetbrains.compose.resources.stringResource
 
 private const val PLUGINS_HELP_DISMISSED_KEY = "pluginsHelpDismissed"
 
@@ -70,21 +76,18 @@ fun PluginsHelpCard(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     )
                 }
                 Text(
-                    "What are plugins?",
+                    stringResource(Res.string.plugin_help_title),
                     style = MaterialTheme.typography.titleLargeEmphasized,
                 )
             }
+            val intro = stringResource(Res.string.plugin_help_intro)
+            val local = stringResource(Res.string.plugin_help_local)
             Text(
                 buildAnnotatedString {
-                    append(
-                        "Plugins integrate with online services and your phone to provide shortcuts and live " +
-                            "data to watchfaces, apps, and the Index Agent. "
-                    )
+                    append(intro)
+                    append(" ")
                     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                        append(
-                            "All plugins run locally on your phone and connect directly " +
-                                    "to each service, they can only use the permissions you allow."
-                        )
+                        append(local)
                     }
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -94,7 +97,7 @@ fun PluginsHelpCard(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.align(Alignment.End),
             ) {
-                Text("Don't show again")
+                Text(stringResource(Res.string.plugin_help_dont_show_again))
             }
         }
     }

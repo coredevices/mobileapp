@@ -10,6 +10,30 @@ import coredevices.ring.backup.BackupImporter
 import coredevices.ring.backup.BackupManager
 import coredevices.ring.database.Preferences
 import coredevices.util.writeToDownloads
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.backup_vm_backing_up
+import coreapp.ring.generated.resources.backup_vm_backing_up_of_total
+import coreapp.ring.generated.resources.backup_vm_backup_deleted
+import coreapp.ring.generated.resources.backup_vm_backup_failed
+import coreapp.ring.generated.resources.backup_vm_backup_saved
+import coreapp.ring.generated.resources.backup_vm_choose_save_location
+import coreapp.ring.generated.resources.backup_vm_collecting_audio
+import coreapp.ring.generated.resources.backup_vm_delete_failed
+import coreapp.ring.generated.resources.backup_vm_deleting_audio
+import coreapp.ring.generated.resources.backup_vm_deleting_backup
+import coreapp.ring.generated.resources.backup_vm_deleting_documents
+import coreapp.ring.generated.resources.backup_vm_deleting_local_feed
+import coreapp.ring.generated.resources.backup_vm_import_done
+import coreapp.ring.generated.resources.backup_vm_import_done_with_failures
+import coreapp.ring.generated.resources.backup_vm_import_failed
+import coreapp.ring.generated.resources.backup_vm_imported_progress
+import coreapp.ring.generated.resources.backup_vm_importing
+import coreapp.ring.generated.resources.backup_vm_local_feed_deleted
+import coreapp.ring.generated.resources.backup_vm_no_recordings
+import coreapp.ring.generated.resources.backup_vm_reading_backup
+import coreapp.ring.generated.resources.backup_vm_save_failed
+import coreapp.ring.generated.resources.backup_vm_saved_with_skipped
+import coreapp.ring.generated.resources.backup_vm_starting_backup
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +44,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import org.jetbrains.compose.resources.getPluralString
+import org.jetbrains.compose.resources.getString
 
 /** Cloud backup settings plus the full export/import flows. Work is done by [BackupManager] and [BackupImporter]. */
 class BackupViewModel(
@@ -79,19 +105,19 @@ class BackupViewModel(
     fun deleteBackup() {
         appScope.launch {
             _backupLoading.value = true
-            _backupStatus.value = "Deleting backup..."
+            _backupStatus.value = getString(Res.string.backup_vm_deleting_backup)
             try {
                 backupManager.deleteCloudBackup { progress ->
                     _backupStatus.value = when (progress) {
-                        BackupDeleteProgress.CollectingAudio -> "Collecting audio files..."
-                        BackupDeleteProgress.DeletingDocuments -> "Deleting documents..."
-                        is BackupDeleteProgress.DeletingAudio -> "Deleting ${progress.count} audio files..."
+                        BackupDeleteProgress.CollectingAudio -> getString(Res.string.backup_vm_collecting_audio)
+                        BackupDeleteProgress.DeletingDocuments -> getString(Res.string.backup_vm_deleting_documents)
+                        is BackupDeleteProgress.DeletingAudio -> getPluralString(Res.plurals.backup_vm_deleting_audio, progress.count, progress.count)
                     }
                 }
-                _backupStatus.value = "Backup deleted"
+                _backupStatus.value = getString(Res.string.backup_vm_backup_deleted)
             } catch (e: Exception) {
                 logger.e(e) { "Failed to delete backup" }
-                _backupStatus.value = "Delete failed: ${e.message}"
+                _backupStatus.value = getString(Res.string.backup_vm_delete_failed, e.message.toString())
             } finally {
                 _backupLoading.value = false
             }
@@ -101,13 +127,13 @@ class BackupViewModel(
     fun deleteLocalFeed() {
         appScope.launch {
             _backupLoading.value = true
-            _backupStatus.value = "Deleting local feed..."
+            _backupStatus.value = getString(Res.string.backup_vm_deleting_local_feed)
             try {
                 backupManager.deleteLocalFeed()
-                _backupStatus.value = "Local feed deleted"
+                _backupStatus.value = getString(Res.string.backup_vm_local_feed_deleted)
             } catch (e: Exception) {
                 logger.e(e) { "Failed to delete local feed" }
-                _backupStatus.value = "Delete failed: ${e.message}"
+                _backupStatus.value = getString(Res.string.backup_vm_delete_failed, e.message.toString())
             } finally {
                 _backupLoading.value = false
             }
@@ -118,31 +144,35 @@ class BackupViewModel(
         if (_backupDownloading.value) return
         viewModelScope.launch {
             _backupDownloading.value = true
-            _backupDownloadStatus.value = "Starting backup..."
+            _backupDownloadStatus.value = getString(Res.string.backup_vm_starting_backup)
             var zipPath: Path? = null
             try {
                 val exported = backupManager.exportAll { done, total ->
-                    _backupDownloadStatus.value = "Backing up $done${total?.let { "/$it" } ?: ""}..."
+                    _backupDownloadStatus.value = if (total != null) {
+                        getString(Res.string.backup_vm_backing_up_of_total, done, total)
+                    } else {
+                        getString(Res.string.backup_vm_backing_up, done)
+                    }
                 }
                 zipPath = exported.zipPath
                 if (exported.recordings == 0) {
-                    _backupDownloadStatus.value = "No recordings to backup"
+                    _backupDownloadStatus.value = getString(Res.string.backup_vm_no_recordings)
                     return@launch
                 }
-                _backupDownloadStatus.value = "Choose save location..."
+                _backupDownloadStatus.value = getString(Res.string.backup_vm_choose_save_location)
                 try {
                     writeToDownloads(uiContext, exported.zipPath, "application/zip")
                     _backupDownloadStatus.value = if (exported.decryptSkipped > 0) {
-                        "Backup saved — ${exported.decryptSkipped} recordings skipped (key mismatch). Restore the original key and retry."
+                        getPluralString(Res.plurals.backup_vm_saved_with_skipped, exported.decryptSkipped, exported.decryptSkipped)
                     } else {
-                        "Backup saved"
+                        getString(Res.string.backup_vm_backup_saved)
                     }
                 } catch (e: Exception) {
-                    _backupDownloadStatus.value = "Backup created but save failed: ${e.message}"
+                    _backupDownloadStatus.value = getString(Res.string.backup_vm_save_failed, e.message.toString())
                 }
             } catch (e: Exception) {
                 logger.e(e) { "Backup failed" }
-                _backupDownloadStatus.value = "Backup failed: ${e.message}"
+                _backupDownloadStatus.value = getString(Res.string.backup_vm_backup_failed, e.message.toString())
             } finally {
                 zipPath?.let { runCatching { SystemFileSystem.delete(it, mustExist = false) } }
                 _backupDownloading.value = false
@@ -154,23 +184,23 @@ class BackupViewModel(
         if (_importing.value) return
         viewModelScope.launch {
             _importing.value = true
-            _importStatus.value = "Reading backup..."
+            _importStatus.value = getString(Res.string.backup_vm_reading_backup)
             try {
                 val result = backupImporter.import(zipPath) { imported, total ->
                     _importStatus.value = if (imported == 0) {
-                        "Importing $total recordings..."
+                        getPluralString(Res.plurals.backup_vm_importing, total, total)
                     } else {
-                        "Imported $imported/$total..."
+                        getString(Res.string.backup_vm_imported_progress, imported, total)
                     }
                 }
-                _importStatus.value = buildString {
-                    append("Done — ${result.imported} imported, ${result.skipped} already existed")
-                    append(", ${result.audioUploaded} audio files")
-                    if (result.failed > 0) append(", ${result.failed} failed")
+                _importStatus.value = if (result.failed > 0) {
+                    getString(Res.string.backup_vm_import_done_with_failures, result.imported, result.skipped, result.audioUploaded, result.failed)
+                } else {
+                    getString(Res.string.backup_vm_import_done, result.imported, result.skipped, result.audioUploaded)
                 }
             } catch (e: Exception) {
                 logger.e(e) { "Import failed" }
-                _importStatus.value = "Import failed: ${e.message}"
+                _importStatus.value = getString(Res.string.backup_vm_import_failed, e.message.toString())
             } finally {
                 _importing.value = false
             }

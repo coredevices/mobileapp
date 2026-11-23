@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="bug_report_title">Informe de error</string>
+    <string name="bug_report_sent">¡Informe enviado!</string>
+    <string name="bug_report_send">Enviar informe</string>
+    <string name="bug_report_describe">Describe el error</string>
+    <string name="bug_report_type_label">Es un:</string>
+    <string name="bug_report_type_index">Error de Index</string>
+    <string name="bug_report_type_watch">Error del reloj</string>
+    <string name="bug_report_must_sign_in">Debes iniciar sesión para enviar un informe de error</string>
+    <string name="bug_report_take_screenshot">Hacer captura del reloj</string>
+    <string name="bug_report_capturing_screenshot">Capturando pantalla...</string>
+    <string name="bug_report_my_reports">Mis informes de error</string>
+    <string name="bug_report_attach_files">Adjuntar archivos</string>
+    <string name="bug_report_add_images">Añadir imágenes</string>
+    <string name="bug_report_view_title">Informe: %1$s</string>
+    <string name="bug_report_view_attach_more_logs">Adjuntar más registros</string>
+    <string name="onboarding_sign_in_body">Inicia sesión para hacer una copia de seguridad de tu cuenta Pebble: aplicaciones, ajustes, etc.</string>
+    <string name="watch_onboarding_waiting_restart">Esperando a que tu Pebble se reinicie..</string>
+    <string name="watch_onboarding_waiting_connect">Esperando a que tu Pebble se conecte..</string>
+    <string name="watch_onboarding_checking_updates">Buscando actualizaciones de PebbleOS..</string>
+    <string name="watch_onboarding_updating">Actualizando tu reloj a la última versión de PebbleOS...</string>
+    <string name="watch_onboarding_language_pack">Instalar un paquete de idioma</string>
+    <string name="watch_onboarding_installing_language">Instalando %1$s</string>
+    <string name="watch_onboarding_installed_language">Instalado actualmente: %1$s</string>
+    <string name="watch_onboarding_configure_watch">Configura tu reloj</string>
+    <string name="watch_onboarding_speech_recognition">Reconocimiento de voz</string>
+    <string name="watch_onboarding_configure_more">Configura más en Ajustes</string>
+    <string name="ring_demo_not_working">¿No funciona? Informa de un error</string>
+    <string name="ring_demo_no_action">Sin acción</string>
+    <string name="ring_demo_thinking">Pensando...</string>
+    <string name="setup_secondary_action">Acción secundaria</string>
+</resources>

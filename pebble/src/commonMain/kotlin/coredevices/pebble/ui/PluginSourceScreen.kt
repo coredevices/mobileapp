@@ -50,6 +50,15 @@ import kotlinx.io.writeString
 import org.koin.compose.koinInject
 import theme.currentColorScheme
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_source_couldnt_load
+import coreapp.pebble.generated.resources.plugin_source_couldnt_save
+import coreapp.pebble.generated.resources.plugin_source_dont_wrap_lines
+import coreapp.pebble.generated.resources.plugin_source_wrap_lines
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.download
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 @Composable
 fun PluginSourceScreen(topBarParams: TopBarParams, uuid: Uuid?, pbwUrl: String?, script: String, title: String) {
@@ -67,7 +76,7 @@ fun PluginSourceScreen(topBarParams: TopBarParams, uuid: Uuid?, pbwUrl: String?,
             TopBarIconButtonWithToolTip(
                 onClick = { wrap = !wrap },
                 icon = Icons.AutoMirrored.Filled.WrapText,
-                description = if (wrap) "Don't wrap lines" else "Wrap lines",
+                description = stringResource(if (wrap) Res.string.plugin_source_dont_wrap_lines else Res.string.plugin_source_wrap_lines),
             )
             val source = loaded?.text
             TopBarIconButtonWithToolTip(
@@ -85,7 +94,7 @@ fun PluginSourceScreen(topBarParams: TopBarParams, uuid: Uuid?, pbwUrl: String?,
                             throw e
                         } catch (e: Exception) {
                             Logger.withTag("PluginSourceScreen").w(e) { "Failed to save $script" }
-                            topBarParams.showSnackbar("Couldn't save ${path.name}")
+                            topBarParams.showSnackbar(getString(Res.string.plugin_source_couldnt_save, path.name))
                         } finally {
                             runCatching { SystemFileSystem.delete(path, mustExist = false) }
                             saving = false
@@ -93,7 +102,7 @@ fun PluginSourceScreen(topBarParams: TopBarParams, uuid: Uuid?, pbwUrl: String?,
                     }
                 },
                 icon = Icons.Filled.Download,
-                description = "Download",
+                description = stringResource(UtilRes.string.download),
                 enabled = uiContext != null && source != null && !saving,
             )
         }
@@ -103,7 +112,7 @@ fun PluginSourceScreen(topBarParams: TopBarParams, uuid: Uuid?, pbwUrl: String?,
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             loaded == null -> CircularProgressIndicator()
-            text == null -> Text("Couldn't load $script")
+            text == null -> Text(stringResource(Res.string.plugin_source_couldnt_load, script))
             else -> SelectionContainer {
                 val dark = currentColorScheme().isDark
                 val highlighted by produceState(AnnotatedString(text), text, dark) {

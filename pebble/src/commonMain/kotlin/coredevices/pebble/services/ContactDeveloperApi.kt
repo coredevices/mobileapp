@@ -16,6 +16,12 @@ import kotlinx.io.IOException
 import kotlinx.io.readByteArray
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.contact_dev_error_not_reachable
+import coreapp.pebble.generated.resources.contact_dev_error_rate_limited
+import coreapp.pebble.generated.resources.contact_dev_error_rejected
+import coreapp.pebble.generated.resources.contact_dev_error_server
+import org.jetbrains.compose.resources.getString
 
 data class ContactAttachment(
     val fileName: String,
@@ -82,10 +88,10 @@ class ContactDeveloperApi(
                 if (errBody == "Email not verified") ContactResult.EmailNotVerified
                 else ContactResult.NotSignedIn
             }
-            403 -> ContactResult.NotContactable(response.parseError() ?: "This developer is not reachable.")
-            429 -> ContactResult.RateLimited(response.parseError() ?: "You are sending messages too quickly. Try again later.")
-            400 -> ContactResult.BadRequest(response.parseError() ?: "Message or attachment was rejected.")
-            else -> ContactResult.ServerError(response.parseError() ?: "Server error ($code)")
+            403 -> ContactResult.NotContactable(response.parseError() ?: getString(Res.string.contact_dev_error_not_reachable))
+            429 -> ContactResult.RateLimited(response.parseError() ?: getString(Res.string.contact_dev_error_rate_limited))
+            400 -> ContactResult.BadRequest(response.parseError() ?: getString(Res.string.contact_dev_error_rejected))
+            else -> ContactResult.ServerError(response.parseError() ?: getString(Res.string.contact_dev_error_server, code))
         }
     }
 

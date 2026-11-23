@@ -16,7 +16,7 @@ actual fun startForegroundService() {
     }
 }
 
-actual fun notifyState(message: String) {
+actual suspend fun notifyState(message: String) {
     val context = KoinPlatform.getKoin().get<Context>()
     BugReportService.updateBugReport(context, message)
 }

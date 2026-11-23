@@ -42,6 +42,20 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.koin.compose.currentKoinScope
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.misc_sign_in_anyway
+import coreapp.util.generated.resources.misc_sign_in_apple
+import coreapp.util.generated.resources.misc_sign_in_existing_body
+import coreapp.util.generated.resources.misc_sign_in_existing_title
+import coreapp.util.generated.resources.misc_sign_in_github
+import coreapp.util.generated.resources.misc_sign_in_google
+import coreapp.util.generated.resources.misc_sign_in_network_error
+import coreapp.util.generated.resources.misc_sign_in_unavailable
+import coreapp.util.generated.resources.misc_sign_in_unknown_error
+import coreapp.util.generated.resources.sign_in
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 internal expect suspend fun signInWithCredential(credential: AuthCredential)
 
@@ -97,7 +111,7 @@ private fun SignInButton(
                     credentialProvider(context!!) ?: return@launch
                 } catch (e: Exception) {
                     Logger.e(e) { "Error getting sign-in credential: ${e.message}" }
-                    onError(e.message ?: "Unknown error")
+                    onError(e.message ?: getString(Res.string.misc_sign_in_unknown_error))
                     return@launch
                 }
                 try {
@@ -109,14 +123,14 @@ private fun SignInButton(
                             forceSwitch(e)
                         } catch (e2: Exception) {
                             Logger.e(e2) { "Error during forced account switch: ${e2.message}" }
-                            onError("Network error during sign in")
+                            onError(getString(Res.string.misc_sign_in_network_error))
                         }
                     } else {
                         pendingSwitch = e
                     }
                 } catch (e: Exception) {
                     Logger.e(e) { "Error signing in with credential: ${e.message}" }
-                    onError("Network error during sign in")
+                    onError(getString(Res.string.misc_sign_in_network_error))
                     return@launch
                 }
             }
@@ -135,7 +149,7 @@ private fun SignInButton(
                         forceSwitch(e)
                     } catch (e: Exception) {
                         Logger.e(e) { "Error completing forced account switch: ${e.message}" }
-                        onError("Network error during sign in")
+                        onError(getString(Res.string.misc_sign_in_network_error))
                     }
                 }
             },
@@ -171,18 +185,15 @@ private fun AccountSwitchConfirmationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sign in to existing account?") },
+        title = { Text(stringResource(Res.string.misc_sign_in_existing_title)) },
         text = {
-            Text(
-                "This account already exists. Signing in will switch to it, and any " +
-                    "apps or settings saved as a guest on this device won't carry over."
-            )
+            Text(stringResource(Res.string.misc_sign_in_existing_body))
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Sign in anyway") }
+            TextButton(onClick = onConfirm) { Text(stringResource(Res.string.misc_sign_in_anyway)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
         },
     )
 }
@@ -205,7 +216,7 @@ fun SignInDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Sign in",
+                    stringResource(Res.string.sign_in),
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.padding(8.dp)
                 )
@@ -226,7 +237,7 @@ fun SignInDialog(
 @Composable
 private fun SignInUnavailable(provider: String) {
     Text(
-        text = "$provider login disabled within this build",
+        text = stringResource(Res.string.misc_sign_in_unavailable, provider),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
@@ -256,7 +267,7 @@ fun SignInButtons(
                 SignInButton(
                     onError = { error = it },
                     onSuccess = onDismiss,
-                    text = "Sign in with Google",
+                    text = stringResource(Res.string.misc_sign_in_google),
                     credentialProvider = { context ->
                         val googleAuthUtil = koin.get<GoogleAuthUtil>()
                         googleAuthUtil.signInGoogle(context)
@@ -272,7 +283,7 @@ fun SignInButtons(
                 SignInButton(
                     onError = { error = it },
                     onSuccess = onDismiss,
-                    text = "Sign in with Apple",
+                    text = stringResource(Res.string.misc_sign_in_apple),
                     credentialProvider = { context ->
                         val appleAuthUtil = koin.get<AppleAuthUtil>()
                         appleAuthUtil.signInApple(context)
@@ -288,7 +299,7 @@ fun SignInButtons(
                 SignInButton(
                     onError = { error = it },
                     onSuccess = onDismiss,
-                    text = "Sign in with GitHub",
+                    text = stringResource(Res.string.misc_sign_in_github),
                     credentialProvider = { context ->
                         val githubAuthUtil = koin.get<GitHubAuthUtil>()
                         githubAuthUtil.signInGithub(context)

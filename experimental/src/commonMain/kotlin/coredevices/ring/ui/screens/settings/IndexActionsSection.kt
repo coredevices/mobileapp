@@ -73,14 +73,69 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_actions_add_mcp_server
+import coreapp.ring.generated.resources.settings_actions_add_mcp_server_subtitle
+import coreapp.ring.generated.resources.settings_actions_add_more_later
+import coreapp.ring.generated.resources.settings_actions_add_plugin
+import coreapp.ring.generated.resources.settings_actions_add_plugin_browse
+import coreapp.ring.generated.resources.settings_actions_add_plugin_later
+import coreapp.ring.generated.resources.settings_actions_allowed
+import coreapp.ring.generated.resources.settings_actions_beeper_messaging
+import coreapp.ring.generated.resources.settings_actions_beeper_messaging_example
+import coreapp.ring.generated.resources.settings_actions_bug_reports
+import coreapp.ring.generated.resources.settings_actions_bug_reports_example
+import coreapp.ring.generated.resources.settings_actions_calendar
+import coreapp.ring.generated.resources.settings_actions_calendar_example
+import coreapp.ring.generated.resources.settings_actions_capture_note_subtitle
+import coreapp.ring.generated.resources.settings_actions_capture_reminder_subtitle
+import coreapp.ring.generated.resources.settings_actions_capture_sheet_subtitle
+import coreapp.ring.generated.resources.settings_actions_capture_sheet_title
+import coreapp.ring.generated.resources.settings_actions_capture_type_note
+import coreapp.ring.generated.resources.settings_actions_capture_type_note_title
+import coreapp.ring.generated.resources.settings_actions_capture_type_reminder
+import coreapp.ring.generated.resources.settings_actions_capture_type_reminder_title
+import coreapp.ring.generated.resources.settings_actions_configure_plugin
+import coreapp.ring.generated.resources.settings_actions_contacts_count
+import coreapp.ring.generated.resources.settings_actions_denied
+import coreapp.ring.generated.resources.settings_actions_description
+import coreapp.ring.generated.resources.settings_actions_get_more
+import coreapp.ring.generated.resources.settings_actions_grant_actions
+import coreapp.ring.generated.resources.settings_actions_grant_sources
+import coreapp.ring.generated.resources.settings_actions_header
+import coreapp.ring.generated.resources.settings_actions_lists
+import coreapp.ring.generated.resources.settings_actions_lists_example
+import coreapp.ring.generated.resources.settings_actions_mcp_server
+import coreapp.ring.generated.resources.settings_actions_no_agent
+import coreapp.ring.generated.resources.settings_actions_notes
+import coreapp.ring.generated.resources.settings_actions_notes_example
+import coreapp.ring.generated.resources.settings_actions_notification_reply
+import coreapp.ring.generated.resources.settings_actions_notification_reply_example
+import coreapp.ring.generated.resources.settings_actions_plugin
+import coreapp.ring.generated.resources.settings_actions_plugin_actions_count
+import coreapp.ring.generated.resources.settings_actions_plugin_sources_count
+import coreapp.ring.generated.resources.settings_actions_reminders
+import coreapp.ring.generated.resources.settings_actions_reminders_example
+import coreapp.ring.generated.resources.settings_actions_saves_to
+import coreapp.ring.generated.resources.settings_actions_sentence_note
+import coreapp.ring.generated.resources.settings_actions_sentence_reminder
+import coreapp.ring.generated.resources.settings_actions_timers_alarms
+import coreapp.ring.generated.resources.settings_actions_timers_alarms_example
+import coreapp.ring.generated.resources.settings_actions_where_lists_save
+import coreapp.ring.generated.resources.settings_actions_where_notes_save
+import coreapp.ring.generated.resources.settings_actions_where_reminders_save
+import coreapp.ring.generated.resources.settings_gesture_dest_index_agent
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.connect
+import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.IndexAction
 import coredevices.ring.agent.IndexPlugin
@@ -111,16 +166,35 @@ import coredevices.ring.ui.viewmodel.isConnected
 import coredevices.ring.ui.viewmodel.isPlugin
 import coredevices.ui.M3Dialog
 import io.rebble.libpebblecommon.permissions.InstallReview
+import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.Uuid
+import coreapp.util.generated.resources.Res as UtilRes
 
 /** Actions are only reachable through an Index agent, so they are off when no gesture routes to one. */
 internal fun nothingRoutesToIndexAgent(routes: Map<RingGesture, GestureDestination>): Boolean =
     routes.values.none { it == GestureDestination.IndexAgent || it == GestureDestination.LocalAgent }
 
-internal fun captureTypeLabel(type: DefaultCaptureType): String = type.title.lowercase()
+internal fun captureTypeLabel(type: DefaultCaptureType): StringResource = when (type) {
+    DefaultCaptureType.Note -> Res.string.settings_actions_capture_type_note
+    DefaultCaptureType.Reminder -> Res.string.settings_actions_capture_type_reminder
+}
 
+private fun captureSentence(type: DefaultCaptureType): StringResource = when (type) {
+    DefaultCaptureType.Note -> Res.string.settings_actions_sentence_note
+    DefaultCaptureType.Reminder -> Res.string.settings_actions_sentence_reminder
+}
+
+private fun captureTypeTitle(type: DefaultCaptureType): StringResource = when (type) {
+    DefaultCaptureType.Note -> Res.string.settings_actions_capture_type_note_title
+    DefaultCaptureType.Reminder -> Res.string.settings_actions_capture_type_reminder_title
+}
+
+@Composable
 internal fun contactsBadge(count: Int): String =
-    "$count ${if (count == 1) "contact" else "contacts"}"
+    pluralStringResource(Res.plurals.settings_actions_contacts_count, count, count)
 
 internal fun captureDestinationLabel(
     type: DefaultCaptureType,
@@ -160,70 +234,74 @@ internal fun noteConfigureDialog(provider: IntegrationProvider): ActionsDialog? 
 
 private data class ActionPresentation(val icon: ImageVector, val title: String, val example: String)
 
+@Composable
 private fun presentationFor(action: IndexAction): ActionPresentation = when (action.name) {
     NoteServlet.NAME -> ActionPresentation(
         Icons.Default.EditNote,
-        "Notes",
-        "“Remember I parked on level 3”",
+        stringResource(Res.string.settings_actions_notes),
+        stringResource(Res.string.settings_actions_notes_example),
     )
     ReminderServlet.NAME -> ActionPresentation(
         Icons.Default.Checklist,
-        "Reminders",
-        "“Remind me to call Mom at 5pm”",
+        stringResource(Res.string.settings_actions_reminders),
+        stringResource(Res.string.settings_actions_reminders_example),
     )
     ListServlet.NAME -> ActionPresentation(
         Icons.AutoMirrored.Filled.FormatListBulleted,
-        "Lists",
-        "“Add milk to my shopping list”",
+        stringResource(Res.string.settings_actions_lists),
+        stringResource(Res.string.settings_actions_lists_example),
     )
     CalendarServlet.NAME -> ActionPresentation(
         Icons.Default.CalendarMonth,
-        "Calendar",
-        "“Create new event - lunch with Sarah at noon on Friday” → create event on phone calendar",
+        stringResource(Res.string.settings_actions_calendar),
+        stringResource(Res.string.settings_actions_calendar_example),
     )
     ClockServlet.name -> ActionPresentation(
         Icons.Default.Alarm,
-        "Timers & Alarms",
-        "“Set an alarm for 7:30” → alarm on this phone",
+        stringResource(Res.string.settings_actions_timers_alarms),
+        stringResource(Res.string.settings_actions_timers_alarms_example),
     )
     MessagingServlet.name -> ActionPresentation(
         Icons.AutoMirrored.Filled.Chat,
-        "Beeper Messaging",
-        "“Tell Jake I’m running late” → message to an approved contact",
+        stringResource(Res.string.settings_actions_beeper_messaging),
+        stringResource(Res.string.settings_actions_beeper_messaging_example),
     )
     NotificationReplyServlet.NAME -> ActionPresentation(
         Icons.AutoMirrored.Filled.Reply,
-        "Reply to Notifications",
-        "“Reply on my way” → reply to the notification on your Pebble watch",
+        stringResource(Res.string.settings_actions_notification_reply),
+        stringResource(Res.string.settings_actions_notification_reply_example),
     )
     BugReportServlet.NAME -> ActionPresentation(
         Icons.Default.BugReport,
-        "Bug Reports",
-        "“Create a bug report for Index, the light didn’t turn on” → sends a bug report",
+        stringResource(Res.string.settings_actions_bug_reports),
+        stringResource(Res.string.settings_actions_bug_reports_example),
     )
     else -> ActionPresentation(Icons.Default.Power, action.title, "")
 }
 
+@Composable
 private fun presentationFor(server: HttpMcpServerEntity) = ActionPresentation(
     Icons.Default.Dns,
     server.cachedTitle.ifBlank { server.name },
-    "MCP Server",
+    stringResource(Res.string.settings_actions_mcp_server),
 )
 
-internal fun grantLabel(grant: PluginGrant): String = when (grant) {
-    PluginGrant.Actions -> "Use actions"
-    PluginGrant.Sources -> "Use data sources"
-}
-
-private fun grantNoun(grant: PluginGrant, count: Int): String = when (grant) {
-    PluginGrant.Actions -> if (count == 1) "action" else "actions"
-    PluginGrant.Sources -> if (count == 1) "data source" else "data sources"
+internal fun grantLabel(grant: PluginGrant): StringResource = when (grant) {
+    PluginGrant.Actions -> Res.string.settings_actions_grant_actions
+    PluginGrant.Sources -> Res.string.settings_actions_grant_sources
 }
 
 /** Collapsed-row summary, e.g. "2 actions · 1 data source". */
+@Composable
 internal fun pluginSummary(plugin: IndexPlugin): String =
-    plugin.grants.entries.joinToString(" · ") { (grant, state) ->
-        "${state.names.size} ${grantNoun(grant, state.names.size)}"
+    pluginGrantCounts(plugin).map { (plural, count) -> pluralStringResource(plural, count, count) }.joinToString(" · ")
+
+internal fun pluginGrantCounts(plugin: IndexPlugin): List<Pair<PluralStringResource, Int>> =
+    plugin.grants.entries.map { (grant, state) ->
+        when (grant) {
+            PluginGrant.Actions -> Res.plurals.settings_actions_plugin_actions_count
+            PluginGrant.Sources -> Res.plurals.settings_actions_plugin_sources_count
+        } to state.names.size
     }
 
 /** The parent checkbox reflects every grant, allowed or not by the user. */
@@ -315,11 +393,11 @@ internal fun IndexActionsSection(
     Column(modifier = Modifier.fillMaxWidth()) {
         if (showHeader) {
             SectionHeader(
-                title = "Index Agent",
+                title = stringResource(Res.string.settings_actions_header),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 2.dp),
             )
             Text(
-                "Select what Index Agent can read and do.",
+                stringResource(Res.string.settings_actions_description),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = colors.onSurfaceVariant,
@@ -327,7 +405,8 @@ internal fun IndexActionsSection(
             )
         }
         CaptureSentence(
-            typeLabel = captureTypeLabel(captureType),
+            template = stringResource(captureSentence(captureType)),
+            typeLabel = stringResource(captureTypeLabel(captureType)),
             destinationLabel = captureDestinationLabel(captureType, noteProvider, reminderProvider),
             onTypeClick = { sheet = ActionsSheet.CaptureType },
             onDestinationClick = {
@@ -404,24 +483,24 @@ internal fun IndexActionsSection(
         if (onGetMorePlugins != null) {
             SectionActionRow(
                 icon = Icons.Default.Power,
-                title = "Add plugin integration",
-                subtitle = "Browse plugins in the store",
+                title = stringResource(Res.string.settings_actions_add_plugin),
+                subtitle = stringResource(Res.string.settings_actions_add_plugin_browse),
                 enabled = true,
                 onClick = onGetMorePlugins,
             )
         } else {
             SectionActionRow(
                 icon = Icons.Default.Power,
-                title = "Add plugin integration",
-                subtitle = "You can add plugins from settings later",
+                title = stringResource(Res.string.settings_actions_add_plugin),
+                subtitle = stringResource(Res.string.settings_actions_add_plugin_later),
                 enabled = false,
                 onClick = {},
             )
         }
         SectionActionRow(
             icon = Icons.Default.Dns,
-            title = "Add MCP server",
-            subtitle = httpMcpDisabledReason ?: "Connect a remote server over HTTP",
+            title = stringResource(Res.string.settings_actions_add_mcp_server),
+            subtitle = httpMcpDisabledReason ?: stringResource(Res.string.settings_actions_add_mcp_server_subtitle),
             enabled = httpMcpDisabledReason == null,
             onClick = { dialog = ActionsDialog.AddServer },
         )
@@ -446,7 +525,7 @@ internal fun IndexActionsSection(
         )
         ActionsSheet.NoteDestination -> DestinationSheet(
             icon = Icons.Default.EditNote,
-            title = "Where notes save",
+            title = stringResource(Res.string.settings_actions_where_notes_save),
             items = noteDestinations,
             hasDialog = { noteConfigureDialog(it) != null },
             onGetMore = onGetMorePlugins,
@@ -477,7 +556,9 @@ internal fun IndexActionsSection(
             val onConnectStarted = if (lists) onListConnectStarted else onReminderConnectStarted
             DestinationSheet(
                 icon = if (lists) Icons.AutoMirrored.Filled.FormatListBulleted else Icons.Default.Checklist,
-                title = if (lists) "Where list items save" else "Where reminders save",
+                title = stringResource(
+                    if (lists) Res.string.settings_actions_where_lists_save else Res.string.settings_actions_where_reminders_save
+                ),
                 items = if (lists) listDestinations else reminderDestinations,
                 onGetMore = onGetMorePlugins,
                 selected = if (lists) listProvider else reminderProvider,
@@ -558,6 +639,7 @@ internal fun IndexActionsSection(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CaptureSentence(
+    template: String,
     typeLabel: String,
     destinationLabel: String,
     onTypeClick: () -> Unit,
@@ -569,10 +651,17 @@ private fun CaptureSentence(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        SentenceText("Any unclear requests become a")
-        SentenceLink(typeLabel, onTypeClick)
-        SentenceText("in")
-        SentenceLink(destinationLabel, onDestinationClick)
+        var start = 0
+        for (match in Regex("%([12])\\\$s").findAll(template)) {
+            template.substring(start, match.range.first).trim().takeIf { it.isNotEmpty() }?.let { SentenceText(it) }
+            if (match.groupValues[1] == "1") {
+                SentenceLink(typeLabel, onTypeClick)
+            } else {
+                SentenceLink(destinationLabel, onDestinationClick)
+            }
+            start = match.range.last + 1
+        }
+        template.substring(start).trim().takeIf { it.isNotEmpty() }?.let { SentenceText(it) }
     }
 }
 
@@ -632,7 +721,7 @@ private fun ActionRow(
         },
         trailing = {
             if (onConnect != null) {
-                TextButton(onClick = onConnect) { Text("Connect") }
+                TextButton(onClick = onConnect) { Text(stringResource(UtilRes.string.connect)) }
             } else {
                 Checkbox(
                     checked = enabled,
@@ -661,7 +750,7 @@ private fun DestinationChip(label: String, interactive: Boolean, onClick: () -> 
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            "Saves to",
+            stringResource(Res.string.settings_actions_saves_to),
             fontSize = 12.sp,
             color = colors.onSurfaceVariant,
         )
@@ -718,7 +807,7 @@ private fun PluginRow(
             Column(modifier = Modifier.padding(bottom = 4.dp)) {
                 plugin.grants.forEach { (grant, state) ->
                     PluginGrantRow(
-                        label = grantLabel(grant),
+                        label = stringResource(grantLabel(grant)),
                         supporting = state.disabledReason ?: state.names.joinToString(", "),
                         checked = state.enabled,
                         interactive = state.disabledReason == null,
@@ -795,7 +884,7 @@ private fun AgentRow(
         }
         if (onSettings != null) {
             IconButton(onClick = onSettings) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                Icon(Icons.Default.Settings, contentDescription = stringResource(UtilRes.string.settings))
             }
         }
         trailing()
@@ -814,7 +903,7 @@ private fun ConfigurePluginLink(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            "Configure plugin",
+            stringResource(Res.string.settings_actions_configure_plugin),
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = colors.primary,
@@ -874,7 +963,7 @@ private fun PluginGrantRow(
                     )
                     Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
                 }
-                Text("Denied")
+                Text(stringResource(Res.string.settings_actions_denied))
             }
             ToggleButton(
                 checked = checked,
@@ -891,7 +980,7 @@ private fun PluginGrantRow(
                     )
                     Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
                 }
-                Text("Allowed")
+                Text(stringResource(Res.string.settings_actions_allowed))
             }
         }
     }
@@ -956,11 +1045,10 @@ private fun NoIndexAgentCard() {
             modifier = Modifier.size(20.dp),
         )
         Text(
-            buildAnnotatedString {
-                append("Nothing routes to the Index agent right now, so actions are off. Point a gesture at ")
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Index agent") }
-                append(" above to turn them back on.")
-            },
+            boldPlaceholder(
+                Res.string.settings_actions_no_agent,
+                stringResource(Res.string.settings_gesture_dest_index_agent),
+            ),
             fontSize = 13.sp,
             lineHeight = 19.sp,
             color = colors.onSurfaceVariant,
@@ -980,13 +1068,13 @@ private fun CaptureTypeSheet(
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                 Text(
-                    "Any unclear requests become",
+                    stringResource(Res.string.settings_actions_capture_sheet_title),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
                 )
                 Text(
-                    "Used when Index can't tell what you meant.",
+                    stringResource(Res.string.settings_actions_capture_sheet_subtitle),
                     fontSize = 12.sp,
                     color = colors.onSurfaceVariant,
                 )
@@ -997,10 +1085,10 @@ private fun CaptureTypeSheet(
                         DefaultCaptureType.Note -> Icons.Default.EditNote
                         DefaultCaptureType.Reminder -> Icons.Default.Checklist
                     },
-                    title = { Text(type.title) },
+                    title = { Text(stringResource(captureTypeTitle(type))) },
                     subtitle = when (type) {
-                        DefaultCaptureType.Note -> "A thought to keep, nothing to do"
-                        DefaultCaptureType.Reminder -> "Something you intend to do"
+                        DefaultCaptureType.Note -> stringResource(Res.string.settings_actions_capture_note_subtitle)
+                        DefaultCaptureType.Reminder -> stringResource(Res.string.settings_actions_capture_reminder_subtitle)
                     },
                     selected = type == current,
                     onClick = { onSelect(type) },
@@ -1080,7 +1168,7 @@ private fun DestOptionTitle(title: String, plugin: Boolean) {
         if (plugin) {
             Icon(
                 Icons.Default.Power,
-                contentDescription = "Plugin",
+                contentDescription = stringResource(Res.string.settings_actions_plugin),
                 modifier = Modifier.size(18.dp),
                 tint = IndexTheme.colors.onSurfaceVariant
             )
@@ -1141,7 +1229,7 @@ private fun DestinationSheet(
                 }
                 SheetOptionRow(
                     title = { DestOptionTitle(item.title, plugin = item.isPlugin) },
-                    subtitle = item.rowSubtitle(configurable),
+                    subtitle = item.rowSubtitle(configurable)?.let { stringResource(it) },
                     onLongClick = installed?.takeIf { configurable }?.let { { onDismiss(); onConfigure(it.provider) } },
                     selected = installed?.provider == selected,
                     onClick = {
@@ -1154,7 +1242,7 @@ private fun DestinationSheet(
                     },
                     trailing = {
                         if (!item.isConnected) {
-                            TextButton(onClick = connect) { Text("Connect") }
+                            TextButton(onClick = connect) { Text(stringResource(UtilRes.string.connect)) }
                         }
                     },
                 )
@@ -1167,7 +1255,7 @@ private fun DestinationSheet(
                     },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
-                    Text("Get more")
+                    Text(stringResource(Res.string.settings_actions_get_more))
                 }
             } else {
                 AddMoreLaterHint(
@@ -1183,7 +1271,7 @@ private fun DestinationSheet(
 @Composable
 private fun AddMoreLaterHint(modifier: Modifier = Modifier) {
     Text(
-        "You can add more from Settings later",
+        stringResource(Res.string.settings_actions_add_more_later),
         fontSize = 13.sp,
         color = IndexTheme.colors.onSurfaceVariant,
         modifier = modifier,
@@ -1198,7 +1286,7 @@ private fun SideloadDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Sideload an action") },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1239,6 +1327,17 @@ private fun SideloadDialog(onDismiss: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** [format]'s single `%1$s` placeholder, filled with [bold] in bold. */
+@Composable
+internal fun boldPlaceholder(format: StringResource, bold: String): AnnotatedString {
+    val text = stringResource(format, bold)
+    val start = text.indexOf(bold)
+    return buildAnnotatedString {
+        append(text)
+        if (start >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, start + bold.length)
     }
 }
 

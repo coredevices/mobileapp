@@ -22,18 +22,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_diagnostics_completed
+import coreapp.ring.generated.resources.settings_diagnostics_dialog_title
+import coreapp.ring.generated.resources.settings_diagnostics_error
+import coreapp.ring.generated.resources.settings_diagnostics_file_bug_report
+import coreapp.ring.generated.resources.settings_diagnostics_intro
+import coreapp.ring.generated.resources.settings_diagnostics_intro_bold
+import coreapp.ring.generated.resources.settings_diagnostics_running
+import coreapp.ring.generated.resources.settings_diagnostics_start
+import coreapp.ring.generated.resources.settings_diagnostics_try_again
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.close
+import coreapp.util.generated.resources.done
 import coredevices.ring.ui.viewmodel.DiagnosticsState
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.M3Dialog
 import kotlinx.coroutines.Job
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res as UtilRes
 
 @Composable
 fun DiagnosticsDialog(
@@ -56,20 +67,20 @@ fun DiagnosticsDialog(
         ),
         onDismissRequest = ::dismiss,
         icon = { Icon(Icons.Default.Troubleshoot, contentDescription = null) },
-        title = { Text("Index 01 Diagnostics") },
+        title = { Text(stringResource(Res.string.settings_diagnostics_dialog_title)) },
         buttons = {
             when (state) {
                 DiagnosticsState.Idle -> {
-                    TextButton(onClick = ::dismiss) { Text("Cancel") }
-                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text("Start") }
+                    TextButton(onClick = ::dismiss) { Text(stringResource(UtilRes.string.cancel)) }
+                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text(stringResource(Res.string.settings_diagnostics_start)) }
                 }
                 DiagnosticsState.Running -> {}
                 is DiagnosticsState.Error -> {
-                    TextButton(onClick = ::dismiss) { Text("Close") }
-                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text("Try Again") }
+                    TextButton(onClick = ::dismiss) { Text(stringResource(UtilRes.string.close)) }
+                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text(stringResource(Res.string.settings_diagnostics_try_again)) }
                 }
                 is DiagnosticsState.Completed -> {
-                    TextButton(onClick = ::dismiss) { Text("Done") }
+                    TextButton(onClick = ::dismiss) { Text(stringResource(UtilRes.string.done)) }
                     TextButton(onClick = {
                         nextBugReportContext.nextContext = buildString {
                             appendLine()
@@ -83,39 +94,32 @@ fun DiagnosticsDialog(
                         }
                         dismiss()
                         coreNav.navigateTo(CommonRoutes.BugReport(pebble = false))
-                    }) { Text("File Bug Report") }
+                    }) { Text(stringResource(Res.string.settings_diagnostics_file_bug_report)) }
                 }
             }
         }
     ) {
         when (state) {
             DiagnosticsState.Idle -> Text(
-                buildAnnotatedString {
-                    append("This checks the Bluetooth connection between your phone and Index 01. ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append("Place the device right next to your phone, ")
-                    }
-                    append("then tap Start.")
-                },
+                boldPlaceholder(
+                    Res.string.settings_diagnostics_intro,
+                    stringResource(Res.string.settings_diagnostics_intro_bold),
+                ),
             )
             DiagnosticsState.Running -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "Keep your Index 01 next to your phone and click the button...",
+                    stringResource(Res.string.settings_diagnostics_running),
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(16.dp))
                 CircularProgressIndicator()
             }
-            is DiagnosticsState.Error -> Text(
-                "An error occurred: ${state.message}\nPlease try again ensuring you've clicked the button to wake up the device"
-            )
-            is DiagnosticsState.Completed -> Text(
-                "Diagnostics complete. If support asked you to run this, file a bug report to send them the results."
-            )
+            is DiagnosticsState.Error -> Text(stringResource(Res.string.settings_diagnostics_error, state.message))
+            is DiagnosticsState.Completed -> Text(stringResource(Res.string.settings_diagnostics_completed))
         }
     }
 }

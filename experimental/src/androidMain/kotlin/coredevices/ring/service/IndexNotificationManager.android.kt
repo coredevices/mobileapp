@@ -9,12 +9,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
+import coredevices.ring.R
 import kotlin.math.roundToInt
 
 const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID = "index_transfer"
-const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME = "Index Recordings"
 const val INDEX_ACTION_NOTIFICATION_CHANNEL_ID = "index_action"
-const val INDEX_ACTION_NOTIFICATION_CHANNEL_NAME = "Index Action"
 
 private fun IndexNotificationChannel.channelId() = when (this) {
     IndexNotificationChannel.Default -> INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
@@ -33,12 +32,12 @@ actual class PlatformIndexNotificationManager(
         val manager = NotificationManagerCompat.from(context)
         manager.createNotificationChannel(
             NotificationChannelCompat.Builder(INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
-                .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
+                .setName(context.getString(R.string.index_transfer_channel_name))
                 .build()
         )
         manager.createNotificationChannel(
             NotificationChannelCompat.Builder(INDEX_ACTION_NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
-                .setName(INDEX_ACTION_NOTIFICATION_CHANNEL_NAME)
+                .setName(context.getString(R.string.index_action_channel_name))
                 .build()
         )
         channelsCreated = true

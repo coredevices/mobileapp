@@ -105,6 +105,52 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import theme.AppTheme
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.setup_app_permissions
+import coreapp.composeapp.generated.resources.setup_backup_sign_in
+import coreapp.composeapp.generated.resources.setup_backups
+import coreapp.composeapp.generated.resources.setup_backups_sub
+import coreapp.composeapp.generated.resources.setup_change_later
+import coreapp.composeapp.generated.resources.setup_cloud_backup
+import coreapp.composeapp.generated.resources.setup_cloud_backup_off
+import coreapp.composeapp.generated.resources.setup_cloud_backup_on
+import coreapp.composeapp.generated.resources.setup_cloud_stt_sign_in
+import coreapp.composeapp.generated.resources.setup_download_error
+import coreapp.composeapp.generated.resources.setup_encrypt_backups
+import coreapp.composeapp.generated.resources.setup_encrypt_needs_backup
+import coreapp.composeapp.generated.resources.setup_encrypt_off
+import coreapp.composeapp.generated.resources.setup_encrypt_on
+import coreapp.composeapp.generated.resources.setup_error_try_later
+import coreapp.composeapp.generated.resources.setup_finish
+import coreapp.composeapp.generated.resources.setup_index_agent
+import coreapp.composeapp.generated.resources.setup_index_agent_sub
+import coreapp.composeapp.generated.resources.setup_local_stt_unsupported
+import coreapp.composeapp.generated.resources.setup_platform_stt_body
+import coreapp.composeapp.generated.resources.setup_platform_stt_languages
+import coreapp.composeapp.generated.resources.setup_platform_stt_title
+import coreapp.composeapp.generated.resources.setup_ring_button
+import coreapp.composeapp.generated.resources.setup_ring_button_sub
+import coreapp.composeapp.generated.resources.setup_secondary_action
+import coreapp.composeapp.generated.resources.setup_secondary_action_sub
+import coreapp.composeapp.generated.resources.setup_secondary_disabled
+import coreapp.composeapp.generated.resources.setup_speech_recognition
+import coreapp.composeapp.generated.resources.setup_stt_cloud_fallback
+import coreapp.composeapp.generated.resources.setup_stt_cloud_fallback_sub
+import coreapp.composeapp.generated.resources.setup_stt_cloud_only
+import coreapp.composeapp.generated.resources.setup_stt_cloud_only_sub
+import coreapp.composeapp.generated.resources.setup_stt_local_only
+import coreapp.composeapp.generated.resources.setup_stt_local_only_sub
+import coreapp.composeapp.generated.resources.setup_stt_on_device
+import coreapp.composeapp.generated.resources.setup_stt_on_device_sub
+import coreapp.composeapp.generated.resources.setup_supported_languages
+import coreapp.composeapp.generated.resources.setup_title
+import coreapp.composeapp.generated.resources.setup_try_it_out
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.ok
+import coreapp.util.generated.resources.search
+import coreapp.util.generated.resources.sign_in
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -120,6 +166,8 @@ internal fun SetupStep(
 ) {
     BackHandler { onBack() }
     val palette = LocalPalette.current
+    val localSttUnsupportedText = stringResource(Res.string.setup_local_stt_unsupported)
+    val cloudSttSignInText = stringResource(Res.string.setup_cloud_stt_sign_in)
     val gestureRoutes by ringButtonViewModel.gestureRoutes.collectAsState()
     val musicPresetSelected = { mode: MusicControlMode ->
         musicRoutesFor(mode).all { (gesture, destination) -> gestureRoutes[gesture] == destination }
@@ -154,7 +202,7 @@ internal fun SetupStep(
                 val models = modelManager.getAvailableSTTModels()
                 value = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
                     ?: run {
-                        snackbarDisplay.showSnackbar("Error occurred. Please try again later.")
+                        snackbarDisplay.showSnackbar(getString(Res.string.setup_error_try_later))
                         pendingSTTModeDialog = null
                         null
                     }
@@ -168,7 +216,7 @@ internal fun SetupStep(
                 onGetRecommended = {
                     scope.launch {
                         if (!modelManager.downloadSTTModel(recommendedModelFinal, allowMetered = true)) {
-                            snackbarDisplay.showSnackbar("Error starting download. Please try again later.")
+                            snackbarDisplay.showSnackbar(getString(Res.string.setup_download_error))
                         } else {
                             coreConfigHolder.update(
                                 coreConfig.copy(
@@ -230,22 +278,19 @@ internal fun SetupStep(
         }
         AlertDialog(
             onDismissRequest = { showPlatformInfoDialog = false },
-            title = { Text("On-device speech recognition") },
+            title = { Text(stringResource(Res.string.setup_platform_stt_title)) },
             text = {
                 Text(
-                    "Uses Apple's built-in speech recognition — no download needed. " +
-                        "Audio is processed on your phone, falling back to cloud " +
-                        "transcription if the language isn't supported or on-device " +
-                        "transcription fails." +
+                    stringResource(Res.string.setup_platform_stt_body) +
                         if (languages.isEmpty()) {
                             ""
                         } else {
-                            "\n\nSupported languages:\n" + languages.joinToString(", ")
+                            "\n\n" + stringResource(Res.string.setup_platform_stt_languages, languages.joinToString(", "))
                         }
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showPlatformInfoDialog = false }) { Text("OK") }
+                TextButton(onClick = { showPlatformInfoDialog = false }) { Text(stringResource(UtilRes.string.ok)) }
             },
         )
     }
@@ -255,10 +300,10 @@ internal fun SetupStep(
         when {
             mode == CactusSTTMode.PlatformOnly -> selectPlatformStt()
             mode != CactusSTTMode.RemoteOnly && !cactusSupported -> {
-                snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
+                snackbarDisplay.showSnackbar(localSttUnsupportedText)
             }
             mode != CactusSTTMode.LocalOnly && coreUser == null -> {
-                snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
+                snackbarDisplay.showSnackbar(cloudSttSignInText)
                 showSignInDialog = true
             }
             mode != CactusSTTMode.RemoteOnly && !hasOfflineModels -> {
@@ -281,7 +326,7 @@ internal fun SetupStep(
         // Title — "Get Set Up"
         Column(modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 8.dp)) {
             Text(
-                text = "Get Set Up",
+                text = stringResource(Res.string.setup_title),
                 fontSize = 36.sp,
                 lineHeight = 44.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -291,7 +336,7 @@ internal fun SetupStep(
         }
 
         var section = 0
-        NumberedSection(num = ++section, title = "Speech recognition") {
+        NumberedSection(num = ++section, title = stringResource(Res.string.setup_speech_recognition)) {
             CardContainer {
                 SpeechModeChoice(
                     mode = coreConfig.sttConfig.mode,
@@ -304,15 +349,15 @@ internal fun SetupStep(
 
         NumberedSection(
             num = ++section,
-            title = "Ring Button",
-            sub = "Choose what each press does. You can change this later in Index settings.",
+            title = stringResource(Res.string.setup_ring_button),
+            sub = stringResource(Res.string.setup_ring_button_sub),
         ) {
             RingButtonSection(coreNav, ringButtonViewModel)
         }
 
         // Before the agent's actions, which are plugins.
         LaunchedEffect(Unit) { appSettings.setHasSeenPermissionsIntro(true) }
-        NumberedSection(num = ++section, title = "App permissions") {
+        NumberedSection(num = ++section, title = stringResource(Res.string.setup_app_permissions)) {
             CardContainer {
                 // The embedded settings row uses Material colours, which don't follow the onboarding palette.
                 MaterialTheme(
@@ -333,23 +378,23 @@ internal fun SetupStep(
 
         NumberedSection(
             num = ++section,
-            title = "Index Agent",
-            sub = "Pick which actions Index can take, and where notes and reminders are saved."
+            title = stringResource(Res.string.setup_index_agent),
+            sub = stringResource(Res.string.setup_index_agent_sub)
         ) {
             IndexAgentActionsSection(coreNav, showHeader = false, canBrowsePlugins = false)
         }
 
         NumberedSection(
             num = ++section,
-            title = "Secondary action",
-            sub = "Click before holding to perform a secondary voice action.",
+            title = stringResource(Res.string.setup_secondary_action),
+            sub = stringResource(Res.string.setup_secondary_action_sub),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PressTile(
-                    label = "Disabled",
+                    label = stringResource(Res.string.setup_secondary_disabled),
                     pattern = PressPattern.None,
                     selected = gestureRoutes[RingGesture.ClickHold] == GestureDestination.IndexAgent,
                     onClick = {
@@ -358,7 +403,7 @@ internal fun SetupStep(
                     modifier = Modifier.weight(1f),
                 )
                 PressTile(
-                    label = "Search",
+                    label = stringResource(UtilRes.string.search),
                     pattern = PressPattern.ShortHold,
                     selected = gestureRoutes[RingGesture.ClickHold] == GestureDestination.WebSearch,
                     onClick = {
@@ -371,14 +416,13 @@ internal fun SetupStep(
 
         NumberedSection(
             num = ++section,
-            title = "Backups",
-            sub = "Your recordings sync to the cloud so you can restore them on a new phone. " +
-                    "Optionally encrypt them for extra privacy.",
+            title = stringResource(Res.string.setup_backups),
+            sub = stringResource(Res.string.setup_backups_sub),
         ) {
             BackupsContent()
         }
 
-        NumberedSection(num = ++section, title = "Try it out") {
+        NumberedSection(num = ++section, title = stringResource(Res.string.setup_try_it_out)) {
             RingDemo(nav = coreNav)
         }
 
@@ -387,9 +431,9 @@ internal fun SetupStep(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            PrimaryFilledButton(text = "Finish setup", onClick = onFinish)
+            PrimaryFilledButton(text = stringResource(Res.string.setup_finish), onClick = onFinish)
             Text(
-                "You can change these later in settings",
+                stringResource(Res.string.setup_change_later),
                 fontSize = 13.sp,
                 color = palette.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -427,14 +471,14 @@ private fun BackupsContent() {
     if (!loggedIn) {
         CardContainer {
             Text(
-                "Sign in to back up your recordings.",
+                stringResource(Res.string.setup_backup_sign_in),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = palette.onSurface,
             )
             Spacer(Modifier.height(12.dp))
             PrimaryFilledButton(
-                text = "Sign in",
+                text = stringResource(UtilRes.string.sign_in),
                 onClick = { showSignInDialog = true },
             )
         }
@@ -447,20 +491,20 @@ private fun BackupsContent() {
         ) {
             Column {
                 BackupSwitchRow(
-                    title = "Cloud Backup",
-                    subtitle = if (backupEnabled) "Recordings sync to the cloud"
-                    else "Recordings stay on this device only",
+                    title = stringResource(Res.string.setup_cloud_backup),
+                    subtitle = if (backupEnabled) stringResource(Res.string.setup_cloud_backup_on)
+                    else stringResource(Res.string.setup_cloud_backup_off),
                     checked = backupEnabled,
                     enabled = true,
                     onCheckedChange = { backupViewModel.setBackupEnabled(it) },
                 )
                 HorizontalDivider(thickness = 1.dp, color = palette.outlineVariant)
                 BackupSwitchRow(
-                    title = "Encrypt Backups",
+                    title = stringResource(Res.string.setup_encrypt_backups),
                     subtitle = encryptionStatus
-                        ?: if (useEncryption) "Only you can read your backups"
-                        else if (backupEnabled) "Encrypt Index data so only you can read it"
-                        else "Turn on Cloud Backup to set up encryption",
+                        ?: if (useEncryption) stringResource(Res.string.setup_encrypt_on)
+                        else if (backupEnabled) stringResource(Res.string.setup_encrypt_off)
+                        else stringResource(Res.string.setup_encrypt_needs_backup),
                     checked = useEncryption,
                     enabled = backupEnabled && !enablingEncryption &&
                             (useEncryption || uiContext != null),
@@ -614,12 +658,12 @@ internal fun SpeechModeChoice(
     onPlatformInfo: (() -> Unit)? = null,
 ) {
     val options = listOfNotNull(
-        Triple(CactusSTTMode.PlatformOnly, "On-device", "Recommended - private, stays on this iPhone")
+        Triple(CactusSTTMode.PlatformOnly, stringResource(Res.string.setup_stt_on_device), stringResource(Res.string.setup_stt_on_device_sub))
             .takeIf { showPlatformOption },
-        Triple(CactusSTTMode.RemoteOnly, "Cloud only", "Best performance, requires connection"),
-        Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 400MB download")
+        Triple(CactusSTTMode.RemoteOnly, stringResource(Res.string.setup_stt_cloud_only), stringResource(Res.string.setup_stt_cloud_only_sub)),
+        Triple(CactusSTTMode.RemoteFirst, stringResource(Res.string.setup_stt_cloud_fallback), stringResource(Res.string.setup_stt_cloud_fallback_sub))
             .takeIf { !showPlatformOption },
-        Triple(CactusSTTMode.LocalOnly, "Local only", "Complete privacy, 400MB download"),
+        Triple(CactusSTTMode.LocalOnly, stringResource(Res.string.setup_stt_local_only), stringResource(Res.string.setup_stt_local_only_sub)),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (m, title, sub) ->
@@ -685,7 +729,7 @@ private fun SpeechRadioCard(
                 IconButton(onClick = onInfo, modifier = Modifier.size(28.dp)) {
                     Icon(
                         Icons.Outlined.Info,
-                        contentDescription = "Supported languages",
+                        contentDescription = stringResource(Res.string.setup_supported_languages),
                         tint = palette.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )

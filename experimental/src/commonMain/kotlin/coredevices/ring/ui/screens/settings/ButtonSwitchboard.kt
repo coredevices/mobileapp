@@ -71,6 +71,49 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_gesture_also
+import coreapp.ring.generated.resources.settings_gesture_also_send_to_webhook
+import coreapp.ring.generated.resources.settings_gesture_click
+import coreapp.ring.generated.resources.settings_gesture_click_hold
+import coreapp.ring.generated.resources.settings_gesture_command
+import coreapp.ring.generated.resources.settings_gesture_command_help
+import coreapp.ring.generated.resources.settings_gesture_command_placeholder
+import coreapp.ring.generated.resources.settings_gesture_configure
+import coreapp.ring.generated.resources.settings_gesture_dest_agent_command
+import coreapp.ring.generated.resources.settings_gesture_dest_agent_plugin
+import coreapp.ring.generated.resources.settings_gesture_dest_index_agent
+import coreapp.ring.generated.resources.settings_gesture_dest_local_agent
+import coreapp.ring.generated.resources.settings_gesture_dest_next_track
+import coreapp.ring.generated.resources.settings_gesture_dest_nothing
+import coreapp.ring.generated.resources.settings_gesture_dest_play_pause
+import coreapp.ring.generated.resources.settings_gesture_dest_previous_track
+import coreapp.ring.generated.resources.settings_gesture_dest_unavailable_agent
+import coreapp.ring.generated.resources.settings_gesture_dest_web_search
+import coreapp.ring.generated.resources.settings_gesture_dest_webhook
+import coreapp.ring.generated.resources.settings_gesture_dest_webhook_only
+import coreapp.ring.generated.resources.settings_gesture_double_click
+import coreapp.ring.generated.resources.settings_gesture_hold
+import coreapp.ring.generated.resources.settings_gesture_no_longer_installed
+import coreapp.ring.generated.resources.settings_gesture_option_agent_command
+import coreapp.ring.generated.resources.settings_gesture_option_next_track
+import coreapp.ring.generated.resources.settings_gesture_option_play_pause
+import coreapp.ring.generated.resources.settings_gesture_option_previous_track
+import coreapp.ring.generated.resources.settings_gesture_option_webhook
+import coreapp.ring.generated.resources.settings_gesture_other_agents
+import coreapp.ring.generated.resources.settings_gesture_other_agents_subtitle
+import coreapp.ring.generated.resources.settings_gesture_send_to_webhook
+import coreapp.ring.generated.resources.settings_gesture_sub_agent_command
+import coreapp.ring.generated.resources.settings_gesture_sub_index_agent
+import coreapp.ring.generated.resources.settings_gesture_sub_local_agent
+import coreapp.ring.generated.resources.settings_gesture_sub_web_search
+import coreapp.ring.generated.resources.settings_gesture_sub_webhook
+import coreapp.ring.generated.resources.settings_gesture_sub_webhook_only
+import coreapp.ring.generated.resources.settings_gesture_triple_click
+import coreapp.ring.generated.resources.settings_gesture_webhook_not_configured
+import coreapp.ring.generated.resources.settings_gesture_webhook_settings
+import coreapp.util.generated.resources.connect
+import coreapp.util.generated.resources.loading
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
@@ -80,6 +123,9 @@ import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.viewmodel.DestinationItem
 import coredevices.ring.ui.viewmodel.isConnected
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
+import coreapp.util.generated.resources.Res as UtilRes
 
 private val DOT = 9.dp
 private val TILE_WIDTH = 168.dp
@@ -93,6 +139,15 @@ val RingGesture.gestureLabel: String
         RingGesture.TripleClick -> "Triple click"
         RingGesture.Hold -> "Hold & Talk"
         RingGesture.ClickHold -> "Double click & hold"
+    }
+
+val RingGesture.gestureLabelRes: StringResource
+    get() = when (this) {
+        RingGesture.Click -> Res.string.settings_gesture_click
+        RingGesture.DoubleClick -> Res.string.settings_gesture_double_click
+        RingGesture.TripleClick -> Res.string.settings_gesture_triple_click
+        RingGesture.Hold -> Res.string.settings_gesture_hold
+        RingGesture.ClickHold -> Res.string.settings_gesture_click_hold
     }
 
 /** Press pattern drawn as one rounded segment per press: [DOT] wide is a click, wider is a hold. */
@@ -173,23 +228,44 @@ fun GestureDestination.tileLabel(agentTitles: Map<String, String>?): String = wh
 
 val GestureDestination.tileLabel: String get() = tileLabel(emptyMap())
 
-private fun GestureDestination.optionLabel(agentTitles: Map<String, String>?): String = when (this) {
-    GestureDestination.PlayPause -> "Play or pause music"
-    GestureDestination.NextTrack -> "Skip to the next track"
-    GestureDestination.Webhook -> "Send to webhook"
-    GestureDestination.AgentCommand -> "Run an Index agent command"
-    GestureDestination.PreviousTrack -> "Go back to the last track"
-    else -> tileLabel(agentTitles)
+/** The UI counterpart of [tileLabel], which stays English for bug reports. */
+@Composable
+fun GestureDestination.localizedTileLabel(agentTitles: Map<String, String>?): String = when (this) {
+    GestureDestination.PlayPause -> stringResource(Res.string.settings_gesture_dest_play_pause)
+    GestureDestination.NextTrack -> stringResource(Res.string.settings_gesture_dest_next_track)
+    GestureDestination.PreviousTrack -> stringResource(Res.string.settings_gesture_dest_previous_track)
+    GestureDestination.IndexAgent -> stringResource(Res.string.settings_gesture_dest_index_agent)
+    GestureDestination.LocalAgent -> stringResource(Res.string.settings_gesture_dest_local_agent)
+    GestureDestination.WebSearch -> stringResource(Res.string.settings_gesture_dest_web_search)
+    GestureDestination.WebhookOnly -> stringResource(Res.string.settings_gesture_dest_webhook_only)
+    GestureDestination.Webhook -> stringResource(Res.string.settings_gesture_dest_webhook)
+    GestureDestination.AgentCommand -> stringResource(Res.string.settings_gesture_dest_agent_command)
+    is GestureDestination.AgentPlugin -> if (agentTitles == null) {
+        stringResource(Res.string.settings_gesture_dest_agent_plugin)
+    } else {
+        agentTitles[providerId] ?: stringResource(Res.string.settings_gesture_dest_unavailable_agent)
+    }
+    GestureDestination.Nothing -> stringResource(Res.string.settings_gesture_dest_nothing)
 }
 
-private val GestureDestination.optionSub: String?
+@Composable
+private fun GestureDestination.optionLabel(agentTitles: Map<String, String>?): String = when (this) {
+    GestureDestination.PlayPause -> stringResource(Res.string.settings_gesture_option_play_pause)
+    GestureDestination.NextTrack -> stringResource(Res.string.settings_gesture_option_next_track)
+    GestureDestination.Webhook -> stringResource(Res.string.settings_gesture_option_webhook)
+    GestureDestination.AgentCommand -> stringResource(Res.string.settings_gesture_option_agent_command)
+    GestureDestination.PreviousTrack -> stringResource(Res.string.settings_gesture_option_previous_track)
+    else -> localizedTileLabel(agentTitles)
+}
+
+private val GestureDestination.optionSub: StringResource?
     get() = when (this) {
-        GestureDestination.IndexAgent -> "Takes actions for you in the cloud, on this phone when offline"
-        GestureDestination.LocalAgent -> "Runs on this phone only. Experimental, supports fewer actions"
-        GestureDestination.WebSearch -> "Answer lands in your feed"
-        GestureDestination.WebhookOnly -> "Recording to your endpoint, kept in your feed"
-        GestureDestination.Webhook -> "Click count and your payload to your endpoint"
-        GestureDestination.AgentCommand -> "Sends a command, eg \"Unlock front door\""
+        GestureDestination.IndexAgent -> Res.string.settings_gesture_sub_index_agent
+        GestureDestination.LocalAgent -> Res.string.settings_gesture_sub_local_agent
+        GestureDestination.WebSearch -> Res.string.settings_gesture_sub_web_search
+        GestureDestination.WebhookOnly -> Res.string.settings_gesture_sub_webhook_only
+        GestureDestination.Webhook -> Res.string.settings_gesture_sub_webhook
+        GestureDestination.AgentCommand -> Res.string.settings_gesture_sub_agent_command
         else -> null
     }
 
@@ -328,7 +404,7 @@ private fun GestureRow(
                 color = if (recording) accent else colors.onSurface,
             )
             Text(
-                gesture.gestureLabel,
+                stringResource(gesture.gestureLabelRes),
                 fontSize = 12.sp,
                 // The design's 12px label fits the 106dp column only without the
                 // 0.5sp letter spacing bodyLarge would otherwise contribute.
@@ -372,7 +448,7 @@ private fun GestureRow(
                 Text(
                     command.trim().takeIf { destination == GestureDestination.AgentCommand && it.isNotEmpty() }
                         ?.let { "“$it”" }
-                        ?: destination.tileLabel(agentTitles),
+                        ?: destination.localizedTileLabel(agentTitles),
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -383,7 +459,7 @@ private fun GestureRow(
                 if (onConfigure != null) {
                     Icon(
                         Icons.Default.Settings,
-                        contentDescription = "Configure",
+                        contentDescription = stringResource(Res.string.settings_gesture_configure),
                         tint = colors.onSurfaceVariant,
                         modifier = Modifier
                             .size(18.dp)
@@ -418,7 +494,7 @@ private fun WebhookCopyRow(onClick: () -> Unit) {
     ) {
         Box(modifier = Modifier.width(LABEL_WIDTH), contentAlignment = Alignment.CenterEnd) {
             Text(
-                "also",
+                stringResource(Res.string.settings_gesture_also),
                 fontSize = 11.sp,
                 color = colors.outline,
                 modifier = Modifier.padding(end = 8.dp),
@@ -447,7 +523,7 @@ private fun WebhookCopyRow(onClick: () -> Unit) {
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                "send to webhook",
+                stringResource(Res.string.settings_gesture_send_to_webhook),
                 fontSize = 12.sp,
                 color = colors.onSurfaceVariant,
             )
@@ -495,7 +571,7 @@ private fun GestureDestinationSheet(
                 else colors.onSurface,
             )
             Text(
-                gesture.gestureLabel,
+                stringResource(gesture.gestureLabelRes),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = colors.onSurface,
@@ -508,7 +584,7 @@ private fun GestureDestinationSheet(
                 SheetChoiceRow(
                     icon = option.icon,
                     title = option.optionLabel(agentTitles),
-                    subtitle = option.optionSub,
+                    subtitle = option.optionSub?.let { stringResource(it) },
                     selected = option == current,
                     onClick = {
                         commitCommand()
@@ -537,14 +613,10 @@ private fun GestureDestinationSheet(
                     value = commandDraft,
                     onValueChange = { commandDraft = it },
                     singleLine = true,
-                    label = { Text("Command") },
-                    placeholder = { Text("Unlock front door") },
+                    label = { Text(stringResource(Res.string.settings_gesture_command)) },
+                    placeholder = { Text(stringResource(Res.string.settings_gesture_command_placeholder)) },
                     supportingText = {
-                        Text(
-                            "Runs as if you'd said it to Index, using your plugins and actions. " +
-                                "For example: \"Unlock front door\", \"Turn off the living room lights\" " +
-                                "or \"Start a 25 minute timer\""
-                        )
+                        Text(stringResource(Res.string.settings_gesture_command_help))
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 )
@@ -559,7 +631,7 @@ private fun GestureDestinationSheet(
                 )
                 WebhookSheetRow(
                     icon = Icons.Default.Webhook,
-                    title = "Also send to webhook",
+                    title = stringResource(Res.string.settings_gesture_also_send_to_webhook),
                     webhookUrl = webhookUrl,
                     onClick = onOpenWebhookSettings,
                 ) {
@@ -572,7 +644,7 @@ private fun GestureDestinationSheet(
             ) {
                 WebhookSheetRow(
                     icon = Icons.Default.SettingsEthernet,
-                    title = "Webhook settings",
+                    title = stringResource(Res.string.settings_gesture_webhook_settings),
                     webhookUrl = webhookUrl,
                     onClick = onOpenWebhookSettings,
                 ) {
@@ -606,11 +678,11 @@ private fun OtherAgentsGroup(
     val chevron by animateFloatAsState(if (expanded) 180f else 0f)
     SheetChoiceRow(
         icon = Icons.AutoMirrored.Filled.Send,
-        title = "Other agents",
+        title = stringResource(Res.string.settings_gesture_other_agents),
         subtitle = when {
-            agents == null -> "Loading…"
-            routed != null -> routed.tileLabel(agentTitles)
-            else -> "What you say goes straight to the agent you pick"
+            agents == null -> stringResource(UtilRes.string.loading)
+            routed != null -> routed.localizedTileLabel(agentTitles)
+            else -> stringResource(Res.string.settings_gesture_other_agents_subtitle)
         },
         selected = routed != null && !expanded,
         onClick = { expanded = !expanded },
@@ -640,7 +712,7 @@ private fun OtherAgentsGroup(
                 }
                 OtherAgentChoiceRow(
                     title = item.title,
-                    subtitle = item.rowSubtitle(configurable),
+                    subtitle = item.rowSubtitle(configurable)?.let { stringResource(it) },
                     selected = installed?.route == current,
                     onClick = {
                         if (installed != null && installed.connected) onSelect(installed.route) else connect()
@@ -651,8 +723,8 @@ private fun OtherAgentsGroup(
             }
             missing?.let {
                 OtherAgentChoiceRow(
-                    title = it.tileLabel(agentTitles),
-                    subtitle = "No longer installed",
+                    title = it.localizedTileLabel(agentTitles),
+                    subtitle = stringResource(Res.string.settings_gesture_no_longer_installed),
                     selected = true,
                     onClick = {},
                     onConnect = null,
@@ -679,7 +751,7 @@ private fun OtherAgentChoiceRow(
         onClick = onClick,
         onLongClick = onLongClick,
         trailing = if (onConnect == null) null else {
-            { TextButton(onClick = onConnect) { Text("Connect") } }
+            { TextButton(onClick = onConnect) { Text(stringResource(UtilRes.string.connect)) } }
         },
         modifier = Modifier.padding(start = 34.dp),
     )
@@ -759,7 +831,7 @@ private fun WebhookSheetRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 15.sp, color = colors.onSurface)
             Text(
-                webhookUrl?.takeIf { it.isNotBlank() } ?: "Not configured yet. Tap to set up",
+                webhookUrl?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.settings_gesture_webhook_not_configured),
                 fontSize = 12.sp,
                 color = if (webhookUrl.isNullOrBlank()) colors.primary
                 else colors.onSurfaceVariant,

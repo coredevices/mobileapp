@@ -1,5 +1,17 @@
 package coredevices.ring.ui.viewmodel
 
+import androidx.compose.runtime.Composable
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.tool_call_called
+import coreapp.ring.generated.resources.tool_call_called_tool
+import coreapp.ring.generated.resources.tool_call_calling
+import coreapp.ring.generated.resources.tool_call_calling_tool
+import coreapp.ring.generated.resources.tool_call_loaded_mcp
+import coreapp.ring.generated.resources.tool_call_loading_mcp
+import coreapp.ring.generated.resources.tool_call_read_sources
+import coreapp.ring.generated.resources.tool_call_reading_sources
+import coreapp.ring.generated.resources.tool_calls_called
+import coreapp.ring.generated.resources.tool_calls_calling
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -8,6 +20,9 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.agent.IndexAgentCactus
 import coredevices.ring.agent.confirmation.confirmationRequest
 import coredevices.ring.agent.builtin_servlets.plugins.ReadSourceTool
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** A conversation as the recording details screen lays it out: one entry per user or assistant turn. */
 sealed class ConversationTurn {
@@ -49,29 +64,37 @@ data class ToolCallStep(
 data class ToolCallLabel(val active: String, val done: String)
 
 private val customToolCallLabels = mapOf(
-    ReadSourceTool.TOOL_NAME to ToolCallLabel("Reading data sources", "Read data sources"),
-    LazyLoadingMcpSession.LOAD_TOOLS_NAME to ToolCallLabel("Loading MCP plugin", "Loaded MCP plugin"),
+    ReadSourceTool.TOOL_NAME to (Res.string.tool_call_reading_sources to Res.string.tool_call_read_sources),
+    LazyLoadingMcpSession.LOAD_TOOLS_NAME to (Res.string.tool_call_loading_mcp to Res.string.tool_call_loaded_mcp),
 )
 
+// MCP tools are namespaced as `<integration>__<tool>`.
+internal fun customToolCallLabel(toolName: String?): Pair<StringResource, StringResource>? =
+    customToolCallLabels[toolName?.substringAfterLast("__")]
+
+@Composable
 fun toolCallLabel(toolName: String?): ToolCallLabel {
-    // MCP tools are namespaced as `<integration>__<tool>`.
-    customToolCallLabels[toolName?.substringAfterLast("__")]?.let { return it }
-    val tool = humanizeToolName(toolName)?.replaceFirstChar { it.lowercase() } ?: "tool"
-    return ToolCallLabel("Calling $tool", "Called $tool")
+    customToolCallLabel(toolName)?.let { (active, done) ->
+        return ToolCallLabel(stringResource(active), stringResource(done))
+    }
+    val tool = humanizeToolName(toolName)?.replaceFirstChar { it.lowercase() }
+        ?: return ToolCallLabel(stringResource(Res.string.tool_call_calling_tool), stringResource(Res.string.tool_call_called_tool))
+    return ToolCallLabel(stringResource(Res.string.tool_call_calling, tool), stringResource(Res.string.tool_call_called, tool))
 }
 
-fun toolCallLabel(step: ToolCallStep): ToolCallLabel {
-    val label = toolCallLabel(step.toolName)
-    return step.summary?.let { label.copy(done = it) } ?: label
-}
+@Composable
+fun toolCallLabel(step: ToolCallStep): ToolCallLabel = toolCallLabel(step.toolName).withSummary(step.summary)
+
+internal fun ToolCallLabel.withSummary(summary: String?): ToolCallLabel = summary?.let { copy(done = it) } ?: this
 
 /** Header for a group of steps: the single step's label, or a count once there are several. */
+@Composable
 fun toolCallsLabel(steps: List<ToolCallStep>, active: Boolean): String {
     val single = steps.singleOrNull()?.let { toolCallLabel(it) }
     return when {
         single != null -> if (active) single.active else single.done
-        active -> "Calling ${steps.size} tools"
-        else -> "Called ${steps.size} tools"
+        active -> pluralStringResource(Res.plurals.tool_calls_calling, steps.size, steps.size)
+        else -> pluralStringResource(Res.plurals.tool_calls_called, steps.size, steps.size)
     }
 }
 

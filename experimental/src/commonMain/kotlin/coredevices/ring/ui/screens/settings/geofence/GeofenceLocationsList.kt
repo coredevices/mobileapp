@@ -11,8 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_geofence_coords
 import coredevices.ring.data.entity.room.SavedGeofenceLocation
 import coredevices.ring.ui.viewmodel.IndexActionsViewModel
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.uuid.Uuid
 
@@ -49,7 +52,10 @@ private fun GeofenceLocationRow(
             Text(location.name)
         },
         supportingContent = {
-            Text(location.cachedAddress ?: "${location.lat}, ${location.long} (${location.radiusMeters}m radius)")
+            Text(
+                location.cachedAddress
+                    ?: stringResource(Res.string.settings_geofence_coords, location.lat, location.long, location.radiusMeters)
+            )
         },
         trailingContent = {
             Icon(Icons.Default.ChevronRight, contentDescription = null)

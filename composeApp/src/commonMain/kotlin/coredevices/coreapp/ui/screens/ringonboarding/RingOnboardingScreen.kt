@@ -69,6 +69,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.ring_onboarding_exit
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.close
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RingOnboardingScreen(
@@ -252,7 +258,7 @@ internal fun TopBarRow(
             Icon(
                 imageVector = if (leadingIsClose) Icons.Default.Close
                 else Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = if (leadingIsClose) "Close" else "Back",
+                contentDescription = if (leadingIsClose) stringResource(UtilRes.string.close) else stringResource(UtilRes.string.back),
                 tint = LocalPalette.current.onSurface,
             )
         }
@@ -272,7 +278,7 @@ internal fun TopBarRow(
             IconButton(onClick = onTrailingClose) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Exit onboarding",
+                    contentDescription = stringResource(Res.string.ring_onboarding_exit),
                     tint = LocalPalette.current.onSurface,
                 )
             }

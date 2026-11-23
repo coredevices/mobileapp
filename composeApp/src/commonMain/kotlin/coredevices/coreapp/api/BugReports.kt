@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.support_message_title
+import org.jetbrains.compose.resources.getString
 
 class BugReports(
     private val platformContext: PlatformContext,
@@ -39,14 +42,15 @@ class BugReports(
                 refresh()
             }
             // TODO check that ticket exists
+            val title = getString(Res.string.support_message_title)
             withContext(Dispatchers.Main) {
                 createNotification(
                     platformContext = platformContext,
-                    title = message.title,
+                    title = title,
                     message = message.body,
                     conversationId = message.conversationId,
                 )
-                watchNotifier.send("support-message/${message.conversationId}", "Pebble Support message", message.body)
+                watchNotifier.send("support-message/${message.conversationId}", title, message.body)
             }
         }
     }
@@ -98,7 +102,7 @@ class BugReports(
     }
 }
 
-expect fun createNotification(
+expect suspend fun createNotification(
     platformContext: PlatformContext,
     title: String,
     message: String,

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="back">Atrás</string>
+    <string name="settings">Ajustes</string>
+    <string name="light">Claro</string>
+    <string name="dark">Oscuro</string>
+    <string name="system">Sistema</string>
+    <string name="delete">Eliminar</string>
+    <string name="search">Buscar</string>
+    <string name="sign_out">Cerrar sesión</string>
+    <string name="misc_sign_in_google">Iniciar sesión con Google</string>
+</resources>

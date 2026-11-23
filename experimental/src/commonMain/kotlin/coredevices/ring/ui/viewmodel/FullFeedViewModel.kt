@@ -124,7 +124,7 @@ class FullFeedViewModel(
     sealed class Entry {
         abstract val uniqueKey: String
 
-        data class DayDivider(val label: String, val ts: Long) : Entry() {
+        data class DayDivider(val day: LocalDate, val daysAgo: Int, val ts: Long) : Entry() {
             override val uniqueKey: String get() = "day-$ts"
         }
 
@@ -175,7 +175,8 @@ class FullFeedViewModel(
                 val day = ts.toLocalDateTime(tz).date
                 if (day != lastDay) {
                     out += Entry.DayDivider(
-                        label = dayLabel(today, day),
+                        day = day,
+                        daysAgo = (today.toEpochDays() - day.toEpochDays()).toInt(),
                         ts = ts.toEpochMilliseconds(),
                     )
                     lastDay = day
@@ -228,16 +229,5 @@ class FullFeedViewModel(
 
         private fun RecordingEntryEntity.isRetryableTranscriptionFailure(): Boolean =
             status == RecordingEntryStatus.transcription_error
-
-        /** Calendar-day-aware label for a day divider. */
-        private fun dayLabel(today: LocalDate, recDay: LocalDate): String {
-            val daysAgo = (today.toEpochDays() - recDay.toEpochDays()).toInt()
-            return when {
-                daysAgo == 0 -> "Today"
-                daysAgo == 1 -> "Yesterday"
-                daysAgo in 2..6 -> recDay.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
-                else -> "${recDay.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${recDay.dayOfMonth}"
-            }
-        }
     }
 }

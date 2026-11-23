@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">Downloading Model</string>
+    <string name="misc_model_notif_downloading_text">Downloading model: %1$s.\nThis could take a few minutes...</string>
+    <string name="misc_model_notif_downloaded_title">Model Downloaded</string>
+    <string name="misc_model_notif_downloaded_text">Successfully downloaded model: %1$s</string>
+    <string name="misc_model_notif_failed_title">Model Download Failed</string>
+    <string name="misc_model_notif_timed_out_text">Download timed out: %1$s</string>
+    <string name="misc_model_notif_failed_text">Failed to download model: %1$s</string>
+    <string name="misc_model_notif_paused_title">Model Download Paused</string>
+    <string name="misc_model_notif_error_title">Model Download Error</string>
+    <string name="misc_model_notif_cancelled_title">Model Download Cancelled</string>
+    <string name="misc_model_notif_paused_text">Download paused due to network conditions.</string>
+    <string name="misc_model_notif_stop_timeout_text">Timed out trying to download model: %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Cancelled download.</string>
+    <string name="misc_model_notif_channel_name">Model Downloads</string>
+    <string name="misc_model_notif_channel_description">Speech and language model download progress</string>
+    <string name="bug_report_channel_name">Bug Report Processing</string>
+    <string name="bug_report_channel_description">Shows progress while processing bug reports</string>
+    <string name="pebble_service_channel_name">Pebble Service</string>
+    <string name="pebble_service_notification_text">Keeping Pebble connection alive</string>
+    <string name="bug_report_service_title">Bug Report</string>
+    <string name="bug_report_service_creating">Creating bug report...</string>
+</resources>

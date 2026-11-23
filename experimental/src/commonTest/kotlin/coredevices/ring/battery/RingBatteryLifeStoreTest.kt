@@ -4,8 +4,15 @@ import com.russhwolf.settings.MapSettings
 import coredevices.ring.data.entity.firestore.FirestoreKnownRing
 import coredevices.ring.data.entity.room.battery.RingBatteryHistory
 import coredevices.ring.database.room.dao.RingBatteryHistoryDao
-import coredevices.ring.ui.screens.settings.formatRecordingTime
-import coredevices.ring.ui.screens.settings.formatRemaining
+import coredevices.ring.ui.screens.settings.recordingTime
+import coredevices.ring.ui.screens.settings.remainingAmount
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_battery_life_days
+import coreapp.ring.generated.resources.settings_battery_life_minutes
+import coreapp.ring.generated.resources.settings_battery_life_months
+import coreapp.ring.generated.resources.settings_battery_life_seconds
+import coreapp.ring.generated.resources.settings_battery_life_weeks
+import coreapp.ring.generated.resources.settings_battery_life_years
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -171,13 +178,13 @@ class RingBatteryLifeStoreTest {
 
     @Test
     fun formatsCoarsely() {
-        assertEquals("5 years", formatRemaining(2_000))
-        assertEquals("13 months", formatRemaining(400))
-        assertEquals("22 months", formatRemaining(685)) // not "1 year" for 1.9 years
-        assertEquals("3 months", formatRemaining(100))
-        assertEquals("4 weeks", formatRemaining(30))
-        assertEquals("1 day", formatRemaining(1))
-        assertEquals("11 sec", formatRecordingTime(22.0)) // fleet median
-        assertEquals("3 min", formatRecordingTime(316.0)) // p99
+        assertEquals(Res.plurals.settings_battery_life_years to 5, remainingAmount(2_000))
+        assertEquals(Res.plurals.settings_battery_life_months to 13, remainingAmount(400))
+        assertEquals(Res.plurals.settings_battery_life_months to 22, remainingAmount(685)) // not "1 year" for 1.9 years
+        assertEquals(Res.plurals.settings_battery_life_months to 3, remainingAmount(100))
+        assertEquals(Res.plurals.settings_battery_life_weeks to 4, remainingAmount(30))
+        assertEquals(Res.plurals.settings_battery_life_days to 1, remainingAmount(1))
+        assertEquals(Res.string.settings_battery_life_seconds to 11, recordingTime(22.0)) // fleet median
+        assertEquals(Res.string.settings_battery_life_minutes to 3, recordingTime(316.0)) // p99
     }
 }

@@ -47,6 +47,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.bug_report_list_agent_message
+import coreapp.composeapp.generated.resources.bug_report_list_empty
+import coreapp.composeapp.generated.resources.bug_report_list_sign_in
+import coreapp.composeapp.generated.resources.bug_report_my_reports
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.refresh
+import coreapp.util.generated.resources.retry
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun BugReportsListScreen(
@@ -79,7 +90,7 @@ fun BugReportsListScreen(
         LaunchedEffect(user) {
             // Clear data immediately when user changes (including sign out)
             if (user == null) {
-                error = "Please sign in to view your bug reports"
+                error = getString(Res.string.bug_report_list_sign_in)
                 loading = false
             } else {
                 loadBugReports()
@@ -89,12 +100,12 @@ fun BugReportsListScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("My Bug Reports") },
+                    title = { Text(stringResource(Res.string.bug_report_my_reports)) },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
                                 Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = stringResource(UtilRes.string.back)
                             )
                         }
                     },
@@ -102,7 +113,7 @@ fun BugReportsListScreen(
                         IconButton(onClick = { loadBugReports() }) {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Refresh"
+                                contentDescription = stringResource(UtilRes.string.refresh)
                             )
                         }
                     }
@@ -146,7 +157,7 @@ fun BugReportsListScreen(
                                 } else {
                                     // Show refresh button if user is authenticated but there was an error
                                     IconButton(onClick = { loadBugReports() }) {
-                                        Icon(Icons.Default.Refresh, contentDescription = "Retry")
+                                        Icon(Icons.Default.Refresh, contentDescription = stringResource(UtilRes.string.retry))
                                     }
                                 }
                             }
@@ -159,7 +170,7 @@ fun BugReportsListScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No bug reports found",
+                                text = stringResource(Res.string.bug_report_list_empty),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
@@ -227,7 +238,7 @@ private fun TicketListItem(
                     .trim()
                 
                 Text(
-                    text = "Agent: $strippedText",
+                    text = stringResource(Res.string.bug_report_list_agent_message, strippedText),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,

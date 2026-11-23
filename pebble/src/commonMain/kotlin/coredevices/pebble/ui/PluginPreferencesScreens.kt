@@ -82,6 +82,32 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_complication_nothing
+import coreapp.pebble.generated.resources.plugin_complication_source
+import coreapp.pebble.generated.resources.plugin_complication_title
+import coreapp.pebble.generated.resources.plugin_complication_which
+import coreapp.pebble.generated.resources.plugin_complication_which_currently
+import coreapp.pebble.generated.resources.plugin_complications_about
+import coreapp.pebble.generated.resources.plugin_complications_empty_slot
+import coreapp.pebble.generated.resources.plugin_complications_header
+import coreapp.pebble.generated.resources.plugin_complications_info
+import coreapp.pebble.generated.resources.plugin_complications_reorder
+import coreapp.pebble.generated.resources.plugin_complications_reset
+import coreapp.pebble.generated.resources.plugin_complications_reset_confirm
+import coreapp.pebble.generated.resources.plugin_complications_reset_message
+import coreapp.pebble.generated.resources.plugin_complications_reset_title
+import coreapp.pebble.generated.resources.plugin_complications_title
+import coreapp.pebble.generated.resources.plugin_preferred_sources_automatic_named
+import coreapp.pebble.generated.resources.plugin_preferred_sources_explanation
+import coreapp.pebble.generated.resources.plugin_preferred_sources_title
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.automatic
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.ok
+import coreapp.util.generated.resources.save
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 private data class SourceRef(val category: String, val item: String) {
     val label get() = "${humanize(category)}: ${humanize(item).lowercase()}"
@@ -113,10 +139,10 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             TopBarIconButtonWithToolTip(
                 onClick = { confirmingReset = true },
                 icon = Icons.Default.RestartAlt,
-                description = "Reset to defaults",
+                description = stringResource(Res.string.plugin_complications_reset),
             )
         }
-        topBarParams.title("Complications")
+        topBarParams.title(getString(Res.string.plugin_complications_title))
     }
     val preferences: PreferencesPlugin = koinInject()
     val slots by preferences.complications.collectAsState()
@@ -124,34 +150,24 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     if (confirmingReset) {
         AlertDialog(
             onDismissRequest = { confirmingReset = false },
-            title = { Text("Reset to defaults?") },
-            text = { Text("Your complication slots will be replaced with the default readings.") },
+            title = { Text(stringResource(Res.string.plugin_complications_reset_title)) },
+            text = { Text(stringResource(Res.string.plugin_complications_reset_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     preferences.resetComplications()
                     confirmingReset = false
-                }) { Text("Reset") }
+                }) { Text(stringResource(Res.string.plugin_complications_reset_confirm)) }
             },
-            dismissButton = { TextButton(onClick = { confirmingReset = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmingReset = false }) { Text(stringResource(UtilRes.string.cancel)) } },
         )
     }
     var showingInfo by remember { mutableStateOf(false) }
     if (showingInfo) {
         AlertDialog(
             onDismissRequest = { showingInfo = false },
-            title = { Text("Complications") },
-            text = {
-                Text(
-                    "Complications are small pieces of information a watchface shows alongside the time, " +
-                        "like the weather, your phone's battery or your next event.\n\n" +
-                        "Instead of each watchface asking you to set these up separately, you choose them once here. " +
-                        "Every watchface can see this list, and the ones that support it fill their complication " +
-                        "slots from it, usually in this order, so put the ones you care about most first.\n\n" +
-                        "Watchfaces have to opt in to using this list. Some don't, and will show their own " +
-                        "choices or have their own settings instead."
-                )
-            },
-            confirmButton = { TextButton(onClick = { showingInfo = false }) { Text("OK") } },
+            title = { Text(stringResource(Res.string.plugin_complications_title)) },
+            text = { Text(stringResource(Res.string.plugin_complications_info)) },
+            confirmButton = { TextButton(onClick = { showingInfo = false }) { Text(stringResource(UtilRes.string.ok)) } },
         )
     }
     editing?.let { position ->
@@ -183,13 +199,13 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                 modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             ) {
                 Text(
-                    "Choose which data you would like watchfaces to display in complication slots, in order",
+                    stringResource(Res.string.plugin_complications_header),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = { showingInfo = true }) {
-                    Icon(Icons.Outlined.Info, contentDescription = "About complications")
+                    Icon(Icons.Outlined.Info, contentDescription = stringResource(Res.string.plugin_complications_about))
                 }
             }
         }
@@ -199,7 +215,7 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                 val reading = rememberReadings(source).getOrNull(slot?.index ?: 0)
                 ListItem(
                     leadingContent = { Text("${position + 1}", style = MaterialTheme.typography.titleMedium) },
-                    headlineContent = { Text(slot?.let { humanize(it.property) } ?: "Empty") },
+                    headlineContent = { Text(slot?.let { humanize(it.property) } ?: stringResource(Res.string.plugin_complications_empty_slot)) },
                     supportingContent = source?.let {
                         { Text(listOfNotNull(it.label, reading?.name()).joinToString(" · ")) }
                     },
@@ -213,7 +229,7 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                                     onDragStopped = { hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd) },
                                 ),
                             ) {
-                                Icon(Icons.Default.DragHandle, contentDescription = "Reorder")
+                                Icon(Icons.Default.DragHandle, contentDescription = stringResource(Res.string.plugin_complications_reorder))
                             }
                         }
                     },
@@ -265,17 +281,17 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Complication") },
+        title = { Text(stringResource(Res.string.plugin_complication_title)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
                 Picker(
-                    label = "Source",
+                    label = stringResource(Res.string.plugin_complication_source),
                     options = listOf<SourceRef?>(null) + served,
                     selected = source,
-                    text = { it?.label ?: "Nothing" },
+                    text = { it?.label ?: stringResource(Res.string.plugin_complication_nothing) },
                     onSelect = {
                         source = it
                         index = 0
@@ -284,12 +300,12 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
                 )
                 if (readings.size > 1 || index > 0) {
                     Picker(
-                        label = "Which",
+                        label = stringResource(Res.string.plugin_complication_which),
                         options = readings.indices.toList().ifEmpty { listOf(index) },
                         selected = index,
                         text = { i ->
                             val name = readings.getOrNull(i)?.name()
-                            if (name == null) ordinal(i + 1) else "${ordinal(i + 1)} (currently: $name)"
+                            if (name == null) ordinal(i + 1) else stringResource(Res.string.plugin_complication_which_currently, ordinal(i + 1), name)
                         },
                         onSelect = { index = it },
                     )
@@ -314,9 +330,9 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
         confirmButton = {
             TextButton(onClick = {
                 onSave(source?.let { ref -> chosenProperty?.let { ComplicationSlot(ref.category, ref.item, index, it) } })
-            }) { Text("Save") }
+            }) { Text(stringResource(UtilRes.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) } },
     )
 }
 
@@ -391,7 +407,7 @@ private fun <T> Picker(
     label: String,
     options: List<T>,
     selected: T,
-    text: (T) -> String,
+    text: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     enabled: Boolean = true,
 ) {
@@ -425,7 +441,7 @@ fun PreferredSourcesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Preferred sources")
+        topBarParams.title(getString(Res.string.plugin_preferred_sources_title))
     }
     val libPebble = rememberLibPebble()
     val preferred by libPebble.preferredSourcePlugins.collectAsState()
@@ -433,7 +449,7 @@ fun PreferredSourcesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Text(
-                "When more than one plugin offers the same thing, apps that don't ask for a particular one get the plugin chosen here.",
+                stringResource(Res.string.plugin_preferred_sources_explanation),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -448,11 +464,16 @@ fun PreferredSourcesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                     Box {
                         TextButton(onClick = { expanded = true }) {
                             // With no choice made, the plugin that answers is the automatic one.
-                            Text(chosen?.name ?: "Automatic (${remember(preferred) { libPebble.sourcePlugin(ref.category, ref.item)?.name }})")
+                            Text(
+                                chosen?.name ?: stringResource(
+                                    Res.string.plugin_preferred_sources_automatic_named,
+                                    remember(preferred) { libPebble.sourcePlugin(ref.category, ref.item)?.name }.toString(),
+                                )
+                            )
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             DropdownMenuItem(
-                                text = { Text("Automatic") },
+                                text = { Text(stringResource(UtilRes.string.automatic)) },
                                 onClick = {
                                     libPebble.setPreferredSourcePlugin(ref.category, ref.item, null)
                                     expanded = false

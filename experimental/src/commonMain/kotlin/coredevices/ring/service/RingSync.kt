@@ -1,6 +1,10 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
+import org.jetbrains.compose.resources.getString
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_sync_bug_prompt_body
+import coreapp.ring.generated.resources.ring_sync_bug_prompt_title
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.haversine.BluetoothFailureReason
@@ -1015,11 +1019,8 @@ class RingSync(
         reportText: String,
     ) {
         indexNotificationManager.sendBugReportPrompt(
-            "Index ran into a problem",
-            """
-                We detected a data transfer error with a recent recording from your Index 01.
-                Sorry about that! Please help us improve by sending a bug report.
-            """.trimIndent(),
+            getString(Res.string.ring_sync_bug_prompt_title),
+            getString(Res.string.ring_sync_bug_prompt_body),
             context = context,
             reportText = reportText
         )

@@ -52,9 +52,29 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingSource
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_beeper_add_contact
+import coreapp.ring.generated.resources.settings_beeper_allowed_contacts
+import coreapp.ring.generated.resources.settings_beeper_description
+import coreapp.ring.generated.resources.settings_beeper_dms_only
+import coreapp.ring.generated.resources.settings_beeper_grant_permission
+import coreapp.ring.generated.resources.settings_beeper_group
+import coreapp.ring.generated.resources.settings_beeper_last_message
+import coreapp.ring.generated.resources.settings_beeper_message_anyone
+import coreapp.ring.generated.resources.settings_beeper_message_anyone_subtitle
+import coreapp.ring.generated.resources.settings_beeper_nickname
+import coreapp.ring.generated.resources.settings_beeper_nickname_value
+import coreapp.ring.generated.resources.settings_beeper_no_contacts
+import coreapp.ring.generated.resources.settings_beeper_permission_required
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.done
+import coreapp.util.generated.resources.remove
+import coreapp.util.generated.resources.save
+import coreapp.util.generated.resources.search
 import coredevices.ring.database.Preferences
 import coredevices.ui.M3Dialog
 import coredevices.util.Permission
+import coredevices.util.formatDate
 import coredevices.util.PermissionRequester
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.delay
@@ -63,8 +83,10 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.util.generated.resources.Res as UtilRes
 
 expect class SettingsBeeperContactsDialogViewModel(): ViewModel {
     fun getContacts(query: String?): PagingSource<Int, SettingsBeeperContact>
@@ -127,15 +149,21 @@ fun SettingsBeeperContactsDialog(
         },
         scrollableContent = true,
         icon = { Icon(Icons.Outlined.Contacts, null) },
-        title = { Text(if (isAddMode) "Add Contact" else "Allowed Contacts") },
+        title = {
+            Text(
+                stringResource(
+                    if (isAddMode) Res.string.settings_beeper_add_contact else Res.string.settings_beeper_allowed_contacts
+                )
+            )
+        },
         buttons = {
             if (isAddMode) {
                 TextButton(onClick = { isAddMode = false }) {
-                    Text("Back")
+                    Text(stringResource(UtilRes.string.back))
                 }
             } else {
                 TextButton(onClick = onDismissRequest) {
-                    Text("Done")
+                    Text(stringResource(UtilRes.string.done))
                 }
             }
         }
@@ -143,7 +171,7 @@ fun SettingsBeeperContactsDialog(
         Column {
             if (!hasPermission) {
                 Text(
-                    "Beeper permission is required to access your contacts.",
+                    stringResource(Res.string.settings_beeper_permission_required),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -159,7 +187,7 @@ fun SettingsBeeperContactsDialog(
                     },
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
-                    Text("Grant Permission")
+                    Text(stringResource(Res.string.settings_beeper_grant_permission))
                 }
             } else if (isAddMode) {
                 AddContactView(viewModel, approvedIds)
@@ -180,7 +208,7 @@ private fun ApprovedContactsView(
     var nicknameText by remember { mutableStateOf("") }
 
     Text(
-        "Contacts Index is allowed to message. Try saying \"Message Alice - What's up?\"",
+        stringResource(Res.string.settings_beeper_description),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 12.dp)
@@ -190,8 +218,8 @@ private fun ApprovedContactsView(
     val messageAnyone by prefs.beeperMessageAnyone.collectAsState()
     ListItem(
         modifier = Modifier.clickable { prefs.setBeeperMessageAnyone(!messageAnyone) },
-        headlineContent = { Text("Message anyone") },
-        supportingContent = { Text("Index asks you before messaging someone not on this list") },
+        headlineContent = { Text(stringResource(Res.string.settings_beeper_message_anyone)) },
+        supportingContent = { Text(stringResource(Res.string.settings_beeper_message_anyone_subtitle)) },
         trailingContent = {
             Switch(checked = messageAnyone, onCheckedChange = prefs::setBeeperMessageAnyone)
         },
@@ -200,7 +228,7 @@ private fun ApprovedContactsView(
 
     if (approvedContacts.isEmpty()) {
         Text(
-            "No contacts added yet.",
+            stringResource(Res.string.settings_beeper_no_contacts),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 24.dp).fillMaxWidth(),
@@ -239,7 +267,7 @@ private fun ApprovedContactsView(
                                 Text(protocolLine)
                                 if (contact.nickname != null && !isEditing) {
                                     Text(
-                                        "Nickname: ${contact.nickname}",
+                                        stringResource(Res.string.settings_beeper_nickname_value, contact.nickname),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
@@ -252,7 +280,7 @@ private fun ApprovedContactsView(
                             }) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(UtilRes.string.remove),
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -267,7 +295,7 @@ private fun ApprovedContactsView(
                             TextField(
                                 value = nicknameText,
                                 onValueChange = { nicknameText = it },
-                                label = { Text("Nickname") },
+                                label = { Text(stringResource(Res.string.settings_beeper_nickname)) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
@@ -280,7 +308,7 @@ private fun ApprovedContactsView(
                                 )
                                 editingNicknameFor = null
                             }) {
-                                Text("Save")
+                                Text(stringResource(UtilRes.string.save))
                             }
                         }
                     }
@@ -294,7 +322,7 @@ private fun ApprovedContactsView(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
     ) {
         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text("  Add Contact", style = MaterialTheme.typography.labelLarge)
+        Text("  " + stringResource(Res.string.settings_beeper_add_contact), style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -323,7 +351,7 @@ private fun AddContactView(
     TextField(
         value = query,
         onValueChange = { query = it },
-        label = { Text("Search") },
+        label = { Text(stringResource(UtilRes.string.search)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
@@ -337,7 +365,7 @@ private fun AddContactView(
             checked = dmOnly,
             onCheckedChange = { dmOnly = it }
         )
-        Text("DMs only", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(Res.string.settings_beeper_dms_only), style = MaterialTheme.typography.bodySmall)
     }
 
     if (pager.loadState.refresh is LoadState.Loading) {
@@ -366,14 +394,15 @@ private fun AddContactView(
                 }
                 val identifier = extractIdentifier(contact.id, contact.protocol)
                 val cleanProtocol = formatProtocol(contact.protocol)
+                val groupProtocol = stringResource(Res.string.settings_beeper_group, cleanProtocol)
                 val protocolLine = buildString {
-                    append(if (contact.isGroupChat) "$cleanProtocol (group)" else cleanProtocol)
+                    append(if (contact.isGroupChat) groupProtocol else cleanProtocol)
                     if (identifier != null) append(" ($identifier)")
                 }
                 val lastMessageText = if (contact.lastMessageTimestamp > 0) {
-                    val dt = Instant.fromEpochMilliseconds(contact.lastMessageTimestamp)
-                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                    "Last message: ${dt.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${dt.dayOfMonth}, ${dt.year}"
+                    val date = Instant.fromEpochMilliseconds(contact.lastMessageTimestamp)
+                        .toLocalDateTime(TimeZone.currentSystemDefault()).date
+                    stringResource(Res.string.settings_beeper_last_message, formatDate(date, "yMMMd"))
                 } else null
 
                 ListItem(

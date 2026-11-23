@@ -28,6 +28,38 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalUriHandler
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_speech_delete_model
+import coreapp.ring.generated.resources.settings_speech_download_lite
+import coreapp.ring.generated.resources.settings_speech_download_lite_message
+import coreapp.ring.generated.resources.settings_speech_download_message
+import coreapp.ring.generated.resources.settings_speech_download_offline
+import coreapp.ring.generated.resources.settings_speech_download_required
+import coreapp.ring.generated.resources.settings_speech_downloading
+import coreapp.ring.generated.resources.settings_speech_engine
+import coreapp.ring.generated.resources.settings_speech_engine_download_detail
+import coreapp.ring.generated.resources.settings_speech_engine_local_first
+import coreapp.ring.generated.resources.settings_speech_engine_local_only
+import coreapp.ring.generated.resources.settings_speech_engine_local_only_detail
+import coreapp.ring.generated.resources.settings_speech_engine_platform
+import coreapp.ring.generated.resources.settings_speech_engine_platform_detail
+import coreapp.ring.generated.resources.settings_speech_engine_remote_first
+import coreapp.ring.generated.resources.settings_speech_engine_remote_only
+import coreapp.ring.generated.resources.settings_speech_engine_remote_only_detail
+import coreapp.ring.generated.resources.settings_speech_engine_sheet_subtitle
+import coreapp.ring.generated.resources.settings_speech_engine_unsupported
+import coreapp.ring.generated.resources.settings_speech_language
+import coreapp.ring.generated.resources.settings_speech_language_not_selectable
+import coreapp.ring.generated.resources.settings_speech_language_sheet_subtitle
+import coreapp.ring.generated.resources.settings_speech_model
+import coreapp.ring.generated.resources.settings_speech_model_download_size
+import coreapp.ring.generated.resources.settings_speech_model_downloaded
+import coreapp.ring.generated.resources.settings_speech_model_sheet_subtitle
+import coreapp.ring.generated.resources.settings_speech_search_languages
+import coreapp.ring.generated.resources.settings_speech_sign_in_required
+import coreapp.ring.generated.resources.settings_speech_wispr
+import coreapp.util.generated.resources.automatic
+import coreapp.util.generated.resources.cancel
 import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.inProgressSlug
 import coredevices.util.models.ModelInfo
@@ -58,6 +90,9 @@ import coredevices.util.transcription.SpokenLanguageOptions
 import coredevices.util.transcription.platformModelNeedsDownload
 import coredevices.util.transcription.platformModelState
 import coredevices.util.transcription.spokenLanguageLabel
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
+import coreapp.util.generated.resources.Res as UtilRes
 
 /** Cloud transcription is provided by Wispr Flow; the row is informational. */
 private const val WISPR_URL = "https://wispr.ai/"
@@ -72,21 +107,23 @@ internal val indexSpeechModes: List<CactusSTTMode> = listOf(
     CactusSTTMode.LocalOnly,
 )
 
+@Composable
 internal fun CactusSTTMode.speechEngineName(): String = when (this) {
-    CactusSTTMode.PlatformOnly -> "iOS Speech Recognition"
-    CactusSTTMode.RemoteOnly -> "Cloud only"
-    CactusSTTMode.RemoteFirst -> "Cloud, with local fallback (Recommended)"
-    CactusSTTMode.LocalFirst -> "Local, cloud fallback"
-    CactusSTTMode.LocalOnly -> "Local only"
+    CactusSTTMode.PlatformOnly -> stringResource(Res.string.settings_speech_engine_platform)
+    CactusSTTMode.RemoteOnly -> stringResource(Res.string.settings_speech_engine_remote_only)
+    CactusSTTMode.RemoteFirst -> stringResource(Res.string.settings_speech_engine_remote_first)
+    CactusSTTMode.LocalFirst -> stringResource(Res.string.settings_speech_engine_local_first)
+    CactusSTTMode.LocalOnly -> stringResource(Res.string.settings_speech_engine_local_only)
     CactusSTTMode.RebbleOnly, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback -> name
 }
 
+@Composable
 internal fun CactusSTTMode.speechEngineDetail(): String = when (this) {
-    CactusSTTMode.PlatformOnly -> "Private, stays on this phone"
-    CactusSTTMode.RemoteOnly -> "Best performance, requires connection"
-    CactusSTTMode.RemoteFirst -> "Requires 400MB download"
-    CactusSTTMode.LocalFirst -> "Requires 400MB download"
-    CactusSTTMode.LocalOnly -> "Complete privacy, requires 400MB download"
+    CactusSTTMode.PlatformOnly -> stringResource(Res.string.settings_speech_engine_platform_detail)
+    CactusSTTMode.RemoteOnly -> stringResource(Res.string.settings_speech_engine_remote_only_detail)
+    CactusSTTMode.RemoteFirst -> stringResource(Res.string.settings_speech_engine_download_detail)
+    CactusSTTMode.LocalFirst -> stringResource(Res.string.settings_speech_engine_download_detail)
+    CactusSTTMode.LocalOnly -> stringResource(Res.string.settings_speech_engine_local_only_detail)
     CactusSTTMode.RebbleOnly, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback -> ""
 }
 
@@ -100,9 +137,9 @@ internal fun CactusSTTMode.needsLocalModel(): Boolean =
         this == CactusSTTMode.RemoteFirst
 
 /** Hardware can't run this engine, so picking it would never work. */
-internal fun speechEngineBlockedReason(mode: CactusSTTMode, onDeviceSupported: Boolean): String? =
+internal fun speechEngineBlockedReason(mode: CactusSTTMode, onDeviceSupported: Boolean): StringResource? =
     if (mode != CactusSTTMode.RemoteOnly && mode != CactusSTTMode.PlatformOnly && !onDeviceSupported) {
-        "This device doesn't support local speech recognition"
+        Res.string.settings_speech_engine_unsupported
     } else {
         null
     }
@@ -124,18 +161,28 @@ internal fun platformModelSubtitle(
     download: ModelDownloadStatus,
 ): String = "${spokenLanguageLabel(spokenLanguage)} · ${platformModelState(availability, download)}"
 
+@Composable
 internal fun speechModelDetail(model: ModelInfo, downloaded: Boolean): String =
     listOfNotNull(
         model.intendedTask,
-        if (downloaded) "Downloaded" else "${model.sizeInMB} MB download",
+        if (downloaded) {
+            stringResource(Res.string.settings_speech_model_downloaded)
+        } else {
+            stringResource(Res.string.settings_speech_model_download_size, model.sizeInMB)
+        },
     ).joinToString(" · ")
 
 /** The language can only be chosen when the model doing the transcribing understands more than one. */
 internal fun spokenLanguageSelectable(mode: CactusSTTMode, model: ModelInfo?): Boolean =
     !mode.needsLocalModel() || model == null || model.supportsMultiLanguage
 
+@Composable
 internal fun spokenLanguageRowSubtitle(spokenLanguage: String?, selectable: Boolean): String =
-    if (selectable) spokenLanguageLabel(spokenLanguage) else "Not selectable for this speech model"
+    if (selectable) {
+        spokenLanguageLabel(spokenLanguage)
+    } else {
+        stringResource(Res.string.settings_speech_language_not_selectable)
+    }
 
 @Composable
 fun SpeechSection(
@@ -192,26 +239,26 @@ fun SpeechSection(
     val platformNeedsDownload = platformModelNeedsDownload(platformModelAvailability, platformDownloadStatus)
 
     SettingsRow(
-        title = "Speech Engine",
+        title = stringResource(Res.string.settings_speech_engine),
         subtitle = mode.speechEngineName(),
         onClick = { showEngineSheet = true },
     )
     SettingsRow(
-        title = "Spoken Language",
+        title = stringResource(Res.string.settings_speech_language),
         subtitle = spokenLanguageRowSubtitle(spokenLanguage, languageSelectable),
         enabled = languageSelectable,
         onClick = { showLanguageSheet = true },
     )
     if (mode.needsLocalModel() && onDeviceSupported) {
         SettingsRow(
-            title = "Speech Model",
+            title = stringResource(Res.string.settings_speech_model),
             subtitle = currentModel,
             onClick = { showModelSheet = true },
         )
     }
     if (mode == CactusSTTMode.PlatformOnly) {
         SettingsRow(
-            title = "Speech Model",
+            title = stringResource(Res.string.settings_speech_model),
             subtitle = platformModelSubtitle(spokenLanguage, platformModelAvailability, platformDownloadStatus),
             enabled = platformNeedsDownload,
             onClick = onShowModelDownload,
@@ -219,7 +266,7 @@ fun SpeechSection(
     }
     val uriHandler = LocalUriHandler.current
     Text(
-        "Cloud speech recognition by Wispr Flow",
+        stringResource(Res.string.settings_speech_wispr),
         fontSize = 12.sp,
         color = IndexTheme.colors.onSurfaceVariant,
         modifier = Modifier
@@ -343,13 +390,13 @@ private fun SpeechEngineSheet(
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                 Text(
-                    "Speech Engine",
+                    stringResource(Res.string.settings_speech_engine),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
                 )
                 Text(
-                    "Select what turns your recordings into text",
+                    stringResource(Res.string.settings_speech_engine_sheet_subtitle),
                     fontSize = 12.sp,
                     color = colors.onSurfaceVariant,
                 )
@@ -365,8 +412,8 @@ private fun SpeechEngineSheet(
                     hasOfflineModels = hasOfflineModels,
                     platformModelNeedsDownload = platformModelNeedsDownload,
                 )
-                val reason = blocked
-                    ?: "Sign in to use cloud speech recognition"
+                val reason = blocked?.let { stringResource(it) }
+                    ?: stringResource(Res.string.settings_speech_sign_in_required)
                         .takeIf { !signedIn && mode.needsSignIn() }
                 val selectable = blocked == null || selected
                 Row(
@@ -429,13 +476,13 @@ private fun SpeechModelSheet(
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                 Text(
-                    "Speech Model",
+                    stringResource(Res.string.settings_speech_model),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
                 )
                 Text(
-                    "Select which model transcribes on this phone",
+                    stringResource(Res.string.settings_speech_model_sheet_subtitle),
                     fontSize = 12.sp,
                     color = colors.onSurfaceVariant,
                 )
@@ -458,7 +505,7 @@ private fun SpeechModelSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(info.slug, fontSize = 15.sp, color = colors.onSurface)
                         Text(
-                            if (downloading) "Downloading…" else speechModelDetail(info, downloaded),
+                            if (downloading) stringResource(Res.string.settings_speech_downloading) else speechModelDetail(info, downloaded),
                             fontSize = 12.sp,
                             color = colors.onSurfaceVariant,
                         )
@@ -487,7 +534,7 @@ private fun SpeechModelSheet(
                             IconButton(onClick = { onDelete(info) }) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Delete ${info.slug}",
+                                    contentDescription = stringResource(Res.string.settings_speech_delete_model, info.slug),
                                     tint = colors.error,
                                     modifier = Modifier.size(18.dp),
                                 )
@@ -516,13 +563,13 @@ private fun SpokenLanguageSheet(
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                 Text(
-                    "Spoken Language",
+                    stringResource(Res.string.settings_speech_language),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
                 )
                 Text(
-                    "The language you speak when recording",
+                    stringResource(Res.string.settings_speech_language_sheet_subtitle),
                     fontSize = 12.sp,
                     color = colors.onSurfaceVariant,
                 )
@@ -531,13 +578,13 @@ private fun SpokenLanguageSheet(
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                placeholder = { Text("Search languages") },
+                placeholder = { Text(stringResource(Res.string.settings_speech_search_languages)) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
             LazyColumn(modifier = Modifier.heightIn(max = 420.dp).padding(top = 8.dp)) {
                 item {
                     SpokenLanguageRow(
-                        label = "Automatic",
+                        label = stringResource(UtilRes.string.automatic),
                         selected = current == null,
                         onClick = { onSelect(null) },
                     )
@@ -587,19 +634,24 @@ private fun SpeechModelDownloadDialog(
 ) {
     M3Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Download Required") },
+        title = { Text(stringResource(Res.string.settings_speech_download_required)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             TextButton(onClick = onDownload) {
-                Text(if (isLite) "Download lite model: ${downloadSizeInMb}MB"
-                     else "Download offline model: ${downloadSizeInMb}MB")
+                Text(
+                    stringResource(
+                        if (isLite) Res.string.settings_speech_download_lite else Res.string.settings_speech_download_offline,
+                        downloadSizeInMb,
+                    )
+                )
             }
         },
     ) {
         Text(
-            "To use offline speech recognition, you need to download a model first. " +
-                "Data charges may apply, Wi-Fi is recommended." +
-                if (isLite) " Your device may struggle with larger models, a reduced accuracy model will be used." else "",
+            listOfNotNull(
+                stringResource(Res.string.settings_speech_download_message),
+                stringResource(Res.string.settings_speech_download_lite_message).takeIf { isLite },
+            ).joinToString(" "),
             fontSize = 14.sp,
             color = IndexTheme.colors.onSurfaceVariant,
         )

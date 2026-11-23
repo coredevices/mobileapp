@@ -64,8 +64,18 @@ import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.WebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
-import coreapp.util.generated.resources.Res
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.watchapp_settings_cant_open_safely
+import coreapp.pebble.generated.resources.watchapp_settings_configuring
+import coreapp.pebble.generated.resources.watchapp_settings_open
+import coreapp.pebble.generated.resources.watchapp_settings_open_in_browser_title
+import coreapp.pebble.generated.resources.watchapp_settings_permission_request
+import coreapp.pebble.generated.resources.watchapp_settings_permissions
+import coreapp.pebble.generated.resources.watchapp_settings_review
+import coreapp.pebble.generated.resources.watchapp_settings_title
+import coreapp.pebble.generated.resources.watchapp_settings_wants_to_open
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.RealPebbleDeepLinkHandler
 import coredevices.pebble.config.ConfigPageBridge
@@ -95,9 +105,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
+import coreapp.util.generated.resources.Res as UtilRes
 
 private const val URL_DATA_PREFIX = "data:text/html;charset=utf-8,"
 
@@ -265,21 +277,21 @@ fun WatchappSettingsScreen(
             }
             AlertDialog(
                 onDismissRequest = { close(false) },
-                title = { Text("Open in browser?") },
+                title = { Text(stringResource(Res.string.watchapp_settings_open_in_browser_title)) },
                 text = {
                     Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
-                        Text("$title wants to open a page on")
+                        Text(stringResource(Res.string.watchapp_settings_wants_to_open, title))
                         Text(request.host, style = MaterialTheme.typography.titleMedium)
                         Text(request.url, style = MaterialTheme.typography.bodySmall)
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = { close(runCatching { uriHandler.openUri(request.url) }.isSuccess) }) {
-                        Text("Open")
+                        Text(stringResource(Res.string.watchapp_settings_open))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { close(false) }) { Text("Cancel") }
+                    TextButton(onClick = { close(false) }) { Text(stringResource(UtilRes.string.cancel)) }
                 },
             )
         }
@@ -335,8 +347,8 @@ fun WatchappSettingsScreen(
                     // Launched: showing waits until it's dismissed.
                     launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "$title wants to ${requestSummary(new, definedPermissions)}",
-                            actionLabel = "Review",
+                            message = getString(Res.string.watchapp_settings_permission_request, title, requestSummary(new, definedPermissions)),
+                            actionLabel = getString(Res.string.watchapp_settings_review),
                             duration = SnackbarDuration.Long,
                         )
                         if (result == SnackbarResult.ActionPerformed) showPermissions = true
@@ -357,8 +369,8 @@ fun WatchappSettingsScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text("App Settings")
-                            Text("Configuring $title", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(Res.string.watchapp_settings_title))
+                            Text(stringResource(Res.string.watchapp_settings_configuring, title), style = MaterialTheme.typography.labelMedium)
                         }
                     },
                     navigationIcon = {
@@ -366,7 +378,7 @@ fun WatchappSettingsScreen(
                             Icon(
                                 Icons.AutoMirrored.Default.ArrowBack,
                                 contentDescription = stringResource(
-                                    Res.string.back
+                                    UtilRes.string.back
                                 )
                             )
                         }
@@ -377,7 +389,7 @@ fun WatchappSettingsScreen(
                                 TopBarIconButtonWithToolTip(
                                     onClick = { showPermissions = true },
                                     icon = Icons.Outlined.Shield,
-                                    description = "Permissions",
+                                    description = stringResource(Res.string.watchapp_settings_permissions),
                                     badge = { PermissionRequestBadge(webViewUuid) },
                                 )
                                 MenuBelowAnchor(
@@ -396,7 +408,7 @@ fun WatchappSettingsScreen(
             if (webViewUuid != null && pageNetwork != null) {
                 if (!pageNetwork.enforced) {
                     Text(
-                        "These settings can't be opened safely on this device.",
+                        stringResource(Res.string.watchapp_settings_cant_open_safely),
                         modifier = Modifier.padding(paddingValues).padding(16.dp),
                     )
                 } else {

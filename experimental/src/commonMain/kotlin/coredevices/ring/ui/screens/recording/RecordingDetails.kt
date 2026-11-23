@@ -105,6 +105,29 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.ring.generated.resources.delete
+import coreapp.ring.generated.resources.feed_copied_to_clipboard
+import coreapp.ring.generated.resources.feed_delete_recording
+import coreapp.ring.generated.resources.feed_delete_recording_and_items
+import coreapp.ring.generated.resources.feed_delete_recording_keep_items
+import coreapp.ring.generated.resources.feed_delete_recording_linked_items
+import coreapp.ring.generated.resources.feed_delete_recording_message
+import coreapp.ring.generated.resources.feed_delete_recording_only
+import coreapp.ring.generated.resources.feed_delete_recording_title
+import coreapp.ring.generated.resources.feed_error_loading_recording
+import coreapp.ring.generated.resources.feed_index_recording
+import coreapp.ring.generated.resources.feed_processed_offline
+import coreapp.ring.generated.resources.feed_remove_everything
+import coreapp.ring.generated.resources.feed_retry_transcription
+import coreapp.ring.generated.resources.feed_thinking
+import coreapp.ring.generated.resources.feed_transcribed_offline
+import coreapp.ring.generated.resources.feed_transcription_error
+import coreapp.ring.generated.resources.pause
+import coreapp.ring.generated.resources.play
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.retry
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
 
 @Composable
 fun RecordingDetails(id: Long, coreNav: CoreNav) {
@@ -153,7 +176,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                     // title, not the AI-generated assistantTitle.
                     (itemState as? RecordingDetailsViewModel.ItemState.Loaded)?.recording?.localTimestamp
                         ?.let { formatRecordingTitle(it) }
-                        ?: "Index Recording",
+                        ?: stringResource(Res.string.feed_index_recording),
                     color = indexColors.onSurface,
                     fontSize = 16.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
@@ -201,7 +224,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Delete recording", color = indexColors.error) },
+                            text = { Text(stringResource(Res.string.feed_delete_recording), color = indexColors.error) },
                             onClick = { viewModel.dismissMoreMenu(); viewModel.requestDelete() },
                         )
                     }
@@ -217,7 +240,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 is RecordingDetailsViewModel.ItemState.Error -> {
-                    Text("Error loading recording", color = indexColors.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
+                    Text(stringResource(Res.string.feed_error_loading_recording), color = indexColors.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
                 }
                 is RecordingDetailsViewModel.ItemState.Loaded -> {
                     RecordingDetailsContents(
@@ -238,7 +261,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                         onOpenTimersAlarms = {
                             coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.TimersAndAlarms)
                         },
-                        onCopied = { scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") } },
+                        onCopied = { scope.launch { snackbarHostState.showSnackbar(getString(Res.string.feed_copied_to_clipboard)) } },
                         onRespondToConfirmation = viewModel::respondToConfirmation,
                     )
                 }
@@ -271,26 +294,25 @@ private fun DeleteRecordingDialog(
     if (linkedItemCount == 0) {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Delete recording?") },
-            text = { Text("This will permanently delete the recording.") },
+            title = { Text(stringResource(Res.string.feed_delete_recording_title)) },
+            text = { Text(stringResource(Res.string.feed_delete_recording_message)) },
             confirmButton = {
                 TextButton(onClick = onDeleteRecordingOnly) {
-                    Text("Delete", color = colors.error)
+                    Text(stringResource(Res.string.delete), color = colors.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             },
         )
     } else {
-        val itemWord = if (linkedItemCount == 1) "item" else "items"
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Delete recording?") },
+            title = { Text(stringResource(Res.string.feed_delete_recording_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "This recording created $linkedItemCount $itemWord in your feed.",
+                        pluralStringResource(Res.plurals.feed_delete_recording_linked_items, linkedItemCount, linkedItemCount),
                     )
                     // Use full-width selectable rows for the two delete
                     // choices so they read cleanly and don't fight the
@@ -301,14 +323,14 @@ private fun DeleteRecordingDialog(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         DeleteChoiceRow(
-                            label = "Delete recording only",
-                            sublabel = "Keep the $itemWord in your feed",
+                            label = stringResource(Res.string.feed_delete_recording_only),
+                            sublabel = pluralStringResource(Res.plurals.feed_delete_recording_keep_items, linkedItemCount),
                             color = colors.error,
                             onClick = onDeleteRecordingOnly,
                         )
                         DeleteChoiceRow(
-                            label = "Delete recording and $itemWord",
-                            sublabel = "Remove everything",
+                            label = pluralStringResource(Res.plurals.feed_delete_recording_and_items, linkedItemCount),
+                            sublabel = stringResource(Res.string.feed_remove_everything),
                             color = colors.error,
                             onClick = onDeleteRecordingAndItems,
                         )
@@ -317,7 +339,7 @@ private fun DeleteRecordingDialog(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             },
         )
     }
@@ -519,7 +541,7 @@ private fun AudioPlayerCard(
             } else {
                 Icon(
                     if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (playing) "Pause" else "Play",
+                    contentDescription = stringResource(if (playing) Res.string.pause else Res.string.play),
                     tint = colors.onPrimary,
                     modifier = Modifier.size(18.dp),
                 )
@@ -656,7 +678,7 @@ private fun AssistantTurn(
                     )
                 }
             }
-            if (turn.processedOffline) OfflineLabel("Processed offline")
+            if (turn.processedOffline) OfflineLabel(stringResource(Res.string.feed_processed_offline))
         }
     }
 }
@@ -667,7 +689,7 @@ private fun UserOfflineLabel() {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.End,
     ) {
-        OfflineLabel("Transcribed offline")
+        OfflineLabel(stringResource(Res.string.feed_transcribed_offline))
     }
 }
 
@@ -712,7 +734,7 @@ private fun ThinkingRow() {
     ) {
         AssistantAvatar()
         ShimmerText(
-            "Thinking",
+            stringResource(Res.string.feed_thinking),
             baseColor = colors.onSurfaceVariant,
             highlightColor = colors.onSurface,
             fontWeight = FontWeight.Medium,
@@ -770,7 +792,7 @@ private fun TranscriptionErrorRow(onRetry: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Transcription error",
+                stringResource(Res.string.feed_transcription_error),
                 color = colors.onErrorContainer,
                 fontSize = 14.5.sp,
                 lineHeight = 21.sp,
@@ -786,13 +808,13 @@ private fun TranscriptionErrorRow(onRetry: () -> Unit) {
             ) {
                 Icon(
                     Icons.Filled.Refresh,
-                    contentDescription = "Retry transcription",
+                    contentDescription = stringResource(Res.string.feed_retry_transcription),
                     tint = colors.onPrimary,
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    "Retry",
+                    stringResource(UtilRes.string.retry),
                     color = colors.onPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,

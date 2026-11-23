@@ -45,6 +45,21 @@ import coredevices.pebble.rememberLibPebble
 import kotlinx.coroutines.flow.collectLatest
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.canned_replies_title
+import coreapp.pebble.generated.resources.canned_replies_header
+import coreapp.pebble.generated.resources.canned_replies_reorder
+import coreapp.pebble.generated.resources.canned_replies_reply_label
+import coreapp.pebble.generated.resources.canned_replies_add
+import coreapp.pebble.generated.resources.canned_replies_unsaved_title
+import coreapp.pebble.generated.resources.canned_replies_unsaved_message
+import coreapp.pebble.generated.resources.canned_replies_discard
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.remove
+import coreapp.util.generated.resources.save
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 private const val MAX_RESPONSES = 8
 private const val MAX_RESPONSE_LENGTH = 30
@@ -55,7 +70,7 @@ fun CannedRepliesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Quick replies")
+        topBarParams.title(getString(Res.string.canned_replies_title))
     }
 
     val libPebble = rememberLibPebble()
@@ -153,7 +168,7 @@ fun CannedRepliesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         ) {
             item(key = "header") {
                 Text(
-                    text = "Custom replies appear in the \"Canned messages\" menu when replying to notifications on the watch.",
+                    text = stringResource(Res.string.canned_replies_header),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -190,7 +205,7 @@ fun CannedRepliesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                                 },
                             ),
                         ) {
-                            Icon(Icons.Default.DragHandle, contentDescription = "Reorder")
+                            Icon(Icons.Default.DragHandle, contentDescription = stringResource(Res.string.canned_replies_reorder))
                         }
                         OutlinedTextField(
                             value = text,
@@ -204,14 +219,14 @@ fun CannedRepliesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                                 .weight(1f)
                                 .focusRequester(focusRequester),
                             singleLine = true,
-                            label = { Text("Reply ${index + 1}") },
+                            label = { Text(stringResource(Res.string.canned_replies_reply_label, index + 1)) },
                         )
                         IconButton(onClick = {
                             responses.removeAt(index)
                             responseKeys.removeAt(index)
                             dirty = true
                         }) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(UtilRes.string.remove))
                         }
                     }
                 }
@@ -234,13 +249,13 @@ fun CannedRepliesScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                 enabled = responses.size < MAX_RESPONSES,
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
-                Text("Add reply", modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(Res.string.canned_replies_add), modifier = Modifier.padding(start = 4.dp))
             }
             Button(
                 onClick = { save() },
                 enabled = dirty,
             ) {
-                Text("Save")
+                Text(stringResource(UtilRes.string.save))
             }
         }
     }
@@ -254,15 +269,15 @@ fun UnsavedRepliesDialog(
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Unsaved changes") },
-        text = { Text("You have unsaved changes to your quick replies.") },
+        title = { Text(stringResource(Res.string.canned_replies_unsaved_title)) },
+        text = { Text(stringResource(Res.string.canned_replies_unsaved_message)) },
         confirmButton = {
-            TextButton(onClick = onSave) { Text("Save") }
+            TextButton(onClick = onSave) { Text(stringResource(UtilRes.string.save)) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onCancel) { Text("Cancel") }
-                TextButton(onClick = onDiscard) { Text("Discard") }
+                TextButton(onClick = onCancel) { Text(stringResource(UtilRes.string.cancel)) }
+                TextButton(onClick = onDiscard) { Text(stringResource(Res.string.canned_replies_discard)) }
             }
         },
     )

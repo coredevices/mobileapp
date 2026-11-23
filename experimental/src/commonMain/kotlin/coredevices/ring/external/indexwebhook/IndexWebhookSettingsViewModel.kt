@@ -2,6 +2,10 @@ package coredevices.ring.external.indexwebhook
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.webhook_vm_remove_failed
+import coreapp.ring.generated.resources.webhook_vm_save_failed
+import org.jetbrains.compose.resources.getString
 import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -121,7 +125,7 @@ class IndexWebhookSettingsViewModel(
                 webhookPreferences.clear(gesture)
                 if (_gesture.value == gesture) closeDialog()
             } catch (_: Exception) {
-                _testState.value = WebhookTestState.Done(false, "Could not remove webhook")
+                _testState.value = WebhookTestState.Done(false, getString(Res.string.webhook_vm_remove_failed))
             }
         }
     }
@@ -247,7 +251,7 @@ class IndexWebhookSettingsViewModel(
                 }
                 if (_gesture.value == gesture) closeDialog()
             } catch (_: Exception) {
-                _testState.value = WebhookTestState.Done(false, "Could not save webhook")
+                _testState.value = WebhookTestState.Done(false, getString(Res.string.webhook_vm_save_failed))
             } finally {
                 _saving.value = false
             }

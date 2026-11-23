@@ -11,6 +11,7 @@ import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import com.google.android.gms.location.GeofencingEvent
+import coredevices.ring.R
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.GeofenceLocationRepository
@@ -62,7 +63,7 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
             .setContentIntent(makeContentIntent(context, data.itemId.hashCode(), deepLink))
             // showsUserInterface must be false (it's a no-UI broadcast) or the watch mirror drops the action
             .addAction(
-                NotificationCompat.Action.Builder(0, "Done", makeMarkDonePendingIntent(context, data.itemId))
+                NotificationCompat.Action.Builder(0, context.getString(R.string.reminder_notification_done), makeMarkDonePendingIntent(context, data.itemId))
                     .setShowsUserInterface(false)
                     .build()
             )
@@ -98,11 +99,11 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
         )
     }
 
-    private fun ensureChannelCreated(notificationManager: NotificationManager) {
+    private fun ensureChannelCreated(context: Context, notificationManager: NotificationManager) {
         notificationManager.createNotificationChannel(
             NotificationChannel(
                 "reminders",
-                "Reminders",
+                context.getString(R.string.reminder_notification_channel),
                 NotificationManager.IMPORTANCE_HIGH
             )
         )
@@ -126,7 +127,7 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
         val isPreNotification = intent.action == ACTION_PRE_NOTIFICATION
         logger.d { "Received reminder alarm broadcast (pre=$isPreNotification)" }
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        ensureChannelCreated(notificationManager)
+        ensureChannelCreated(context, notificationManager)
         scope.launch {
             val reminder = localReminderDao.getReminder(itemId)
             if (reminder == null) {
@@ -136,9 +137,9 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
 
             val placeName = reminder.geofenceLocationId?.let { geofenceLocations.getSavedById(it) }?.name
             val title = when {
-                isPreNotification -> "Upcoming reminder"
-                placeName != null -> "Reminder: $placeName"
-                else -> "Reminder"
+                isPreNotification -> context.getString(R.string.reminder_notification_upcoming)
+                placeName != null -> context.getString(R.string.reminder_notification_at_place, placeName)
+                else -> context.getString(R.string.reminder_notification_title)
             }
             val notification = makeNotification(context, reminder, deepLinkResolver.resolveDeepLink(reminder.itemId), title)
             withContext(Dispatchers.Main) {

@@ -38,6 +38,9 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.firmware_check_unknown_platform
+import org.jetbrains.compose.resources.getString
 
 class FirmwareUpdateCheck(
     private val memfault: Memfault,
@@ -96,7 +99,7 @@ class FirmwareUpdateCheck(
     }
 
     private suspend fun doCheck(watch: WatchInfo): FirmwareUpdateCheckResult = when {
-        watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed("Unknown platform")
+        watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_unknown_platform))
         watch.platform.isCoreDevice() -> engDashOta.getLatestFirmware(watch)
         else -> cohorts.getLatestFirmware(watch)
     }

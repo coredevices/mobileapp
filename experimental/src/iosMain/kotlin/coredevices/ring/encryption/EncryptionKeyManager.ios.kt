@@ -3,6 +3,10 @@
 package coredevices.ring.encryption
 
 import PlatformUiContext
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.encryption_key_icloud_not_found
+import coreapp.ring.generated.resources.encryption_key_icloud_save_failed
+import org.jetbrains.compose.resources.getString
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -98,14 +102,14 @@ actual class EncryptionKeyManager {
             saveToKeychain(CLOUD_SERVICE, CLOUD_ACCOUNT, key, synchronizable = true)
             logger.i { "Key saved to iCloud Keychain" }
         } catch (e: Exception) {
-            throw Exception("Could not save to iCloud Keychain. Make sure iCloud Keychain is enabled in Settings > Apple ID > iCloud > Passwords and Keychain.")
+            throw Exception(getString(Res.string.encryption_key_icloud_save_failed))
         }
     }
 
     actual suspend fun readFromCloudKeychain(uiContext: PlatformUiContext): String? {
         val key = readFromKeychain(CLOUD_SERVICE, CLOUD_ACCOUNT, synchronizable = true)
         if (key == null) {
-            throw Exception("No encryption key found in iCloud Keychain. Make sure iCloud Keychain is enabled and synced, or generate a new key.")
+            throw Exception(getString(Res.string.encryption_key_icloud_not_found))
         }
         return key
     }

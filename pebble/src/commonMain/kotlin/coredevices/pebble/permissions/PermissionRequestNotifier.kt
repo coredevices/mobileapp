@@ -2,8 +2,8 @@ package coredevices.pebble.permissions
 
 import coredevices.pebble.RealPebbleDeepLinkHandler
 import coredevices.pebble.config.VisibleConfigPage
+import coredevices.pebble.ui.joinRequests
 import coredevices.pebble.ui.requestLabels
-import coredevices.pebble.ui.requestSummary
 import coredevices.util.WatchNotificationAction
 import coredevices.util.WatchNotifier
 import coredevices.util.setWatchNotificationActionHandler
@@ -15,6 +15,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.perm_request_unknown_app
+import coreapp.pebble.generated.resources.perm_request_wants
+import coreapp.pebble.generated.resources.perm_request_wants_review
+import coreapp.pebble.generated.resources.perm_request_n_more
+import coreapp.pebble.generated.resources.perm_request_wants_one
+import coreapp.pebble.generated.resources.perm_request_wants_many
+import coreapp.pebble.generated.resources.plugin_permission_list_and
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
 
 /** A running app's runtime requests, answered together by the notification's actions. */
 data class PermissionRequestNotification(
@@ -89,7 +99,7 @@ class PermissionRequestNotifier(
     }
 
     private suspend fun notificationFor(appUuid: Uuid, keys: List<String>): PermissionRequestNotification {
-        val appName = libPebble.getLockerApp(appUuid).first()?.properties?.title ?: "An app"
+        val appName = libPebble.getLockerApp(appUuid).first()?.properties?.title ?: getString(Res.string.perm_request_unknown_app)
         val labels = requestLabels(keys, libPebble.pluginPermissions().first())
         val (body, complete) = requestBody(labels)
         return PermissionRequestNotification(
@@ -107,23 +117,26 @@ class PermissionRequestNotifier(
         fun keyOf(appUuid: Uuid) = "permissions/$appUuid".hashCode()
 
         /** As many of [labels] as the watch can show, then how many more; and whether that's all of them. */
-        internal fun requestBody(labels: List<String>): Pair<String, Boolean> {
-            val full = "Wants to ${requestSummary(labels)}"
-            return if (full.fitsOnWatch()) full to true else shortenedRequest(labels) to false
-        }
+        internal suspend fun requestBody(
+            labels: List<String>,
+            string: suspend (StringResource, Array<out Any>) -> String = { res, args -> getString(res, *args) },
+        ): Pair<String, Boolean> {
+            suspend fun summary(labels: List<String>): String =
+                joinRequests(labels) { rest, last -> string(Res.string.plugin_permission_list_and, arrayOf(rest, last)) }
 
-        private fun shortenedRequest(labels: List<String>): String =
-            (labels.size - 1 downTo 1).asSequence()
-                .map { shown ->
-                    val listed = labels.take(shown) + "${labels.size - shown} more"
-                    "Wants to ${requestSummary(listed)}. Review them in the Pebble app."
-                }
-                .firstOrNull { it.fitsOnWatch() }
-                ?: if (labels.size == 1) {
-                    "Wants a permission. Review it in the Pebble app."
-                } else {
-                    "Wants ${labels.size} permissions. Review them in the Pebble app."
-                }
+            val full = string(Res.string.perm_request_wants, arrayOf(summary(labels)))
+            if (full.fitsOnWatch()) return full to true
+            for (shown in labels.size - 1 downTo 1) {
+                val listed = labels.take(shown) + string(Res.string.perm_request_n_more, arrayOf(labels.size - shown))
+                val body = string(Res.string.perm_request_wants_review, arrayOf(summary(listed)))
+                if (body.fitsOnWatch()) return body to false
+            }
+            return if (labels.size == 1) {
+                string(Res.string.perm_request_wants_one, emptyArray())
+            } else {
+                string(Res.string.perm_request_wants_many, arrayOf(labels.size))
+            } to false
+        }
 
         private fun String.fitsOnWatch() = encodeToByteArray().size <= TimelineAttribute.Body.maxLength
 

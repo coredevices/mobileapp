@@ -55,8 +55,25 @@ import com.swmansion.kmpmaps.core.MapProperties
 import com.swmansion.kmpmaps.core.MapType
 import com.swmansion.kmpmaps.core.MapUISettings
 import com.swmansion.kmpmaps.core.Marker
-import coreapp.util.generated.resources.Res
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_geofence_add_title
+import coreapp.ring.generated.resources.settings_geofence_address
+import coreapp.ring.generated.resources.settings_geofence_address_not_found
+import coreapp.ring.generated.resources.settings_geofence_address_placeholder
+import coreapp.ring.generated.resources.settings_geofence_delete_confirm
+import coreapp.ring.generated.resources.settings_geofence_delete_reminders
+import coreapp.ring.generated.resources.settings_geofence_delete_title
+import coreapp.ring.generated.resources.settings_geofence_edit_title
+import coreapp.ring.generated.resources.settings_geofence_radius
+import coreapp.ring.generated.resources.settings_geofence_reminder_count
+import coreapp.ring.generated.resources.settings_geofence_remove_association
+import coreapp.ring.generated.resources.settings_geofence_used_by
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.delete
+import coreapp.util.generated.resources.name
+import coreapp.util.generated.resources.save
+import coreapp.util.generated.resources.search
 import coredevices.ring.data.entity.room.SavedGeofenceLocation
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.viewmodel.IndexActionsViewModel
@@ -65,12 +82,14 @@ import dev.jordond.compass.geocoder.Geocoder
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
+import coreapp.util.generated.resources.Res as UtilRes
 
 private val RADIUS_RANGE_METERS = 5f..100f
 private const val MAP_ZOOM = 18f
@@ -174,32 +193,29 @@ fun GeofenceLocationEditScreen(
         if (reminderCount == 0) {
             M3Dialog(
                 onDismissRequest = { deleteReminderCount = null },
-                title = { Text("Delete Saved Place") },
+                title = { Text(stringResource(Res.string.settings_geofence_delete_title)) },
                 buttons = {
-                    TextButton(onClick = { deleteReminderCount = null }) { Text("Cancel") }
-                    TextButton(onClick = { delete(deleteReminders = false) }) { Text("Delete") }
+                    TextButton(onClick = { deleteReminderCount = null }) { Text(stringResource(UtilRes.string.cancel)) }
+                    TextButton(onClick = { delete(deleteReminders = false) }) { Text(stringResource(UtilRes.string.delete)) }
                 },
             ) {
-                Text("Delete “${saved.name}”?")
+                Text(stringResource(Res.string.settings_geofence_delete_confirm, saved.name))
             }
         } else {
-            val reminders = if (reminderCount == 1) "1 reminder" else "$reminderCount reminders"
+            val reminders = pluralStringResource(Res.plurals.settings_geofence_reminder_count, reminderCount, reminderCount)
             M3Dialog(
                 onDismissRequest = { deleteReminderCount = null },
-                title = { Text("Delete Saved Place") },
+                title = { Text(stringResource(Res.string.settings_geofence_delete_title)) },
                 verticalButtons = {
                     TextButton(
                         onClick = { delete(deleteReminders = true) },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text("Delete reminders") }
-                    TextButton(onClick = { delete(deleteReminders = false) }) { Text("Remove association") }
-                    TextButton(onClick = { deleteReminderCount = null }) { Text("Cancel") }
+                    ) { Text(stringResource(Res.string.settings_geofence_delete_reminders)) }
+                    TextButton(onClick = { delete(deleteReminders = false) }) { Text(stringResource(Res.string.settings_geofence_remove_association)) }
+                    TextButton(onClick = { deleteReminderCount = null }) { Text(stringResource(UtilRes.string.cancel)) }
                 },
             ) {
-                Text(
-                    "“${saved.name}” is used by $reminders. You can either delete these reminders or " +
-                        "remove their place association."
-                )
+                Text(stringResource(Res.string.settings_geofence_used_by, saved.name, reminders))
             }
         }
     }
@@ -220,11 +236,17 @@ fun GeofenceLocationEditScreen(
                     IconButton(onClick = coreNav::goBack) {
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(Res.string.back)
+                            contentDescription = stringResource(UtilRes.string.back)
                         )
                     }
                 },
-                title = { Text(if (locationId == null) "Add Saved Place" else "Edit Saved Place") },
+                title = {
+                    Text(
+                        stringResource(
+                            if (locationId == null) Res.string.settings_geofence_add_title else Res.string.settings_geofence_edit_title
+                        )
+                    )
+                },
                 actions = {
                     BugReportButton(
                         coreNav,
@@ -247,7 +269,7 @@ fun GeofenceLocationEditScreen(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(UtilRes.string.delete))
                     }
                 }
                 if (entity != null) {
@@ -259,7 +281,7 @@ fun GeofenceLocationEditScreen(
                             }
                         },
                         icon = { Icon(Icons.Default.Check, contentDescription = null) },
-                        text = { Text("Save") },
+                        text = { Text(stringResource(UtilRes.string.save)) },
                     )
                 }
             }
@@ -308,7 +330,7 @@ fun GeofenceLocationEditScreen(
                         value = current.name,
                         onValueChange = { draft = current.copy(name = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Name") },
+                        label = { Text(stringResource(UtilRes.string.name)) },
                         isError = current.name.isBlank(),
                         singleLine = true,
                     )
@@ -320,20 +342,20 @@ fun GeofenceLocationEditScreen(
                                 searchFailed = false
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Address") },
-                            placeholder = { Text("Search for an address") },
+                            label = { Text(stringResource(Res.string.settings_geofence_address)) },
+                            placeholder = { Text(stringResource(Res.string.settings_geofence_address_placeholder)) },
                             trailingIcon = {
                                 if (searching) {
                                     CircularProgressIndicator(Modifier.padding(12.dp), strokeWidth = 2.dp)
                                 } else {
                                     IconButton(onClick = ::searchAddress) {
-                                        Icon(Icons.Default.Search, contentDescription = "Search")
+                                        Icon(Icons.Default.Search, contentDescription = stringResource(UtilRes.string.search))
                                     }
                                 }
                             },
                             isError = searchFailed,
                             supportingText = if (searchFailed) {
-                                { Text("Couldn't find that address.") }
+                                { Text(stringResource(Res.string.settings_geofence_address_not_found)) }
                             } else null,
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -342,7 +364,7 @@ fun GeofenceLocationEditScreen(
                     }
                     Column {
                         Text(
-                            "Radius: ${current.radiusMeters.roundToInt()} m",
+                            stringResource(Res.string.settings_geofence_radius, current.radiusMeters.roundToInt()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurface,
                         )

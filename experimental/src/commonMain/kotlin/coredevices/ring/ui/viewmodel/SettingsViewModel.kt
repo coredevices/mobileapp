@@ -1,6 +1,9 @@
 package coredevices.ring.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_diagnostics_unreachable
+import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.libindex.device.IndexDeviceManager
@@ -139,7 +142,7 @@ class SettingsViewModel(
                 }
             }
             _diagnosticsState.value = DiagnosticsState.Error(
-                lastError?.message ?: "Couldn't reach your Index 01"
+                lastError?.message ?: getString(Res.string.ring_diagnostics_unreachable)
             )
         }.apply {
             invokeOnCompletion {

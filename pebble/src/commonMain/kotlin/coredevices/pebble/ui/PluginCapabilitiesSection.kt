@@ -40,6 +40,19 @@ import androidx.compose.ui.unit.dp
 import coredevices.pebble.ui.PluginCapabilities.ActionSummary
 import coredevices.pebble.ui.PluginCapabilities.SourceGroup
 import io.rebble.libpebblecommon.plugin.PluginMetadata
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_capabilities_about
+import coreapp.pebble.generated.resources.plugin_capabilities_actions
+import coreapp.pebble.generated.resources.plugin_capabilities_actions_info
+import coreapp.pebble.generated.resources.plugin_capabilities_asks_first
+import coreapp.pebble.generated.resources.plugin_capabilities_destructive
+import coreapp.pebble.generated.resources.plugin_capabilities_show_all
+import coreapp.pebble.generated.resources.plugin_capabilities_show_less
+import coreapp.pebble.generated.resources.plugin_capabilities_sources
+import coreapp.pebble.generated.resources.plugin_capabilities_sources_info
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.ok
+import org.jetbrains.compose.resources.stringResource
 
 /** What a plugin's manifest declares it serves and can do. Rows expand on tap for the detail. */
 @Composable
@@ -48,30 +61,26 @@ fun PluginCapabilitiesSection(metadata: PluginMetadata) {
     if (capabilities.isEmpty) return
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (capabilities.sources.isNotEmpty()) {
-            SectionTitle("Sources", SOURCES_INFO)
+            SectionTitle(stringResource(Res.string.plugin_capabilities_sources), stringResource(Res.string.plugin_capabilities_sources_info))
             capabilities.sources.forEach { SourceGroupRow(it) }
         }
         if (capabilities.actions.isNotEmpty()) {
-            SectionTitle("Actions", ACTIONS_INFO)
+            SectionTitle(stringResource(Res.string.plugin_capabilities_actions), stringResource(Res.string.plugin_capabilities_actions_info))
             var showAll by remember(metadata) { mutableStateOf(false) }
             val actions = capabilities.actions
             val shown = if (showAll) actions else actions.take(PluginCapabilities.ACTIONS_PREVIEW)
             shown.forEach { ActionRow(it) }
             if (actions.size > PluginCapabilities.ACTIONS_PREVIEW) {
                 TextButton(onClick = { showAll = !showAll }, modifier = Modifier.align(Alignment.End)) {
-                    Text(if (showAll) "Show less" else "Show all ${actions.size}")
+                    Text(
+                        if (showAll) stringResource(Res.string.plugin_capabilities_show_less)
+                        else stringResource(Res.string.plugin_capabilities_show_all, actions.size)
+                    )
                 }
             }
         }
     }
 }
-
-private const val SOURCES_INFO = "The information this plugin provides, like the weather or your next calendar event. " +
-    "Watchfaces, apps and other plugins can show it, if you allow them to."
-
-private const val ACTIONS_INFO = "The things this plugin can do, like turning on a light. Watchfaces, apps, other " +
-    "plugins and Index can ask it to do them; apps need your permission first. What apps have done is listed in " +
-    "Settings › Apps › App activity."
 
 @Composable
 private fun SectionTitle(text: String, info: String) {
@@ -81,13 +90,13 @@ private fun SectionTitle(text: String, info: String) {
             onDismissRequest = { showInfo = false },
             title = { Text(text) },
             text = { Text(info) },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text(stringResource(UtilRes.string.ok)) } },
         )
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
         Text(text, style = MaterialTheme.typography.titleMedium)
         IconButton(onClick = { showInfo = true }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Outlined.Info, contentDescription = "About $text", modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.Info, contentDescription = stringResource(Res.string.plugin_capabilities_about, text), modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -143,8 +152,8 @@ private fun ActionRow(action: ActionSummary) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(action.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            if (action.requiresConfirmation) Tag("Asks first", MaterialTheme.colorScheme.onSurfaceVariant)
-            if (action.destructive) Tag("Destructive", MaterialTheme.colorScheme.error)
+            if (action.requiresConfirmation) Tag(stringResource(Res.string.plugin_capabilities_asks_first), MaterialTheme.colorScheme.onSurfaceVariant)
+            if (action.destructive) Tag(stringResource(Res.string.plugin_capabilities_destructive), MaterialTheme.colorScheme.error)
         }
         if (action.description.isNotEmpty()) {
             Text(

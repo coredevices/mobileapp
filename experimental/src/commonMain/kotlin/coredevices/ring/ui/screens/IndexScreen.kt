@@ -15,6 +15,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.settings
 import coredevices.pebble.ui.IndexTabBadge
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.database.Preferences
@@ -27,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import kotlinx.io.buffered
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import kotlin.time.Clock
@@ -90,7 +93,7 @@ fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
                     onClick = { coreNav.navigateTo(RingRoutes.Settings) },
                 ) {
                     BadgedBox(badge = { if (settingsBadgeCount > 0) Badge() }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(UtilRes.string.settings))
                     }
                 }
             },

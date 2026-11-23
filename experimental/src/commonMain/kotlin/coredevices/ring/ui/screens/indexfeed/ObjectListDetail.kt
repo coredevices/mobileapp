@@ -125,6 +125,48 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.index_new_list_name
+import coreapp.ring.generated.resources.delete
+import coreapp.ring.generated.resources.feed_add_checkbox
+import coreapp.ring.generated.resources.feed_add_item
+import coreapp.ring.generated.resources.feed_add_note
+import coreapp.ring.generated.resources.feed_change_list_type
+import coreapp.ring.generated.resources.feed_convert_to_reminder
+import coreapp.ring.generated.resources.feed_delete_all_subitems
+import coreapp.ring.generated.resources.feed_delete_all_subitems_subtitle
+import coreapp.ring.generated.resources.feed_delete_list
+import coreapp.ring.generated.resources.feed_delete_list_subitem_count
+import coreapp.ring.generated.resources.feed_delete_list_title
+import coreapp.ring.generated.resources.feed_done_count
+import coreapp.ring.generated.resources.feed_emoji
+import coreapp.ring.generated.resources.feed_list_type
+import coreapp.ring.generated.resources.feed_list_type_keep_as
+import coreapp.ring.generated.resources.feed_list_type_select_default
+import coreapp.ring.generated.resources.feed_list_type_switch_to
+import coreapp.ring.generated.resources.feed_list_untitled
+import coreapp.ring.generated.resources.feed_more
+import coreapp.ring.generated.resources.feed_move_subitems
+import coreapp.ring.generated.resources.feed_move_subitems_subtitle
+import coreapp.ring.generated.resources.feed_new_list
+import coreapp.ring.generated.resources.feed_no_emoji
+import coreapp.ring.generated.resources.feed_no_matches
+import coreapp.ring.generated.resources.feed_notes_to_self
+import coreapp.ring.generated.resources.feed_nothing_here_yet
+import coreapp.ring.generated.resources.feed_open
+import coreapp.ring.generated.resources.feed_overdue
+import coreapp.ring.generated.resources.feed_remove_checkbox
+import coreapp.ring.generated.resources.feed_rename_list
+import coreapp.ring.generated.resources.feed_search_emojis
+import coreapp.ring.generated.resources.feed_this_list
+import coreapp.ring.generated.resources.feed_type_checkbox
+import coreapp.ring.generated.resources.feed_type_note
+import coreapp.ring.generated.resources.search
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.save
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 // List kind detail (children rows, sort/search, done section) — split
 // out of ObjectDetail.kt for review-friendliness.
@@ -153,7 +195,7 @@ internal fun ListView(
     var deleteAction by remember(s.list.firestoreId) { mutableStateOf(DeleteListAction.MoveItems) }
     var deleteTargetListId by remember(s.list.firestoreId) { mutableStateOf(LIST_NOTES_SELF_ID) }
     var editing by remember(s.list.firestoreId) { mutableStateOf(startEditing && !isTodos) }
-    val initialNewListRename = startEditing && s.list.title == "New list"
+    val initialNewListRename = startEditing && s.list.title == stringResource(Res.string.index_new_list_name)
     var draftTitle by remember(s.list.firestoreId) {
         val initialTitle = if (initialNewListRename) "" else s.list.title
         mutableStateOf(TextFieldValue(initialTitle, selection = TextRange(initialTitle.length)))
@@ -263,7 +305,7 @@ internal fun ListView(
             )
         } else {
             DetailTopBar(
-                title = s.list.title.ifBlank { "List" },
+                title = s.list.title.ifBlank { stringResource(Res.string.feed_list_untitled) },
                 titleSlot = if (editing) {
                     {
                         // Inline rename input. Replaces the title text while
@@ -301,7 +343,7 @@ internal fun ListView(
                                     Box {
                                         if (draftTitle.text.isBlank()) {
                                             Text(
-                                                "New list",
+                                                stringResource(Res.string.feed_new_list),
                                                 color = colors.onSurfaceVariant.copy(alpha = 0.55f),
                                                 fontSize = 16.sp,
                                                 fontWeight = FontWeight.SemiBold,
@@ -333,7 +375,7 @@ internal fun ListView(
                                 Spacer(Modifier.width(8.dp))
                             }
                             Text(
-                                s.list.title.ifBlank { "List" },
+                                s.list.title.ifBlank { stringResource(Res.string.feed_list_untitled) },
                                 style = TextStyle(
                                     color = colors.onSurface,
                                     fontSize = 16.sp,
@@ -356,7 +398,7 @@ internal fun ListView(
                 right = {
                     if (editing) {
                         Text(
-                            "Save",
+                            stringResource(UtilRes.string.save),
                             color = colors.primary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -365,23 +407,23 @@ internal fun ListView(
                     } else {
                         SortPill(sort = s.sort, onClick = vm::toggleSort)
                         IconButton(onClick = { searching = true }) {
-                            Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Search, stringResource(Res.string.search), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
                         }
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Default.MoreVert, "More", tint = colors.onSurfaceVariant)
+                                Icon(Icons.Default.MoreVert, stringResource(Res.string.feed_more), tint = colors.onSurfaceVariant)
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 if (!isTodos) {
                                     DropdownMenuItem(
-                                        text = { Text("Rename list") },
+                                        text = { Text(stringResource(Res.string.feed_rename_list)) },
                                         onClick = {
                                             menuOpen = false
                                             startTitleEdit()
                                         },
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Change list type") },
+                                        text = { Text(stringResource(Res.string.feed_change_list_type)) },
                                         onClick = {
                                             menuOpen = false
                                             entryTypeDialogOpen = true
@@ -390,7 +432,7 @@ internal fun ListView(
                                 }
                                 if (!isCoreList) {
                                     DropdownMenuItem(
-                                        text = { Text("Delete list", color = colors.error) },
+                                        text = { Text(stringResource(Res.string.feed_delete_list), color = colors.error) },
                                         onClick = {
                                             menuOpen = false
                                             if (s.childCount == 0) {
@@ -425,7 +467,7 @@ internal fun ListView(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (s.query.isNotBlank()) "No matches." else "Nothing here yet.",
+                            stringResource(if (s.query.isNotBlank()) Res.string.feed_no_matches else Res.string.feed_nothing_here_yet),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                         )
@@ -435,7 +477,7 @@ internal fun ListView(
             if (inlineNoteEditor && s.query.isBlank() && s.sort == ObjectDetailViewModel.ListSort.Newest) {
                 item("new-note-editor-top") {
                     NewNoteRow(
-                        placeholder = if (isChecklistList) "Add item" else "Add note",
+                        placeholder = stringResource(if (isChecklistList) Res.string.feed_add_item else Res.string.feed_add_note),
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
@@ -489,7 +531,7 @@ internal fun ListView(
             if (inlineNoteEditor && s.query.isBlank() && s.sort != ObjectDetailViewModel.ListSort.Newest) {
                 item("new-note-editor-bottom") {
                     NewNoteRow(
-                        placeholder = if (isChecklistList) "Add item" else "Add note",
+                        placeholder = stringResource(if (isChecklistList) Res.string.feed_add_item else Res.string.feed_add_note),
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
@@ -545,7 +587,7 @@ internal fun ListView(
 
     if (deleteDialogOpen) {
         DeleteListDialog(
-            listTitle = s.list.title.ifBlank { "this list" },
+            listTitle = s.list.title.ifBlank { stringResource(Res.string.feed_this_list) },
             childCount = s.childCount,
             targetLists = deleteTargetLists,
             selectedAction = deleteAction,
@@ -584,7 +626,7 @@ private fun EntryTypeDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "List Type",
+                stringResource(Res.string.feed_list_type),
                 color = colors.onSurface,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -592,7 +634,7 @@ private fun EntryTypeDialog(
         contents = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "Select a default type for new entries:",
+                    stringResource(Res.string.feed_list_type_select_default),
                     color = colors.onSurfaceVariant,
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
@@ -600,12 +642,12 @@ private fun EntryTypeDialog(
                 Spacer(Modifier.height(4.dp))
                 EntryTypeButton(
                     selected = listKind != "checklist",
-                    label = "Note",
+                    label = stringResource(Res.string.feed_type_note),
                     onClick = { onSelect("note") },
                 )
                 EntryTypeButton(
                     selected = listKind == "checklist",
-                    label = "Checkbox",
+                    label = stringResource(Res.string.feed_type_checkbox),
                     onClick = { onSelect("checklist") },
                 )
             }
@@ -622,14 +664,7 @@ private fun EntryTypeButton(
     val modifier = Modifier.fillMaxWidth()
     FilledTonalButton(onClick = onClick, modifier = modifier) {
         Text(
-            buildString {
-                if (selected) {
-                    append("Keep as ")
-                } else {
-                    append("Switch to ")
-                }
-                append(label)
-            }
+            stringResource(if (selected) Res.string.feed_list_type_keep_as else Res.string.feed_list_type_switch_to, label)
         )
     }
 }
@@ -653,7 +688,7 @@ private fun DeleteListDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Delete list?",
+                stringResource(Res.string.feed_delete_list_title),
                 color = colors.onSurface,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -662,7 +697,7 @@ private fun DeleteListDialog(
             {
                 Column {
                     Text(
-                        "$listTitle has $childCount ${if (childCount == 1) "subitem" else "subitems"}.",
+                        pluralStringResource(Res.plurals.feed_delete_list_subitem_count, childCount, listTitle, childCount),
                         color = colors.onSurfaceVariant,
                         fontSize = 14.sp,
                         lineHeight = 19.sp,
@@ -671,8 +706,8 @@ private fun DeleteListDialog(
                     if (targetLists.isNotEmpty()) {
                         ChoiceRow(
                             selected = selectedAction == DeleteListAction.MoveItems,
-                            title = "Move subitems",
-                            subtitle = "Add them to another list before deleting this one.",
+                            title = stringResource(Res.string.feed_move_subitems),
+                            subtitle = stringResource(Res.string.feed_move_subitems_subtitle),
                             onClick = { onAction(DeleteListAction.MoveItems) },
                         )
                         if (selectedAction == DeleteListAction.MoveItems) {
@@ -693,7 +728,7 @@ private fun DeleteListDialog(
                                     )
                                     if (!selectedTarget?.icon.isNullOrBlank()) Spacer(Modifier.width(8.dp))
                                     Text(
-                                        selectedTarget?.title?.ifBlank { "List" } ?: "Notes to self",
+                                        selectedTarget?.title?.ifBlank { stringResource(Res.string.feed_list_untitled) } ?: stringResource(Res.string.feed_notes_to_self),
                                         color = colors.onSurface,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
@@ -713,7 +748,7 @@ private fun DeleteListDialog(
                                                         Text(list.icon, fontSize = 14.sp)
                                                         Spacer(Modifier.width(8.dp))
                                                     }
-                                                    Text(list.title.ifBlank { "List" })
+                                                    Text(list.title.ifBlank { stringResource(Res.string.feed_list_untitled) })
                                                 }
                                             },
                                             onClick = {
@@ -729,8 +764,8 @@ private fun DeleteListDialog(
                     }
                     ChoiceRow(
                         selected = selectedAction == DeleteListAction.DeleteItems,
-                        title = "Delete all subitems",
-                        subtitle = "Remove every subitem in this list.",
+                        title = stringResource(Res.string.feed_delete_all_subitems),
+                        subtitle = stringResource(Res.string.feed_delete_all_subitems_subtitle),
                         onClick = { onAction(DeleteListAction.DeleteItems) },
                     )
                 }
@@ -738,12 +773,12 @@ private fun DeleteListDialog(
         } else null,
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Delete list", color = colors.error, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(Res.string.feed_delete_list), color = colors.error, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = colors.onSurfaceVariant)
+                Text(stringResource(UtilRes.string.cancel), color = colors.onSurfaceVariant)
             }
         },
     )
@@ -909,7 +944,7 @@ private fun SwipeToDeleteRow(
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(Res.string.delete),
                         tint = Color.White,
                         modifier = Modifier.size(20.dp),
                     )
@@ -994,14 +1029,14 @@ private fun ListEmojiPicker(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Emoji",
+                            stringResource(Res.string.feed_emoji),
                             color = colors.onSurface,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            "No emoji",
+                            stringResource(Res.string.feed_no_emoji),
                             color = colors.primary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1047,7 +1082,7 @@ private fun ListEmojiPicker(
                                 Box(Modifier.weight(1f)) {
                                     if (query.isBlank()) {
                                         Text(
-                                            "Search emojis",
+                                            stringResource(Res.string.feed_search_emojis),
                                             color = colors.onSurfaceVariant,
                                             fontSize = 14.sp,
                                         )
@@ -1106,6 +1141,8 @@ private fun EditableNoteRow(
     var isMultiLine by remember(child.firestoreId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val isChecklist = child.kind == "checklist"
+    val toggleCheckboxLabel = stringResource(if (isChecklist) Res.string.feed_remove_checkbox else Res.string.feed_add_checkbox)
+    val convertToReminderLabel = stringResource(Res.string.feed_convert_to_reminder)
 
     fun flush() {
         val clean = draft.trim()
@@ -1125,7 +1162,7 @@ private fun EditableNoteRow(
         ) {
             Icon(
                 Icons.Default.Delete,
-                contentDescription = "Delete",
+                contentDescription = stringResource(Res.string.delete),
                 tint = colors.onSurfaceVariant,
                 modifier = Modifier.size(17.dp),
             )
@@ -1204,14 +1241,14 @@ private fun EditableNoteRow(
                 .appendTextContextMenuComponents {
                     textContextMenuItem(
                         key = ToggleCheckboxMenuKey,
-                        label = if (isChecklist) "Remove Checkbox" else "Add Checkbox",
+                        label = toggleCheckboxLabel,
                     ) {
                         onToggleKind(draft)
                         close()
                     }
                     textContextMenuItem(
                         key = ConvertToReminderMenuKey,
-                        label = "Convert to Reminder",
+                        label = convertToReminderLabel,
                     ) {
                         onConvertToReminder(draft)
                         close()
@@ -1245,7 +1282,7 @@ private fun EditableNoteRow(
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Open",
+                contentDescription = stringResource(Res.string.feed_open),
                 tint = colors.onSurfaceVariant,
                 modifier = Modifier.size(17.dp),
             )
@@ -1290,7 +1327,7 @@ private fun NewNoteRow(
     ) {
         Icon(
             Icons.Default.Add,
-            contentDescription = "Add note",
+            contentDescription = stringResource(Res.string.feed_add_note),
             tint = colors.onSurfaceVariant.copy(alpha = 0.58f),
             modifier = Modifier.size(18.dp),
         )
@@ -1363,7 +1400,7 @@ private fun DoneSection(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                "Done · ${done.size}",
+                stringResource(Res.string.feed_done_count, done.size),
                 color = colors.onSurfaceVariant,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -1389,13 +1426,15 @@ private fun DoneSection(
     }
 }
 
+@Composable
 private fun childSubtitle(c: CachedItem): String? {
+    val overdue = stringResource(Res.string.feed_overdue)
     fun dueLabel(due: Instant): String {
         // Overdue takes precedence over the formatted date so the user
         // sees urgency at a glance — same logic as the home Todos
         // preview's TaskRow.
         val now = Clock.System.now()
-        return if (due.toEpochMilliseconds() < now.toEpochMilliseconds()) "Overdue"
+        return if (due.toEpochMilliseconds() < now.toEpochMilliseconds()) overdue
             else formatShortDateTime(due)
     }
     return when (c.kind) {

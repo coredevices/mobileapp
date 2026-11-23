@@ -34,13 +34,21 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import org.jetbrains.compose.resources.stringResource
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_set_due_date
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.next
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.save
 
 /** Tappable due-date row: tap opens a date picker that chains into a time picker. */
 @Composable
 internal fun DueAtRow(label: String, dueAt: Instant?, onChange: (Instant?) -> Unit) {
     val colors = IndexTheme.colors
     var showDate by remember { mutableStateOf(false) }
-    val pretty = dueAt?.let { formatLongDateTime(it) } ?: "Set due date…"
+    val pretty = dueAt?.let { formatLongDateTime(it) } ?: stringResource(Res.string.feed_set_due_date)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -60,7 +68,7 @@ internal fun DueAtRow(label: String, dueAt: Instant?, onChange: (Instant?) -> Un
         )
         if (dueAt != null) {
             Text(
-                "Clear",
+                stringResource(Res.string.feed_clear),
                 color = colors.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -114,10 +122,10 @@ internal fun DueAtPickerFlow(
                         pickedDate, kotlinx.datetime.LocalTime(existing.hour, existing.minute),
                     ).toInstant(tz)
                     showTime = true
-                }) { Text("Next") }
+                }) { Text(stringResource(UtilRes.string.next)) }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             },
         ) {
             DatePicker(state = datePickerState)
@@ -141,14 +149,14 @@ internal fun DueAtPickerFlow(
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
                     TextButton(onClick = {
                         onPicked(
                             kotlinx.datetime.LocalDateTime(
                                 ldt.date, kotlinx.datetime.LocalTime(timeState.hour, timeState.minute),
                             ).toInstant(tz),
                         )
-                    }) { Text("Save") }
+                    }) { Text(stringResource(UtilRes.string.save)) }
                 }
             }
         }

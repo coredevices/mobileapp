@@ -33,6 +33,10 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.viewmodel.ToolCallStep
 import coredevices.ring.ui.viewmodel.toolCallLabel
 import coredevices.ring.ui.viewmodel.toolCallsLabel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_hide_tool_calls
+import coreapp.ring.generated.resources.feed_show_tool_calls
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Collapsed summary of an assistant turn's intermediate tool calls. The header shimmers while
@@ -57,7 +61,7 @@ fun ToolCallGroup(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Hide tool calls" else "Show tool calls",
+                contentDescription = stringResource(if (expanded) Res.string.feed_hide_tool_calls else Res.string.feed_show_tool_calls),
                 tint = colors.onSurfaceVariant,
                 modifier = Modifier.size(16.dp).rotate(caretRotation),
             )

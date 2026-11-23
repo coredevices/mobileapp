@@ -26,6 +26,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.permissions_screen_all_granted
+import coreapp.pebble.generated.resources.permissions_screen_hide_warnings
+import coreapp.pebble.generated.resources.permissions_screen_hide_warnings_description
+import coreapp.pebble.generated.resources.permissions_screen_title
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -33,6 +38,8 @@ import coredevices.util.description
 import coredevices.util.name
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 private val logger = Logger.withTag("PermissionsScreen")
@@ -44,7 +51,7 @@ fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             topBarParams.searchAvailable(null)
             topBarParams.actions {
             }
-            topBarParams.title("Permissions")
+            topBarParams.title(getString(Res.string.permissions_screen_title))
         }
         val permissionRequester: PermissionRequester = koinInject()
         val coreConfigHolder: CoreConfigHolder = koinInject()
@@ -63,9 +70,9 @@ fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         LazyColumn {
             item(key = "hide_badges_toggle") {
                 ListItem(
-                    headlineContent = { Text("Hide missing permission warnings") },
+                    headlineContent = { Text(stringResource(Res.string.permissions_screen_hide_warnings)) },
                     supportingContent = {
-                        Text("Don't show a badge on Settings when permissions are missing")
+                        Text(stringResource(Res.string.permissions_screen_hide_warnings_description))
                     },
                     trailingContent = {
                         Switch(
@@ -101,12 +108,12 @@ fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             ),
                             modifier = Modifier.padding(15.dp),
                         ) {
-                            Text("All permissions granted!", modifier = Modifier.padding(15.dp))
+                            Text(stringResource(Res.string.permissions_screen_all_granted), modifier = Modifier.padding(15.dp))
                         }
                     }
                 }
             } else {
-                items(missingPermissionsList, key = { it.name() }) { permission ->
+                items(missingPermissionsList, key = { it.name }) { permission ->
                     ListItem(
                         headlineContent = {
                             Text(text = permission.name())

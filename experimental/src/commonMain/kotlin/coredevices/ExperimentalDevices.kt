@@ -2,6 +2,10 @@ package coredevices
 
 import DocumentAttachment
 import com.eygraber.uri.Uri
+import org.jetbrains.compose.resources.getString
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_repair_required_body
+import coreapp.ring.generated.resources.ring_repair_required_title
 import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.database.dao.AgentIterationDao
 import coredevices.indexai.database.dao.ConversationMessageDao
@@ -133,8 +137,8 @@ class ExperimentalDevices(
         }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
-            val title = "Re-pairing required"
-            val body = "Please re-pair your Index 01 device to continue using it."
+            val title = getString(Res.string.ring_repair_required_title)
+            val body = getString(Res.string.ring_repair_required_body)
             NotifierManager.getLocalNotifier().notify {
                 this.title = title
                 this.body = body
