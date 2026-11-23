@@ -90,6 +90,10 @@ Most code runs in background services where requesting permissions isn't possibl
 
 Each PR should address one concern. Do not bundle animation fixes + trace timeline + retry UI + error handling changes into one PR. Multi-concern PRs are harder to review and get closed as "rewritten" when any part is wrong.
 
+Agree the design with the mobile engineering team before writing a PR that adds more than ~300 lines, or adds a new feature which isn't a simple expansion/copy of an existing feature. The important part is to agree on the design/architecture - otherwise an agent will make compounding decisions which are very likely to go in the wrong direction.
+
+PRs are not needed to run CI - ust push a branch. If you need to publish an internal iOS build then create a draft PR but don;t mark it ready for review unless it really should be reviewed.
+
 ### 8. Include tests for new logic
 
 Non-trivial new logic (parsers, encoders, state machines) must have unit tests. When Alice rewrote the M4A feature, she included 324 lines of tests for the M4A parser. The original PR had zero.
@@ -98,7 +102,9 @@ Non-trivial new logic (parsers, encoders, state machines) must have unit tests. 
 
 When adding a new format/encoding, prefer keeping the local storage format unchanged and converting at the boundary (upload/download). Don't introduce MIME-type dispatch, dual playback paths, or multi-step file replacement schemes when you can encode on upload and decode on download.
 
-### 10. Prefer simple architectures over clever ones
+This applies to design proposals as much as code. Lead with the simplest option. Every new API, interface, stored state, flag, migration or fallback needs a reason an existing mechanism can't do the job (e.g. locker sync, LibPebbleConfig, an existing DB table).
+
+### 10. No init blocks
 
 Never use kotlin class `init()` blocks. These are invoked on class creation (happens during DI graph init and could block main thread/happen at an unexpected time). Use an explicit initialization method if needed, called from somewhere sensible.
 
@@ -113,6 +119,8 @@ Comments should be concise. Specifically:
     - Default to no comment on a fix. If the code has a genuine landmine someone would reintroduce later, one line stating the constraint itself; the full story goes in the commit message.
     - Comments describing inner workings of a method easily become stale when the code changes; don't write them in the first place unless really needed.
     - Keep any comments which *are* required minimal and concise.
+
+The same goes for docs, PR descriptions and UI copy: short, and an example beats a paragraph. PR descriptions must only claim what was actually tested.
 
 ### 12. Imports
 
@@ -132,6 +140,28 @@ libpebble3 has an explicit API. The module uses gradle's `explicitApi()` which m
 class must define whether it is internal/public/private. There must be a very good reason to make 
 anything public in libpebble3 - we want to the keep API limited in scope. There is further work
 needed to reduce the scope.
+
+### 16. Fix in the right layer, and fix the whole class
+
+Fix in the shared layer (DAO, codegen, service, plugin API) rather than patching call sites, and prefer the backend over the app when the server can do it (as a general rule - there are always exceptions). Before calling a change done, check the other paths that can hit the same thing: plugin layer, interceptors, pkjs, legacy apps/settings pages, iOS.
+
+### 17. Verify before claiming
+
+- Don't state how Android, iOS, firmware or a library behaves from memory — read the source/docs, or say it's unverified.
+- "Done" means every touched module compiles and its tests run (iOS too for commonMain/iosMain changes; tests in commonTest/androidHostTest/iosTest, which CI runs).
+- UI changes aren't done until someone has looked at them on a device. Say what wasn't exercised.
+
+### 18. Don't commit agent artifacts
+
+No plans, TODO lists, specs (`PLAN.md`, `docs/superpowers`, etc) or prebuilt binaries. Do commit the generated Room schema JSON with any schema change.
+
+### 19. Don't write fallbacks for features which need a firmware change
+
+We assume that users will update firmware quickly. Don't write a fallback to make a feature work on
+existing firmware versions, if the alternative is waiting for users to update.
+
+The only exception to this is if we decide we want to make a feature work on legacy watches whose
+firmware cannot be updated.
 
 ## Useful references
 

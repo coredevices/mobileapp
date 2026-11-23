@@ -16,6 +16,14 @@ Do not submit huge pull requests - we won't review them. Break down large featur
 
 Please don't let that put you off submitting changes - but also please understand that in a world where anyone can ask an agent to write thousands of lines of code in minutes, we cannot accept all of that code into our codebase at the same rate while keeping it maintainable and at a high quality.
 
+### PR description
+
+Listing the files that changed in the PR description is not useful (that;'s what github does). 
+
+Please describe the architecture of the change - at a high level, what changed, why, and what alternative designs were considered / trade-offs were made.
+
+Describe what testing was done, and include screenshots of any UI changes.
+
 ### Sign off
 
 After you make a PR a comment from @CLAassistant will appear asking you to sign the CLA. This will link a page to allow you to confirm that you have read and agreed to the CLA by signing in with GitHub.
