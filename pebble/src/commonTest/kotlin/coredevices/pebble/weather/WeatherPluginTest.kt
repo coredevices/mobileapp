@@ -145,7 +145,8 @@ class WeatherSeriesTest {
     private val london = entry(LONDON, "London").copy(
         lastUpdateTimeUtcSecs = fetched,
         locationUtcOffsetMin = 0,
-        todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte()) },
+        todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte(), uvIndexX10 = (it * 10).toShort()) },
+        todayUvIndexX10 = 75,
         tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte()) },
         todayWindSpeed = 10,
         todayWindDirection = 270,
@@ -183,6 +184,7 @@ class WeatherSeriesTest {
         assertEquals(270.0, number(WeatherPlugin.PROPERTY_WIND_DIRECTION))
         assertEquals(70.0, number(WeatherPlugin.PROPERTY_HUMIDITY))
         assertEquals(0.0, number(WeatherPlugin.PROPERTY_UTC_OFFSET))
+        assertEquals(9.0, number(WeatherPlugin.PROPERTY_UV_INDEX))
         assertEquals(
             midnight + 7 * 3600,
             Json.decodeFromJsonElement<TimestampShape>(properties.getValue(WeatherPlugin.PROPERTY_SUNRISE).getValue(SourceShapeNames.TIMESTAMP)).value,

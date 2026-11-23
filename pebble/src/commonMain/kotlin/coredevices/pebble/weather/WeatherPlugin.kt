@@ -298,9 +298,11 @@ class WeatherPlugin(
         )
     }
 
-    /** v4-only, so a watch that never reported one leaves the property off the instance. */
+    /** The hour the forecast was fetched in; absent when the forecast had no hourly UV. */
     private fun uvShapes(entry: WeatherAppEntry): Map<String, Map<String, JsonElement>> {
-        val uv = entry.todayUvIndexX10?.let { it / 10.0 } ?: return emptyMap()
+        val hour = ((entry.lastUpdateTimeUtcSecs - entry.forecastDayStart()) / SECONDS_PER_HOUR).toInt()
+        val hours = entry.todayHourly.orEmpty() + entry.tomorrowHourly.orEmpty()
+        val uv = hours.getOrNull(hour)?.uvIndexX10?.let { it / 10.0 } ?: return emptyMap()
         return mapOf(
             PROPERTY_UV_INDEX to mapOf(
                 // 11 is the top of the published scale; anything above it is still "extreme".
