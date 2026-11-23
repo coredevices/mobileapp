@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Model-agnostic tool-calling base: owns the conversation state, runs a single
@@ -144,7 +147,7 @@ abstract class ToolCallingAgent(
         sessionContext: SessionContext,
     ): Boolean {
         val results = toolCalls.map { call ->
-            val r = validationFailure(call)?.let { ToolCallResult(AWAITING_CONFIRMATION_RESULT, it) }
+            val r = validationFailure(call, mcpSession, sessionContext)?.let { ToolCallResult(AWAITING_CONFIRMATION_RESULT, it) }
                 ?: mcpSession.callTool(
                     call.integrationName,
                     call.toolName,
@@ -174,14 +177,29 @@ abstract class ToolCallingAgent(
         return false
     }
 
-    private suspend fun validationFailure(call: AgentToolCall): SemanticResult.ValidationFailure? {
+    private suspend fun validationFailure(
+        call: AgentToolCall,
+        mcpSession: McpSession,
+        sessionContext: SessionContext,
+    ): SemanticResult.ValidationFailure? {
         val validator = toolCallValidator ?: return null
         val tool = listedTools.firstOrNull {
             it.integrationName == call.integrationName && it.tool.definition.name == call.toolName
         }
         if (tool?.tool?.requiresConfirmation == true) return null
-        return validator.validate(call, tool, currentConversation().filterNot { it.awaitsConfirmation })
+        return validator.validate(
+            call,
+            tool,
+            currentConversation().filterNot { it.awaitsConfirmation },
+            callState(call, mcpSession, sessionContext),
+        )
     }
+
+    /** The extra context the model was given by [call]'s integration, cut to [MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH]. */
+    private suspend fun callState(call: AgentToolCall, mcpSession: McpSession, sessionContext: SessionContext): JsonObject? =
+        mcpSession.getIntegrationExtraContext(call.integrationName, sessionContext)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { buildJsonObject { put(CALL_STATE_EXTRA_CONTEXT, it.take(MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH)) } }
 
     override suspend fun send(
         input: String,
@@ -199,6 +217,8 @@ abstract class ToolCallingAgent(
 }
 
 private const val AWAITING_CONFIRMATION_RESULT = "Waiting for the user to confirm this action"
+private const val CALL_STATE_EXTRA_CONTEXT = "extra_tool_context"
+internal const val MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH = 10_000
 
 /** A tool result that is a placeholder for a call the user has yet to confirm. */
 val ConversationMessageDocument.awaitsConfirmation: Boolean

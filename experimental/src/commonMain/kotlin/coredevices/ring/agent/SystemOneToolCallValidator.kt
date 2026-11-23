@@ -33,6 +33,7 @@ class SystemOneToolCallValidator(private val systemOne: SystemOneAgent) : ToolCa
         call: AgentToolCall,
         tool: McpSessionTool?,
         conversation: List<ConversationMessageDocument>,
+        callState: JsonObject?,
     ): SemanticResult.ValidationFailure? {
         if (call.integrationName == LazyLoadingMcpSession.LOADER_INTEGRATION_NAME) return null
         if ((call.integrationName to call.toolName) in UNCHECKED_TOOLS) return null
@@ -48,11 +49,13 @@ class SystemOneToolCallValidator(private val systemOne: SystemOneAgent) : ToolCa
                 tool?.tool?.definition?.description?.takeIf { it.isNotBlank() }?.let { put("description", it) }
                 put("arguments", arguments)
             }
+            callState?.let { put(STATE_CALL_STATE, it) }
         }
+        val instructions = if (callState == null) INSTRUCTIONS else INSTRUCTIONS + CALL_STATE_INSTRUCTIONS
         val answers = try {
             withTimeoutOrNull(VALIDATE_TIMEOUT) {
                 systemOne.decide(state) {
-                    yesNo(QUESTION, INSTRUCTIONS) {
+                    yesNo(QUESTION, instructions) {
                         yes = VALID_CRITERIA
                         no = INVALID_CRITERIA
                     }
@@ -91,9 +94,13 @@ class SystemOneToolCallValidator(private val systemOne: SystemOneAgent) : ToolCa
         )
         private const val STATE_CONVERSATION = "conversation"
         private const val STATE_TOOL_CALL = "tool_call"
+        private const val STATE_CALL_STATE = "call_state"
         private const val INSTRUCTIONS =
             "Is the tool call in $STATE_TOOL_CALL what the user asked for? $STATE_CONVERSATION is the exchange " +
                 "between the user, the assistant and the assistant's tools that led to it."
+        private const val CALL_STATE_INSTRUCTIONS =
+            " $STATE_CALL_STATE is what else the assistant knew when it made the call, which the arguments " +
+                "may also be worked out from."
         private const val VALID_CRITERIA =
             "The call carries out the user's request or gathers information needed for it, or saves what the " +
                 "user said when they asked for nothing else, and its arguments are stated in or worked out " +

@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -37,6 +38,7 @@ class IterativeAgentTest {
     private class FakeIntegration(
         /** Tools that need the user's go-ahead before running. */
         private val confirmationTools: Set<String> = emptySet(),
+        private val extraContext: String? = null,
     ) : McpIntegration {
         override val name = "fake"
         val calls = mutableListOf<Pair<String, Map<String, JsonElement>>>()
@@ -60,7 +62,7 @@ class IterativeAgentTest {
             }
             return ToolCallResult("""{"success":true}""", null)
         }
-        override suspend fun getExtraContext(sessionContext: SessionContext?): String? = null
+        override suspend fun getExtraContext(sessionContext: SessionContext?): String? = extraContext
     }
 
     /** Returns each scripted round's tool calls in order, then [finalContent] with no calls (= model stops). */
@@ -379,7 +381,7 @@ class IterativeAgentTest {
                 ),
                 listOf(toolCall("c3", name = "fake__create_note", args = """{"text":"never"}""")),
             ),
-            toolCallValidator = { call, tool, conversation ->
+            toolCallValidator = { call, tool, conversation, _ ->
                 validated += Triple(call, tool, conversation)
                 failure.takeIf { call.toolName == "delete_note" }
             },
@@ -399,6 +401,48 @@ class IterativeAgentTest {
     }
 
     @Test
+    fun validatorGetsTheCalledIntegrationsExtraContextAsCallState() = runTest {
+        val integration = FakeIntegration(extraContext = "Notebooks: Work").apply { tools = listOf(FakeTool("create_note")) }
+        val callStates = mutableMapOf<String, JsonObject?>()
+        val agent = ScriptedAgent(
+            mutableListOf(
+                listOf(
+                    toolCall("c1", name = "fake__create_note", args = """{"text":"note"}"""),
+                    toolCall("c2", name = "gone__create_note", args = """{"text":"note"}"""),
+                ),
+            ),
+            toolCallValidator = { call, _, _, callState ->
+                callStates[call.id] = callState
+                null
+            },
+        )
+        agent.send("input", McpSession(listOf(integration), this), sessionContext())
+
+        val extraContext = JsonObject(mapOf("extra_context" to JsonPrimitive("Notebooks: Work")))
+        assertEquals(mapOf("c1" to extraContext, "c2" to null), callStates)
+    }
+
+    @Test
+    fun callStateExtraContextIsCutToItsMaxLength() = runTest {
+        val integration = FakeIntegration(extraContext = "a".repeat(MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH) + "b")
+            .apply { tools = listOf(FakeTool("create_note")) }
+        var callState: JsonObject? = null
+        val agent = ScriptedAgent(
+            mutableListOf(listOf(toolCall("c1", name = "fake__create_note", args = """{"text":"note"}"""))),
+            toolCallValidator = { _, _, _, state ->
+                callState = state
+                null
+            },
+        )
+        agent.send("input", McpSession(listOf(integration), this), sessionContext())
+
+        assertEquals(
+            JsonObject(mapOf("extra_context" to JsonPrimitive("a".repeat(MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH)))),
+            callState,
+        )
+    }
+
+    @Test
     fun toolThatConfirmsItsOwnCallsIsNotValidated() = runTest {
         val integration = FakeIntegration(confirmationTools = setOf("delete_note")).apply {
             tools = listOf(FakeTool("delete_note", requiresConfirmation = true), FakeTool("create_note"))
@@ -411,7 +455,7 @@ class IterativeAgentTest {
                     toolCall("c2", name = "fake__create_note", args = """{"text":"note"}"""),
                 ),
             ),
-            toolCallValidator = { call, _, _ ->
+            toolCallValidator = { call, _, _, _ ->
                 validated += call.toolName
                 null
             },

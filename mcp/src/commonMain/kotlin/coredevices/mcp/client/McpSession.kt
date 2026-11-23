@@ -84,6 +84,10 @@ open class McpSession(
             .takeIf { it.isNotEmpty() }
     }
 
+    /** What [integrationName] alone adds to [getExtraContext]; null when it is not in the session. */
+    suspend fun getIntegrationExtraContext(integrationName: String, context: SessionContext?): String? =
+        integrationLookup[integrationName]?.getExtraContext(context)
+
     /**
      * Calls a tool by its integration and tool name.
      * @throws IllegalArgumentException if requireExists is true and the integration is not found.

@@ -31,11 +31,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.seconds
@@ -81,7 +84,8 @@ class SystemOneToolCallValidatorTest {
         systemOne: SystemOneAgent,
         call: AgentToolCall = this.call,
         tool: McpSessionTool? = this.tool,
-    ) = SystemOneToolCallValidator(systemOne).validate(call, tool, conversation)
+        callState: JsonObject? = null,
+    ) = SystemOneToolCallValidator(systemOne).validate(call, tool, conversation, callState)
 
     @Test
     fun asksAboutTheCallWithTheConversationHistoryAsState() = runTest {
@@ -131,7 +135,19 @@ class SystemOneToolCallValidatorTest {
             },
             systemOne.state,
         )
-        assertIs<SystemOneQuestion.YesNo>(systemOne.questions!!.single())
+        val question = assertIs<SystemOneQuestion.YesNo>(systemOne.questions!!.single())
+        assertFalse("call_state" in question.instructions!!)
+    }
+
+    @Test
+    fun callStateJoinsTheStateAndIsExplainedInTheQuestion() = runTest {
+        val systemOne = FakeSystemOneAgent { 0.9 }
+        val callState = buildJsonObject { put("extra_context", "Approved contacts:\n- Sam Lee (Nickname: brother)") }
+
+        assertNull(validate(systemOne, callState = callState))
+
+        assertEquals(callState, systemOne.state!!.jsonObject["call_state"])
+        assertContains(systemOne.questions!!.single().instructions!!, "call_state")
     }
 
     @Test
