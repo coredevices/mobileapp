@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -344,7 +345,6 @@ internal class JsPlugin(
         suspend fun stop() {
             logger.d { "Stopping session for: $pluginUuid $name" }
             evals.close()
-            pump.cancel()
             xhr.close()
             webSockets.close()
             geolocation.close()
@@ -353,6 +353,7 @@ internal class JsPlugin(
             fileSystemBridge.close()
             sourcesBridge.close()
             permissionsBridge.close()
+            pump.cancelAndJoin()
             engine.stop()
         }
     }
