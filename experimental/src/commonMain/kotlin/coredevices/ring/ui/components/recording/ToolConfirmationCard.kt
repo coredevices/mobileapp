@@ -43,12 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.confirmation.argumentLines
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.viewmodel.humanizeToolName
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Allow / deny prompt for a tool call the agent paused on, with its parameters in a dialog on demand. */
+/** Allow / deny prompt for a tool call the agent paused on, listing its parameters unless the tool supplied its own title. */
 @Composable
 fun ToolConfirmationCard(
     request: SemanticResult.RequiresConfirmation,
@@ -105,12 +106,17 @@ fun ToolConfirmationCard(
         Spacer(Modifier.height(8.dp))
         Text("Action", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
         Text(tool, color = colors.onSurfaceVariant, fontSize = 14.sp)
+        if (request.title == null && request.arguments.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text("Parameters", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            request.argumentLines.forEach { Text(it, color = colors.onSurface, fontSize = 14.sp) }
+        }
         request.description?.let {
             Spacer(Modifier.height(4.dp))
             Text("Description", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
             Text(it, color = colors.onSurfaceVariant, fontSize = 14.sp)
         }
-        if (request.arguments.isNotEmpty()) {
+        if (request.title != null && request.arguments.isNotEmpty()) {
             TextButton(
                 onClick = { showDetails = true },
                 contentPadding = PaddingValues(vertical = 0.dp),

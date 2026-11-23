@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Lets the user allow or deny a tool call the agent paused on ([SemanticResult.confirmationRequest]),
@@ -104,6 +105,11 @@ val SemanticResult.confirmationRequest: SemanticResult.RequiresConfirmation?
         else -> null
     }
 
+val SemanticResult.RequiresConfirmation.argumentLines: List<String>
+    get() = arguments.map { (key, value) ->
+        "${humanizeToolName(key) ?: key}: ${(value as? JsonPrimitive)?.content ?: value}"
+    }
+
 internal fun confirmationNotificationId(toolCallId: String): Int =
     NOTIFICATION_ID_BASE + (toolCallId.hashCode() and 0xFFFF)
 
@@ -115,6 +121,7 @@ internal fun confirmationNotification(
     val tool = humanizeToolName(request.toolName) ?: request.toolName
     val content = if (request.title != null) request.description.orEmpty() else buildString {
         appendLine("Allow agent to run $tool from ${request.integrationName}?")
+        request.argumentLines.forEach(::appendLine)
         request.description?.let {
             appendLine()
             appendLine(it)

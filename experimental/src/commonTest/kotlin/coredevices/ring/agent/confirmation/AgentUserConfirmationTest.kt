@@ -61,6 +61,7 @@ class AgentUserConfirmationTest {
         val content = notification.contentText.orEmpty()
         assertContains(content, "Music")
         assertContains(content, "Clear queue")
+        assertContains(content, "All: true")
         assertContains(content, "Empty the play queue.")
         assertContains(content, "destructive")
         assertEquals(confirmationNotificationId("c1"), notification.id)
