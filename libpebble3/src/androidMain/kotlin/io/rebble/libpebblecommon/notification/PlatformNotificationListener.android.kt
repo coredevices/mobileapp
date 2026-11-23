@@ -20,12 +20,13 @@ internal fun appIconBitmap(packageName: String, appContext: AppContext): Bitmap?
     null
 }
 
-private fun Drawable.toBoundedBitmap(): Bitmap {
+internal fun Drawable.toBoundedBitmap(): Bitmap {
     val largest = maxOf(intrinsicWidth, intrinsicHeight)
-    if (largest <= 0) return toBitmap(MAX_ICON_PX, MAX_ICON_PX)
+    if (largest <= 0) return toBitmap(MAX_ICON_PX, MAX_ICON_PX, Bitmap.Config.ARGB_8888)
     val scale = minOf(1f, MAX_ICON_PX.toFloat() / largest)
     return toBitmap(
         width = (intrinsicWidth * scale).roundToInt().coerceAtLeast(1),
         height = (intrinsicHeight * scale).roundToInt().coerceAtLeast(1),
+        config = Bitmap.Config.ARGB_8888,
     )
 }
