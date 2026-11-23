@@ -167,7 +167,8 @@
         <service
             android:name="com.google.firebase.messaging.FirebaseMessagingService"
             android:directBootAware="false"
-            tools:replace="android:directBootAware" />
+            tools:replace="android:directBootAware"
+            tools:ignore="MissingClass" />
         <service
             android:name=".BugReportService"
             android:enabled="true"
