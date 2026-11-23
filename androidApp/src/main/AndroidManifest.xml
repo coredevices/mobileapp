@@ -163,6 +163,11 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 tools:node="remove" />
         </provider>
+        <!-- App init touches credential-encrypted storage, so the process must not start in direct boot -->
+        <service
+            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+            android:directBootAware="false"
+            tools:replace="android:directBootAware" />
         <service
             android:name=".BugReportService"
             android:enabled="true"
