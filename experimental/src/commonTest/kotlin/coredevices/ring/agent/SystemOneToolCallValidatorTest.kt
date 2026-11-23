@@ -142,7 +142,7 @@ class SystemOneToolCallValidatorTest {
     @Test
     fun callStateJoinsTheStateAndIsExplainedInTheQuestion() = runTest {
         val systemOne = FakeSystemOneAgent { 0.9 }
-        val callState = buildJsonObject { put("extra_context", "Approved contacts:\n- Sam Lee (Nickname: brother)") }
+        val callState = buildJsonObject { put("extra_tool_context", "Approved contacts:\n- Sam Lee (Nickname: brother)") }
 
         assertNull(validate(systemOne, callState = callState))
 

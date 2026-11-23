@@ -418,7 +418,7 @@ class IterativeAgentTest {
         )
         agent.send("input", McpSession(listOf(integration), this), sessionContext())
 
-        val extraContext = JsonObject(mapOf("extra_context" to JsonPrimitive("Notebooks: Work")))
+        val extraContext = JsonObject(mapOf("extra_tool_context" to JsonPrimitive("Notebooks: Work")))
         assertEquals(mapOf("c1" to extraContext, "c2" to null), callStates)
     }
 
@@ -437,7 +437,7 @@ class IterativeAgentTest {
         agent.send("input", McpSession(listOf(integration), this), sessionContext())
 
         assertEquals(
-            JsonObject(mapOf("extra_context" to JsonPrimitive("a".repeat(MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH)))),
+            JsonObject(mapOf("extra_tool_context" to JsonPrimitive("a".repeat(MAX_CALL_STATE_EXTRA_CONTEXT_LENGTH)))),
             callState,
         )
     }
