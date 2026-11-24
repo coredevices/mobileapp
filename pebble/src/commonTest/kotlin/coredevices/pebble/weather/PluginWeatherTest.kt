@@ -67,6 +67,14 @@ private fun instance(
             WeatherPlugin.PROPERTY_HOURLY_CONDITION_CODE,
             series(hourlyFrom, 3600, SeriesShape(longText = TextSeries((0 until 30).map { "sun" }))),
         )
+        put(
+            WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION,
+            series(hourlyFrom, 3600, SeriesShape(numericValue = NumericSeries(listOf(61.5, null), "%"))),
+        )
+        put(
+            WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT,
+            series(hourlyFrom, 3600, SeriesShape(numericValue = NumericSeries(listOf(0.4, 0.0), "mm"))),
+        )
     },
 )
 
@@ -115,6 +123,18 @@ class PluginWeatherTest {
         assertEquals(31, hours[0].iconCode)
         assertEquals(32, hours[10].iconCode)
         assertEquals(31, hours[17].iconCode)
+    }
+
+    @Test
+    fun hourlyPrecipitationIsOnlyForTheHoursItCovers() {
+        val hours = response()!!.fcsthourly!!.data.hours
+        assertNull(hours[9].pop)
+        assertNull(hours[9].precipMm)
+        assertEquals(62, hours[10].pop)
+        assertEquals(0.4, hours[10].precipMm)
+        assertNull(hours[11].pop)
+        assertEquals(0.0, hours[11].precipMm)
+        assertNull(hours[12].precipMm)
     }
 
     @Test

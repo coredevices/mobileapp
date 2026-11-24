@@ -382,6 +382,7 @@ public enum class ProtocolCapsFlag(public val value: Int) {
     SupportsNotificationWindowState(26),
     SupportsAppPermissions(27),
     SupportsMultipleLanguagePacks(28),
+    SupportsWeatherDbSizedRecords(29),
     ;
 
     public companion object {

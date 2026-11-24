@@ -69,7 +69,9 @@ public data class WeatherAppEntry(
         }
         if (params.capabilities.contains(ProtocolCapsFlag.SupportsWeatherDbV4)) {
             Logger.v { "using weather v4" }
-            return v4Record().toBytes()
+            return v4Record(
+                sizedRecords = ProtocolCapsFlag.SupportsWeatherDbSizedRecords in params.capabilities,
+            ).toBytes()
         }
         return WeatherAppBlobRecord(
             currentTemp = currentTemp,
@@ -86,7 +88,7 @@ public data class WeatherAppEntry(
         ).toBytes()
     }
 
-    internal fun v4Record(): WeatherAppBlobRecordV4 {
+    internal fun v4Record(sizedRecords: Boolean = false): WeatherAppBlobRecordV4 {
         val daily = (dailyForecast ?: emptyList()).take(WEATHER_DB_MAX_FORECAST_DAYS)
         val hourly = (todayHourly ?: emptyList()).take(WEATHER_DB_HOURLY_COUNT)
         val tomorrowHours = (tomorrowHourly ?: emptyList()).take(WEATHER_DB_HOURLY_COUNT)
@@ -120,6 +122,11 @@ public data class WeatherAppEntry(
             tomorrowHourlyCount = tomorrowHours.size.toUByte(),
             tomorrowHourlyWeatherType = tomorrowHours.hourlyTypes(),
             tomorrowHourlyTemp = tomorrowHours.hourlyTemps(),
+            minorVersion = if (sizedRecords) WEATHER_DB_SIZED_MINOR_VERSION else WEATHER_DB_MINOR_VERSION,
+            todayHourlyPrecipProbability = hourly.hourlyPrecipProbability(),
+            tomorrowHourlyPrecipProbability = tomorrowHours.hourlyPrecipProbability(),
+            todayHourlyPrecipMmX10 = hourly.hourlyPrecipMmX10(),
+            tomorrowHourlyPrecipMmX10 = tomorrowHours.hourlyPrecipMmX10(),
             locationName = locationName,
             forecastShort = forecastShort,
         )
@@ -135,6 +142,17 @@ private fun List<WeatherHourlyForecast>.hourlyTypes(): UByteArray =
 
 private fun List<WeatherHourlyForecast>.hourlyTemps(): ByteArray =
     ByteArray(WEATHER_DB_HOURLY_COUNT) { i -> getOrNull(i)?.temp ?: 0 }
+
+private fun List<WeatherHourlyForecast>.hourlyPrecipProbability(): UByteArray =
+    UByteArray(WEATHER_DB_HOURLY_COUNT) { i ->
+        getOrNull(i)?.precipProbability?.takeIf { it in 0..100 }?.toUByte() ?: WEATHER_V4_BYTE_UNKNOWN
+    }
+
+private fun List<WeatherHourlyForecast>.hourlyPrecipMmX10(): UByteArray =
+    UByteArray(WEATHER_DB_HOURLY_COUNT) { i ->
+        getOrNull(i)?.precipMm?.takeIf { it >= 0 }?.let { (it * 10).roundToInt().coerceAtMost(254).toUByte() }
+            ?: WEATHER_V4_BYTE_UNKNOWN
+    }
 
 private fun Double?.toCoordE2(): Short =
     this?.let { (it * 100).roundToInt().coerceIn(Short.MIN_VALUE + 1, Short.MAX_VALUE.toInt()).toShort() }
@@ -179,6 +197,9 @@ internal class WeatherAppBlobRecord(
 internal const val WEATHER_DB_MAX_FORECAST_DAYS = 7
 internal const val WEATHER_DB_HOURLY_COUNT = 24
 internal const val WEATHER_DB_MINOR_VERSION: UByte = 5u
+/** Needs [ProtocolCapsFlag.SupportsWeatherDbSizedRecords]. */
+internal const val WEATHER_DB_SIZED_MINOR_VERSION: UByte = 6u
+internal const val WEATHER_DB_V4_6_FIXED_SIZE: UShort = 348u
 internal val WEATHER_V4_TEMP_UNKNOWN: Short = Short.MAX_VALUE          // 32767
 internal val WEATHER_V4_UV_UNKNOWN: Short = -1
 internal val WEATHER_V4_PRECIP_UNKNOWN: Short = -1
@@ -236,15 +257,15 @@ private fun Int?.toClampedUShort(): UShort =
     this?.takeIf { it >= 0 }?.coerceAtMost(65534)?.toUShort() ?: WEATHER_V4_USHORT_UNKNOWN
 
 /**
- * v4 weather BlobDB record, minor version 5. Layout is the v3 fixed prefix (identical offsets),
+ * v4 weather BlobDB record, minor version 5 or 6. Layout is the v3 fixed prefix (identical offsets),
  * then the v4 fixed fields, then the trailing pstring16s — exactly as the firmware reads it. See
- * weather_db.h. The fixed block is 250 bytes; the watch rejects a minor >= 1 record any shorter,
+ * weather_db.h. The fixed block is 250 bytes (348 for minor 6); the watch rejects a minor >= 1 record any shorter,
  * so every field is always emitted (unknown ones as sentinels). The phone only sends this when
  * the watch advertises
  * [ProtocolCapsFlag.SupportsWeatherDbV4]; otherwise it keeps writing [WeatherAppBlobRecord] (v3).
  *
- * The minor version decides where the watch looks for the trailing strings, so appending a block
- * here requires firmware that knows that minor.
+ * From minor 6 the record states its fixed size, so later minors may append fields without firmware
+ * knowing them; minor 5 firmware rejects anything newer.
  */
 internal class WeatherAppBlobRecordV4(
     currentTemp: Short,
@@ -274,6 +295,11 @@ internal class WeatherAppBlobRecordV4(
     tomorrowHourlyCount: UByte,
     tomorrowHourlyWeatherType: UByteArray,
     tomorrowHourlyTemp: ByteArray,
+    minorVersion: UByte,
+    todayHourlyPrecipProbability: UByteArray,
+    tomorrowHourlyPrecipProbability: UByteArray,
+    todayHourlyPrecipMmX10: UByteArray,
+    tomorrowHourlyPrecipMmX10: UByteArray,
     locationName: String,
     forecastShort: String,
 ) : StructMappable(endianness = Endian.Little) {
@@ -290,7 +316,7 @@ internal class WeatherAppBlobRecordV4(
     val isCurrentLocation: SBoolean = SBoolean(m, isCurrentLocation)
 
     // --- v4 additions (fixed-size, appended before the trailing strings) ---
-    val minorVersion: SUByte = SUByte(m, WEATHER_DB_MINOR_VERSION)
+    val minorVersion: SUByte = SUByte(m, minorVersion)
     val todayFeelsLikeTemp: SShort = SShort(m, todayFeelsLikeTemp, endianness = Endian.Little)
     val todayUvIndexX10: SShort = SShort(m, todayUvIndexX10, endianness = Endian.Little)
     val todayPrecipProbability: SShort = SShort(m, todayPrecipProbability, endianness = Endian.Little)
@@ -361,6 +387,18 @@ internal class WeatherAppBlobRecordV4(
     val tomorrowHourlyCount: SUByte = SUByte(m, tomorrowHourlyCount)
     val tomorrowHourlyWeatherType: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyWeatherType, endianness = Endian.Unspecified)
     val tomorrowHourlyTemp: SBytes = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
+
+    // --- v4 minor 6 additions ---
+    private val sized = minorVersion >= WEATHER_DB_SIZED_MINOR_VERSION
+    val fixedSize: SUShort? = if (sized) SUShort(m, WEATHER_DB_V4_6_FIXED_SIZE, endianness = Endian.Little) else null
+    val todayHourlyPrecipProbability: SBytes? =
+        if (sized) SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyPrecipProbability, endianness = Endian.Unspecified) else null
+    val tomorrowHourlyPrecipProbability: SBytes? =
+        if (sized) SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyPrecipProbability, endianness = Endian.Unspecified) else null
+    val todayHourlyPrecipMmX10: SBytes? =
+        if (sized) SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyPrecipMmX10, endianness = Endian.Unspecified) else null
+    val tomorrowHourlyPrecipMmX10: SBytes? =
+        if (sized) SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyPrecipMmX10, endianness = Endian.Unspecified) else null
 
     // --- variable-length trailing strings (MUST stay last) ---
     val allStringsLength: SUShort = SUShort(m, serializedWeatherStringsLength(locationName, forecastShort), endianness = Endian.Little)

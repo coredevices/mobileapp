@@ -34,10 +34,12 @@ class WeatherFetcherFieldsTest {
 
     @Test
     fun mapsHourlyForecastFields() {
-        val hour = HourlyForecast(iconCode = 32, temp = 21, uvIndex = 6.44).toHourlyForecast()
+        val hour = HourlyForecast(iconCode = 32, temp = 21, uvIndex = 6.44, pop = 30, precipMm = 1.2).toHourlyForecast()
         assertEquals(WeatherType.Sun, hour.weatherType)
         assertEquals(21, hour.temp)
         assertEquals(64, hour.uvIndexX10)
+        assertEquals(30, hour.precipProbability)
+        assertEquals(1.2, hour.precipMm)
 
         val missing = HourlyForecast(iconCode = 32).toHourlyForecast()
         assertEquals(0, missing.temp)

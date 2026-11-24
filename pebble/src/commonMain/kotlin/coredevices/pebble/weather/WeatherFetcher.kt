@@ -488,6 +488,8 @@ internal fun HourlyForecast.toHourlyForecast() = WeatherHourlyForecast(
     weatherType = iconCode.toWeatherType(),
     temp = (temp ?: 0).coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt()).toByte(),
     uvIndexX10 = uvIndex?.let { (it * 10).roundToInt().toShort() },
+    precipProbability = pop,
+    precipMm = precipMm,
 )
 
 //object Iso8601InstantSerializer : KSerializer<Instant> {
@@ -738,4 +740,7 @@ data class HourlyForecast(
     // Plain index (e.g. 5.4) for this hour; the daily uv_index is the day's peak.
     @SerialName("uv_index")
     val uvIndex: Double? = null,
+    val pop: Int? = null,
+    @SerialName("precip_mm")
+    val precipMm: Double? = null,
 )

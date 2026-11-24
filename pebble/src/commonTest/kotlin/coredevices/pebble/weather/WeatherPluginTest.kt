@@ -27,6 +27,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -147,7 +148,7 @@ class WeatherSeriesTest {
         locationUtcOffsetMin = 0,
         todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte(), uvIndexX10 = (it * 10).toShort()) },
         todayUvIndexX10 = 75,
-        tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte()) },
+        tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte(), precipProbability = it, precipMm = it / 10.0) },
         todayWindSpeed = 10,
         todayWindDirection = 270,
         dailyForecast = listOf(
@@ -190,6 +191,20 @@ class WeatherSeriesTest {
             Json.decodeFromJsonElement<TimestampShape>(properties.getValue(WeatherPlugin.PROPERTY_SUNRISE).getValue(SourceShapeNames.TIMESTAMP)).value,
         )
         assertEquals(listOf(midnight + 17 * 3600, null), properties.series(WeatherPlugin.PROPERTY_DAILY_SUNSET).timestamp!!.values)
+    }
+
+    @Test
+    fun hourlyPrecipitationIsServed() = runTest {
+        val properties = read(listOf(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION, WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT))
+        val chance = properties.series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION)
+        assertEquals(midnight, chance.start)
+        assertEquals(48, chance.numericValue!!.values.size)
+        assertNull(chance.numericValue!!.values[0])
+        assertEquals(5.0, chance.numericValue!!.values[29])
+        assertEquals("5%", chance.shortText!!.values[29])
+        val amount = properties.series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT)
+        assertEquals(0.5, amount.numericValue!!.values[29])
+        assertEquals("0.5 mm", amount.shortText!!.values[29])
     }
 
     @Test

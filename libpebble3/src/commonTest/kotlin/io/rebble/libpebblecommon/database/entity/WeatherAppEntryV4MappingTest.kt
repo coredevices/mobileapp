@@ -193,6 +193,39 @@ internal class WeatherAppEntryV4MappingTest {
     }
 
     @Test
+    fun sizedRecordAppendsHourlyPrecip() {
+        val bytes = entry(
+            todayHourly = listOf(
+                WeatherHourlyForecast(WeatherType.LightRain, 10, precipProbability = 62, precipMm = 0.44),
+                WeatherHourlyForecast(WeatherType.HeavyRain, 10, precipProbability = 100, precipMm = 40.0),
+            ),
+            tomorrowHourly = listOf(WeatherHourlyForecast(WeatherType.Sun, 10, precipProbability = 0, precipMm = 0.0)),
+        ).v4Record(sizedRecords = true).toBytes()
+
+        assertEquals(6u.toUByte(), bytes[18])
+        assertUByteArrayEquals(le16(348), bytes.sliceArray(250..251))
+        assertEquals(62u.toUByte(), bytes[252])
+        assertEquals(100u.toUByte(), bytes[253])
+        assertEquals(0xFFu.toUByte(), bytes[254])
+        assertEquals(0u.toUByte(), bytes[276])
+        assertEquals(0xFFu.toUByte(), bytes[277])
+        assertEquals(4u.toUByte(), bytes[300])
+        assertEquals(254u.toUByte(), bytes[301]) // clamped
+        assertEquals(0xFFu.toUByte(), bytes[302])
+        assertEquals(0u.toUByte(), bytes[324])
+        assertEquals(0xFFu.toUByte(), bytes[325])
+        assertEquals(348 + 2 + 3 + 3, bytes.size)
+    }
+
+    @Test
+    fun unsizedRecordStaysMinor5() {
+        val bytes = entry(
+            todayHourly = listOf(WeatherHourlyForecast(WeatherType.LightRain, 10, precipProbability = 62)),
+        ).v4Record().toBytes()
+        assertEquals(5u.toUByte(), bytes[18])
+    }
+
+    @Test
     fun clampsHourlyToTwentyFourEntries() {
         val bytes = entry(
             todayHourly = List(30) { WeatherHourlyForecast(WeatherType.Sun, 10) },

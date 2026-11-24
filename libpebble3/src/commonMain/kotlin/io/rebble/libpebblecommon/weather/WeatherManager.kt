@@ -112,6 +112,8 @@ public data class WeatherHourlyForecast(
     val weatherType: WeatherType,
     val temp: Byte,
     val uvIndexX10: Short? = null,
+    val precipProbability: Int? = null,
+    val precipMm: Double? = null,
 )
 
 public sealed class WeatherLocationData {
