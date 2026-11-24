@@ -25,8 +25,8 @@ internal class LockerPluginLoader(
     private val logger = Logger.withTag("LockerPluginLoader")
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    /** uuid -> the version registered, so a re-sideload with a changed manifest re-registers. */
-    private val registered = mutableMapOf<Uuid, String>()
+    /** uuid -> the version and manifest hash registered, so a re-sideload with a changed manifest re-registers. */
+    private val registered = mutableMapOf<Uuid, Pair<String, Int>>()
 
     fun init() {
         scope.launch {
@@ -47,7 +47,7 @@ internal class LockerPluginLoader(
         }
 
         wanted.forEach { (uuid, row) ->
-            if (registered[uuid] == row.version) return@forEach
+            if (registered[uuid] == (row.version to row.pluginManifest.hashCode())) return@forEach
             val manifest = try {
                 json.decodeFromString(PluginManifest.serializer(), row.pluginManifest!!)
                     .resolvePermissions(uuid)
@@ -64,7 +64,7 @@ internal class LockerPluginLoader(
                     script = { appFileReader.getAppFile(uuid, manifest.script).orEmpty() },
                 )
             )
-            registered[uuid] = row.version
+            registered[uuid] = row.version to row.pluginManifest.hashCode()
             logger.i { "registered plugin ${row.title} ($uuid)" }
         }
     }
