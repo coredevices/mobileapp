@@ -161,7 +161,7 @@ internal class NotificationsPlugin(
                     ?.let { appIcon(notification.packageName, it) }
                     ?.let { put(PROPERTY_APP_ICON, mapOf(SourceShapeNames.IMAGE to it)) }
                 largeIconSize
-                    ?.let { size -> notification.largeIcon?.let { largeIcon(it, size) } }
+                    ?.let { size -> notification.largeIcon?.let { largeIcon(notification.key, it, size) } }
                     ?.let { put(PROPERTY_LARGE_ICON, mapOf(SourceShapeNames.IMAGE to it)) }
             },
         )
@@ -187,19 +187,44 @@ internal class NotificationsPlugin(
         return shape
     }
 
+    /**
+     * A large icon is valid until its notification is re-posted: the framework keeps the same
+     * [Icon] instance while a notification stands, so keying on its identity (plus the
+     * notification key and size) hits while the icon is unchanged and misses on a new one.
+     * (An app that mutates its large-icon bitmap in place gets the cached encoding.)
+     */
+    private val largeIcons = object : LruCache<String, JsonElement>(MAX_ICON_CACHE_CHARS) {
+        override fun sizeOf(key: String, value: JsonElement): Int = value.toString().length
+    }
+
     private suspend fun largeIcon(
+        notificationKey: String,
         icon: Icon,
         size: IconPixelSize,
     ): JsonElement? {
+        val key = "$notificationKey|${System.identityHashCode(icon)}|${size.w}x${size.h}"
+        largeIcons.get(key)?.let { return it }
+        // loadDrawable reads the app Resources, which Android only guarantees on the main
+        // thread; the load goes there, the heavier encode stays off it.
+        val drawable = withContext(Dispatchers.Main) {
+            try {
+                icon.loadDrawable(appContext.context)
+            } catch (e: Exception) {
+                logger.w(e) { "Couldn't load large icon" }
+                null
+            }
+        } ?: return null
         val encoded = withContext(Dispatchers.Default) {
             try {
-                icon.loadDrawable(appContext.context)?.toBoundedBitmap()?.encodeForWatch(size.w, size.h)
+                drawable.toBoundedBitmap()?.encodeForWatch(size.w, size.h)
             } catch (e: Exception) {
                 logger.w(e) { "Couldn't encode large icon" }
                 null
             }
         } ?: return null
-        return encodeImage(encoded)
+        val shape = encodeImage(encoded)
+        largeIcons.put(key, shape)
+        return shape
     }
 
     @OptIn(ExperimentalEncodingApi::class)
