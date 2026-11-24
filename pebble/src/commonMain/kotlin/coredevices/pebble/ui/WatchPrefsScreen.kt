@@ -267,12 +267,14 @@ fun watchPrefs(): List<SettingsItem> {
     val coreConfigHolder = koinInject<CoreConfigHolder>()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val coreConfig by coreConfigHolder.config.collectAsState()
+    val healthTracking by libPebble.healthSettings.map { it.trackingEnabled }.collectAsState(false)
     val weatherFetcher = koinInject<WeatherFetcher>()
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions, coreConfig) {
+    val mapped = remember(settings, quickLaunchOptions, coreConfig, healthTracking) {
         settings.inLayoutOrder()
             .hidePresetManagedBacklightPrefs()
             .hideTouchNavigationWhenTouchOff()
+            .filterNot { it.pref == EnumWatchPref.InsightsStyle && !healthTracking }
             .groupScheduleHours()
             .hideUnusedBacklightColorPrefs(coreConfig.backlightColorAutoSunriseSunset)
             .flatMap { item ->
