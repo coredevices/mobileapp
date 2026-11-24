@@ -101,6 +101,8 @@ import coreapp.pebble.generated.resources.watch_pref_speaker_volume
 import coreapp.pebble.generated.resources.watch_pref_notification_grouping
 import coreapp.pebble.generated.resources.watch_pref_notification_grouping_desc
 import coreapp.pebble.generated.resources.watch_pref_notification_status_bar
+import coreapp.pebble.generated.resources.watch_pref_insights_style
+import coreapp.pebble.generated.resources.watch_pref_insights_style_desc
 import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker
 import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker_desc
 import coreapp.pebble.generated.resources.watch_pref_touch_enabled
@@ -415,6 +417,8 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(BoolWatchPref.MusicShowProgressBar, Section.Music, name = Res.string.watch_pref_music_show_progress_bar),
     PrefLayout(BoolWatchPref.MusicShowAlbumArt, Section.Music, name = Res.string.watch_pref_music_show_album_art),
 
+    PrefLayout(EnumWatchPref.InsightsStyle, Section.Health, SettingsGroup.Insights, name = Res.string.watch_pref_insights_style, description = Res.string.watch_pref_insights_style_desc),
+
     PrefLayout(BoolWatchPref.StandbyMode, Section.Other, name = Res.string.watch_pref_standby_mode, description = Res.string.watch_pref_standby_mode_desc),
 )
 
@@ -434,8 +438,8 @@ internal fun List<WatchPreference<*>>.inLayoutOrder(): List<WatchPreference<*>> 
     sortedBy { POSITION[it.pref] ?: Int.MAX_VALUE }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
-    // Weather is configured on the phone, even though the unit it sets is a watch pref.
-    EnumWatchPref.WindSpeed, EnumWatchPref.Temperature -> TopLevelType.Phone
+    // Configured alongside phone settings, even though these are watch prefs.
+    EnumWatchPref.WindSpeed, EnumWatchPref.Temperature, EnumWatchPref.InsightsStyle -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
 

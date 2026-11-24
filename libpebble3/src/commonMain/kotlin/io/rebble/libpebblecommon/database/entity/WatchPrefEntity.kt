@@ -590,6 +590,11 @@ internal enum class TimelinePeekFaceMode(override val code: UByte, override val 
     SquishUp(1u, "Squish Up"),
 }
 
+internal enum class ActivityInsightsStyle(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Standard(0u, "Standard"),
+    Playful(1u, "Playful"),
+}
+
 public enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -769,6 +774,12 @@ public enum class EnumWatchPref(
         displayName = "Notification Status Bar",
         defaultValue = NotificationStatusBarStyle.Default,
         options = NotificationStatusBarStyle.entries,
+    ),
+    InsightsStyle(
+        id = "activityInsightsStyle",
+        displayName = "Insights Style",
+        defaultValue = ActivityInsightsStyle.Standard,
+        options = ActivityInsightsStyle.entries,
     ),
     ;
 

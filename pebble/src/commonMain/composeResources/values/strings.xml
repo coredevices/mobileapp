@@ -1386,6 +1386,9 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="watch_pref_notification_grouping">Group by Sender</string>
     <string name="watch_pref_notification_grouping_desc">Group notifications from the same sender received within this time</string>
     <string name="watch_pref_notification_status_bar">Notification Status Bar</string>
+    <string name="watch_pref_insights_style">Insights Style</string>
+    <string name="watch_pref_insights_style_desc">Wording of sleep insights for nights outside 7 to 9 hours</string>
+    <string name="watch_pref_option_playful">Playful</string>
     <string name="watch_pref_quiet_time_mute_speaker">Quiet Time - Mute Speaker</string>
     <string name="watch_pref_quiet_time_mute_speaker_desc">Mute the speaker during Quiet Time</string>
     <string name="watch_pref_option_on">On</string>

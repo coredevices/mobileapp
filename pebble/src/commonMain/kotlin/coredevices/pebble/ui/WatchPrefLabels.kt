@@ -46,6 +46,7 @@ import coreapp.pebble.generated.resources.watch_pref_option_nudge_nudge
 import coreapp.pebble.generated.resources.watch_pref_option_off
 import coreapp.pebble.generated.resources.watch_pref_option_other
 import coreapp.pebble.generated.resources.watch_pref_option_overlay
+import coreapp.pebble.generated.resources.watch_pref_option_playful
 import coreapp.pebble.generated.resources.watch_pref_option_pebble_morse
 import coreapp.pebble.generated.resources.watch_pref_option_phone_calls
 import coreapp.pebble.generated.resources.watch_pref_option_pulse
@@ -143,6 +144,7 @@ internal val WATCH_PREF_OPTION_LABELS: Map<String, StringResource> = mapOf(
     "All" to Res.string.watch_pref_option_all,
     "Bold" to Res.string.watch_pref_option_bold,
     "Big & Bold" to Res.string.watch_pref_option_big_bold,
+    "Playful" to Res.string.watch_pref_option_playful,
 )
 
 internal val WATCH_PREF_COLOR_LABELS: Map<String, StringResource> = mapOf(
