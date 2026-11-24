@@ -12,13 +12,18 @@ import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
+/** Stops a nested block reaching an outer builder, e.g. an action's attributes landing on the item. */
+@DslMarker
+public annotation class TimelineDsl
+
+@TimelineDsl
 public class ActionBuilder internal constructor(public val actionId: UByte, public val type: TimelineActionType) {
     private var attributes = listOf<BaseAttribute>()
     internal var internalType: String? = null
     internal var pluginAction: PluginActionRef? = null
     public var internalData: String? = null
 
-    internal fun attributes(block: AttributesListBuilder.() -> Unit) {
+    public fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
         builder.block()
         attributes = builder.build()
@@ -33,6 +38,7 @@ internal fun actions(block: ActionsListBuilder.() -> Unit): List<BaseAction> = A
     block()
 }.build()
 
+@TimelineDsl
 public class ActionsListBuilder internal constructor() {
     private val actions = mutableListOf<BaseAction>()
     private var actionId: UByte = 0u
@@ -57,6 +63,7 @@ internal fun attributes(block: AttributesListBuilder.() -> Unit): List<BaseAttri
         block()
     }.build()
 
+@TimelineDsl
 public class AttributesListBuilder internal constructor() {
     private val attributes = mutableListOf<BaseAttribute>()
 
@@ -173,6 +180,7 @@ public class AttributesListBuilder internal constructor() {
     }
 }
 
+@TimelineDsl
 internal class FlagsBuilder internal constructor() {
     private val flags = mutableListOf<TimelineItemFlag>()
 
@@ -279,6 +287,7 @@ public fun buildTimelineReminder(
     return builder.build()
 }
 
+@TimelineDsl
 public sealed class TimelineItemContainerBuilder {
     public var itemID: Uuid = Uuid.random()
     internal abstract val parentId: Uuid
