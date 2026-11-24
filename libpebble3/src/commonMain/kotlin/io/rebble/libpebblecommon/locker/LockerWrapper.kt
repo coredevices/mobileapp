@@ -83,6 +83,7 @@ public sealed class LockerWrapper {
         val sideloaded: Boolean,
         val configurable: Boolean,
         val sync: Boolean,
+        val hasPlugin: Boolean,
     ) : LockerWrapper()
 
     public data class SystemApp internal constructor(

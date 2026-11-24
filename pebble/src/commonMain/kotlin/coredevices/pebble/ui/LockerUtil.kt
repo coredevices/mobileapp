@@ -332,7 +332,7 @@ fun CommonApp.SettingsButton(
                 connected
             ) {
                 // A plugin's config page is phone-side, so it doesn't need the app synced or a watch.
-                type == AppType.Plugin ||
+                type == AppType.Plugin || hasPlugin ||
                     isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System)
             }
 
@@ -557,6 +557,7 @@ fun LockerWrapper.asCommonApp(
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
         capabilities = properties.capabilities,
+        hasPlugin = this is LockerWrapper.NormalApp && hasPlugin,
     )
 }
 

@@ -1092,5 +1092,6 @@ internal fun fakeLockerEntry(): LockerWrapper {
         sideloaded = false,
         configurable = Random.nextBoolean(),
         sync = true,
+        hasPlugin = false,
     )
 }

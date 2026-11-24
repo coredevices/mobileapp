@@ -741,8 +741,11 @@ internal fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
         sideloaded = sideloaded,
         configurable = configurable,
         sync = orderIndex < config.value.lockerSyncLimitV2,
+        hasPlugin = hasLoadablePlugin(),
     )
 }
+
+internal fun LockerEntry.hasLoadablePlugin(): Boolean = pluginManifest != null && !isLegacy(manifestVersion)
 
 internal fun findSystemApp(uuid: Uuid): SystemApps? = SystemApps.entries.find { it.uuid == uuid }
 

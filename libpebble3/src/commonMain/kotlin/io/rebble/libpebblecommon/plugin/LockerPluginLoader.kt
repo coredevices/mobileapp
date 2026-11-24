@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.locker.AppFileReader
-import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.locker.hasLoadablePlugin
 import io.rebble.libpebblecommon.permissions.resolvePermissions
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -13,8 +13,7 @@ import kotlin.uuid.Uuid
 
 /**
  * Projects the locker into the [PluginRegistry]: an installed pbw whose LockerEntry carries a plugin
- * manifest is registered, and unregistered when the app leaves the locker or plugins are switched
- * off.
+ * manifest is registered, and unregistered when the app leaves the locker.
  */
 internal class LockerPluginLoader(
     private val registry: PluginRegistry,
@@ -37,7 +36,7 @@ internal class LockerPluginLoader(
 
     private fun reconcile(rows: List<LockerEntry>) {
         val wanted = rows.mapNotNull { row ->
-            if (row.pluginManifest == null || isLegacy(row.manifestVersion)) return@mapNotNull null
+            if (!row.hasLoadablePlugin()) return@mapNotNull null
             row.id to row
         }.toMap()
 

@@ -1184,7 +1184,9 @@ suspend fun CommonApp.showSettings(
 ) {
     when (commonAppType) {
         is CommonAppType.Locker -> {
-            if (type == AppType.Plugin) {
+            val watch = libPebble.watches.first().filterIsInstance<ConnectedPebbleDevice>()
+                .firstOrNull()
+            if (type == AppType.Plugin || hasPlugin && (watch == null || !isCompatible)) {
                 // A plugin's config page is phone-side; no watch or PKJS session to launch.
                 val url = libPebble.appConfigPageUrl(uuid) ?: run {
                     topBarParams.showSnackbar(getString(Res.string.locker_no_settings, title))
@@ -1196,8 +1198,6 @@ suspend fun CommonApp.showSettings(
                 )
                 return
             }
-            val watch = libPebble.watches.first().filterIsInstance<ConnectedPebbleDevice>()
-                .firstOrNull()
             //TODO: Handle multiple watches connected, selector?
             if (watch == null) {
                 logger.w("No connected watch found, cannot show settings")
