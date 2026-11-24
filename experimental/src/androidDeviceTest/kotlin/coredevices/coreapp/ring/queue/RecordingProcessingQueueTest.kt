@@ -585,31 +585,26 @@ class RecordingProcessingQueueTest {
     }
 
     @Test
-    fun localAudioProcessing_agentFatalError_completesSuccessfully() = runBlocking {
-        // Tests that a fatal agent error (HTTP 500 in tool loop) is swallowed by
-        // RecordingProcessor.processText, resulting in a "completed" entry and successful task.
-        // This documents the current production behavior.
+    fun localAudioProcessing_agentFatalError_marksEntryFailed() = runBlocking {
         val fileId = "test-audio-agent-fatal"
         createFakeAudioFile(fileId)
 
         fakeTranscription.enqueue(FakeTranscriptionService.Behavior.Success("Fatal error test"))
         fakeNenya.enqueue(
             FakeNenyaClient.NenyaResponse.SuccessWithToolCalls, // 1st call → tool_calls
-            FakeNenyaClient.NenyaResponse.ServerError500        // 2nd call → 500, agent throws Exception, processText swallows
+            FakeNenyaClient.NenyaResponse.ServerError500        // 2nd call → 500, agent throws Exception
         )
 
         queue.queueLocalAudioProcessing(fileId)
         awaitTaskDone(taskId = 1)
 
         val task = taskDao.getTaskById(1)!!
-        // Error is swallowed by processText's catch(Throwable) — task succeeds
-        assertEquals(TaskStatus.Success, task.status)
+        assertEquals(TaskStatus.Failed, task.status)
         assertEquals(1, task.attempts)
 
         val entries = entryDao.getEntriesForRecording(1).first()
         assertEquals(1, entries.size)
-        // Entry is marked completed because processText returned normally
-        assertEquals(RecordingEntryStatus.completed, entries[0].status)
+        assertEquals(RecordingEntryStatus.agent_error, entries[0].status)
     }
 
     // ---- Restart / Resume Test Cases ----

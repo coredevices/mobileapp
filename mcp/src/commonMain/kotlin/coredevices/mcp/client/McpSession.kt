@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlin.coroutines.cancellation.CancellationException
 
 open class McpSession(
     private val integrations: List<McpIntegration>,
@@ -91,6 +92,7 @@ open class McpSession(
     /**
      * Calls a tool by its integration and tool name.
      * @throws IllegalArgumentException if requireExists is true and the integration is not found.
+     * @throws McpToolCallException if the integration fails to make the call.
      * @param integrationName The name of the integration.
      * @param toolName The name of the tool to call.
      * @param jsonInput The JSON input parameters for the tool.
@@ -114,9 +116,17 @@ open class McpSession(
                     SemanticResult.GenericFailure("Invalid tool call")
                 )
             }
-        return integration.callTool(toolName, jsonInput, context)
+        return try {
+            integration.callTool(toolName, jsonInput, context)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw McpToolCallException("Failed to call tool: ${e.message}", e)
+        }
     }
 }
+
+class McpToolCallException(message: String, cause: Throwable) : Exception(message, cause)
 
 data class McpSessionTool(
     val integrationName: String,

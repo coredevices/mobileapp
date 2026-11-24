@@ -29,7 +29,7 @@ class FakeNenyaClient : NenyaClient {
         data object SuccessFinal : NenyaResponse()
         /** Throw IOException (in tool loop this becomes AgentNetworkException) */
         data object ThrowIOException : NenyaResponse()
-        /** Return HTTP 500 (in tool loop, agent throws Exception, processText swallows it) */
+        /** Return HTTP 500 (in tool loop, agent throws Exception) */
         data object ServerError500 : NenyaResponse()
     }
 

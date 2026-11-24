@@ -302,6 +302,7 @@ class RecordingProcessor(
         val scope = CoroutineScope(currentCoroutineContext())
         val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
         val iterationJob = watchAgentIterations(scope, agent, recordingId)
+        var agentError: Throwable? = null
         try {
             agent.send(text, mcpSession, sessionContext)
         } catch (e: AgentNetworkException) {
@@ -319,6 +320,7 @@ class RecordingProcessor(
             throw RecoverableTaskException("Network error during agent processing: ${e.message}", e)
         } catch (e: Throwable) {
             logger.e(e) { "Error during agent processing" }
+            agentError = e
         } finally {
             iterationJob.cancelAndJoin()
             convUpdJob.cancelAndJoin()
@@ -356,6 +358,17 @@ class RecordingProcessor(
         updateConversation(recordingId, agent.conversation.first())
         finishTurn(recordingId, firestoreId, createdAt, agent.conversation.first().drop(convEndIdx))
         linkUserMessageToEntry(recordingId, recordingEntryId)
+        if (agentError != null && !(forcedTool != null && forceTool)) {
+            trace.markEvent("agent_processing_failed",
+                TraceEventData.AgentProcessingFailed(
+                    recordingId = recordingId,
+                    recordingEntryId = recordingEntryId,
+                    agent = agent.label,
+                    reason = agentError.message ?: agentError.toString()
+                )
+            )
+            throw agentError
+        }
         trace.markEvent("agent_processing_end",
             TraceEventData.AgentProcessingEnd(
                 recordingId = recordingId,
@@ -395,6 +408,7 @@ class RecordingProcessor(
         val scope = CoroutineScope(currentCoroutineContext())
         val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
         val iterationJob = watchAgentIterations(scope, agent, recordingId)
+        var agentError: Throwable? = null
         try {
             var stillPaused = false
             if (request != null) {
@@ -429,12 +443,14 @@ class RecordingProcessor(
             throw e
         } catch (e: Throwable) {
             logger.e(e) { "Error while resuming agent" }
+            agentError = e
         } finally {
             iterationJob.cancelAndJoin()
             convUpdJob.cancelAndJoin()
             updateConversation(recordingId, agent.conversation.first())
         }
         finishTurn(recordingId, firestoreId, createdAt, agent.conversation.first().drop(convEndIdx))
+        agentError?.let { throw it }
     }
 
     /**
