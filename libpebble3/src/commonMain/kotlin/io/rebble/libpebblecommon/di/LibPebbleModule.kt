@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.WebSockets
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -120,6 +118,7 @@ import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
+import io.rebble.libpebblecommon.js.createHttpClient
 import io.rebble.libpebblecommon.imaging.ImagingService
 import io.rebble.libpebblecommon.locker.AppFileReader
 import io.rebble.libpebblecommon.locker.Locker
@@ -479,7 +478,7 @@ internal fun initKoin(
                         token = proxyTokenProvider
                     )
                 }
-                single { HttpClient { install(WebSockets) } }
+                single { createHttpClient() }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlin.time.Clock> { kotlin.time.Clock.System }

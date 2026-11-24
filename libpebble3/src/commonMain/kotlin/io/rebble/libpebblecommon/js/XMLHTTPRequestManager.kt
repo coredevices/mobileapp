@@ -10,18 +10,20 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsBytes
-import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.authority
+import io.ktor.http.charset
 import io.ktor.http.isSecure
 import io.ktor.http.takeFrom
 import io.ktor.util.decodeBase64Bytes
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
+import io.ktor.utils.io.charsets.Charsets
 import io.ktor.utils.io.charsets.MalformedInputException
+import io.ktor.utils.io.charsets.decode
 import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.requestBytes
@@ -38,8 +40,12 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer as KotlinxBuffer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okio.Buffer
+import okio.GzipSource
+import okio.buffer
 import kotlin.uuid.Uuid
 
 private const val UNSENT = 0
@@ -212,6 +218,12 @@ internal class XMLHTTPRequestManager(
             val password = password
             val headers = headers.toMap()
             val sentBytes = requestBytes(method.value, url, headers, data?.size?.toLong() ?: 0)
+            // Asking for gzip ourselves stops OkHttp unzipping transparently, so the compressed size can be counted.
+            val askGzip = headers.keys.none {
+                it.equals(HttpHeaders.AcceptEncoding, ignoreCase = true) || it.equals(HttpHeaders.Range, ignoreCase = true)
+            }
+            // On iOS the system unzips anyway and Ktor drops Content-Encoding, so this measures it there.
+            val wireBytes = WireBytes()
             suspend fun execute(): Outcome {
                 // Served on the phone, so no network check; interceptors check their own permissions.
                 if (httpInterceptorManager.shouldIntercept(url)) {
@@ -240,6 +252,8 @@ internal class XMLHTTPRequestManager(
                         headers.entries.forEach {
                             header(it.key, it.value)
                         }
+                        if (askGzip) header(HttpHeaders.AcceptEncoding, "gzip")
+                        wireBytes.tag(this)
                     }
                 } catch (e: RedirectDeniedException) {
                     logger.w { "$appUuid blocked redirect: ${e.message}" }
@@ -255,9 +269,14 @@ internal class XMLHTTPRequestManager(
                     dataUsage.record(appUuid, url, sentBytes, 0, requests = 1)
                     return Outcome.Error(notAllowed = false)
                 }
+                val gzipped = askGzip && response.headers[HttpHeaders.ContentEncoding].equals("gzip", ignoreCase = true)
                 val responseHeaders = try {
                     Json.encodeToString(response.headers
                         .flattenEntries()
+                        .filter {
+                            !gzipped || !(it.first.equals(HttpHeaders.ContentEncoding, ignoreCase = true) ||
+                                it.first.equals(HttpHeaders.ContentLength, ignoreCase = true))
+                        }
                         .toMap()
                         .mapKeys { it.key.lowercase() })
                 } catch (e: Throwable) {
@@ -266,19 +285,19 @@ internal class XMLHTTPRequestManager(
                 }
                 var receivedBytes = 0L
                 val body = try {
+                    val raw = response.bodyAsBytes()
+                    receivedBytes = wireBytes.take() ?: raw.size.toLong()
+                    val bytes = if (gzipped && raw.isNotEmpty()) gunzip(raw) else raw
                     when (responseType) {
-                        "arraybuffer" -> response.bodyAsBytes()
-                            .also { receivedBytes = it.size.toLong() }
-                            .let { Json.encodeToString(it.encodeBase64()) }
+                        "arraybuffer" -> Json.encodeToString(bytes.encodeBase64())
                         "text", "", "json", null -> {
                             val text = try {
-                                response.bodyAsText()
+                                (response.charset() ?: Charsets.UTF_8).newDecoder()
+                                    .decode(KotlinxBuffer().apply { write(bytes) })
                             } catch (e: MalformedInputException) {
                                 logger.e(e) { "Response has charset errors: ${e.message}. Decoding as UTF-8 with replacements" }
-                                // Replace invalid sequences
-                                response.bodyAsBytes().decodeToString(throwOnInvalidSequence = false)
+                                bytes.decodeToString(throwOnInvalidSequence = false)
                             }
-                            receivedBytes = text.encodeToByteArray().size.toLong()
                             Json.encodeToString(text)
                         }
                         else -> {
@@ -295,15 +314,17 @@ internal class XMLHTTPRequestManager(
                 logger.v { "XHR Response: ${response.status.value} ${response.status.description}" }
                 return Outcome.Response(responseHeaders, response.status.value, response.status.description, body)
             }
+            // Drops a measured size that a failed request never read.
+            suspend fun executeAndForgetSize(): Outcome = try { execute() } finally { wireBytes.take() }
             if (!async) {
-                val outcome = runBlocking(Dispatchers.IO) { execute() }
+                val outcome = runBlocking(Dispatchers.IO) { executeAndForgetSize() }
                 if (!settled.compareAndSet(expect = false, update = true)) return null
                 forget()
                 return outcome.toSyncResult()
             }
             requestJob = scope.launch(Dispatchers.IO) {
                 dispatchEvent(XHREvent.LoadStart)
-                val outcome = execute()
+                val outcome = executeAndForgetSize()
                 scope.launch { deliver(outcome) }
             }
             return null
@@ -347,6 +368,8 @@ internal class XMLHTTPRequestManager(
         if (noRedirectClientLazy.isInitialized()) noRedirectClient.close()
     }
 }
+
+private fun gunzip(bytes: ByteArray): ByteArray = GzipSource(Buffer().write(bytes)).buffer().readByteArray()
 
 private val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
 private const val MAX_REDIRECTS = 20

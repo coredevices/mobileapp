@@ -4,6 +4,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
+import io.ktor.http.headersOf
 import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
@@ -16,9 +19,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
+import okio.Buffer
+import okio.GzipSink
+import okio.buffer
+import okio.use
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
@@ -37,9 +45,13 @@ class XMLHTTPRequestManagerTest {
     private val internet = NetworkAccess { _, _ -> PluginNetworkVerdict.Allowed }
     private val nothing = NetworkAccess { _, _ -> PluginNetworkVerdict.Denied("not allowed") }
     private val sentBodies = mutableListOf<ByteArray>()
+    private val sentHeaders = mutableListOf<Headers>()
+    private var responseBody = "{\"temp\":12}".encodeToByteArray()
+    private var responseHeaders = headersOf()
     private val client = HttpClient(MockEngine { request ->
         sentBodies += request.body.toByteArray()
-        respond("{\"temp\":12}")
+        sentHeaders += request.headers
+        respond(responseBody, headers = responseHeaders)
     })
 
     private fun CoroutineScope.manager(
@@ -73,6 +85,22 @@ class XMLHTTPRequestManagerTest {
 
         assertEquals(listOf(Recorded(URL, "POST".length + URL.length + 9L, 11, 1)), recorded)
         assertTrue(evals.any { it.contains("_onResponseComplete") })
+    }
+
+    @Test
+    fun aGzippedResponseIsRecordedCompressedAndHandedOverUnzipped() = runTest {
+        val json = "{\"temp\":12,\"pad\":\"" + "x".repeat(200) + "\"}"
+        responseBody = Buffer().also { GzipSink(it).buffer().use { sink -> sink.writeUtf8(json) } }.readByteArray()
+        responseHeaders = headersOf(
+            HttpHeaders.ContentEncoding to listOf("gzip"),
+            HttpHeaders.ContentLength to listOf(responseBody.size.toString()),
+        )
+        val result = Json.decodeFromString<JsonObject>(manager(mutableListOf()).request(async = false) as String)
+
+        assertEquals("gzip", sentHeaders.single()[HttpHeaders.AcceptEncoding])
+        assertEquals(json, result["body"]!!.jsonPrimitive.content)
+        assertFalse(result.toString().contains("content-encoding", ignoreCase = true))
+        assertEquals(responseBody.size.toLong(), recorded.single().received)
     }
 
     @Test
