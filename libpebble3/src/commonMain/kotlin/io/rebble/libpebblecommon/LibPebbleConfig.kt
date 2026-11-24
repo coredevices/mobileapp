@@ -175,6 +175,8 @@ public data class NotificationConfig(
      * Mute all call alerts on the phone when at least one watch is connected
      */
     val mutePhoneCallSoundsWhenConnected: Boolean = false,
+    /** Switch to speakerphone when a call is answered from the watch (unless a headset is connected) */
+    val answerCallsFromWatchOnSpeaker: Boolean = false,
     /** Drop DND-silenced notifications for watches which can't receive the RespectPhoneSilence watch pref. */
     val respectDoNotDisturb: Boolean = false,
     /**

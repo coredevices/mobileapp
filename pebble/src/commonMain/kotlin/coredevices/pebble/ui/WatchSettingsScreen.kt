@@ -130,6 +130,8 @@ import coreapp.pebble.generated.resources.settings
 import coreapp.pebble.generated.resources.settings_about_item
 import coreapp.pebble.generated.resources.settings_always_send_notifications
 import coreapp.pebble.generated.resources.settings_always_send_notifications_desc
+import coreapp.pebble.generated.resources.settings_answer_calls_on_speaker
+import coreapp.pebble.generated.resources.settings_answer_calls_on_speaker_desc
 import coreapp.pebble.generated.resources.settings_app_activity
 import coreapp.pebble.generated.resources.settings_app_activity_desc
 import coreapp.pebble.generated.resources.settings_app_theme
@@ -1313,6 +1315,24 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             libPebbleConfig.copy(
                                 notificationConfig = libPebbleConfig.notificationConfig.copy(
                                     mutePhoneCallSoundsWhenConnected = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationHints() },
+                ),
+                basicSettingsToggleItem(
+                    title = SettingsText(Res.string.settings_answer_calls_on_speaker),
+                    description = SettingsText(Res.string.settings_answer_calls_on_speaker_desc),
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    group = SettingsGroup.PhoneEffects,
+                    checked = libPebbleConfig.notificationConfig.answerCallsFromWatchOnSpeaker,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    answerCallsFromWatchOnSpeaker = it
                                 )
                             )
                         )

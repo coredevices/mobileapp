@@ -1027,6 +1027,8 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_mute_notification_effects_desc">Mutes the phone's own notification vibration/sound while the watch is connected</string>
     <string name="settings_mute_call_effects">Mute phone call effects</string>
     <string name="settings_mute_call_effects_desc">Mutes the phone's own call vibration/sound while the watch is connected</string>
+    <string name="settings_answer_calls_on_speaker">Answer calls on speaker</string>
+    <string name="settings_answer_calls_on_speaker_desc">Use the phone's speaker when answering a call from the watch, unless a headset is connected</string>
     <string name="settings_vibe_pattern_title">Vibration Pattern</string>
     <string name="settings_use_os_vibe_patterns">Use vibration patterns from OS</string>
     <string name="settings_use_os_vibe_patterns_desc">If there is a vibration pattern defined by the app which created a notification, use it on the watch (unless overridden)</string>
