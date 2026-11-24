@@ -46,7 +46,7 @@ class ListTool: BuiltInMcpTool(
 
     companion object Companion {
         const val TOOL_NAME = "create_list_item"
-        const val TOOL_DESCRIPTION = "Add an item to a shopping list, grocery list, or to-do list. Use when the user names a list or wants to buy groceries, food, or household supplies."
+        const val TOOL_DESCRIPTION = "Add an item to a shopping list, grocery list, or to-do list. Only use when the user names a list or asks to add or buy something, not for a bare item name like 'tortilla chips'."
         private val logger = Logger.withTag(ReminderTool::class.simpleName!!)
 
         /**
