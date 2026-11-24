@@ -45,7 +45,7 @@ class HttpMcpIntegration(
     override val name: String,
     implementation: Implementation,
     private val url: String,
-    protocol: HttpMcpProtocol = HttpMcpProtocol.Sse,
+    private val protocol: HttpMcpProtocol = HttpMcpProtocol.Sse,
     authHeader: String? = null,
     private val cache: McpServerCache = McpServerCache(),
     override val description: String? = null,
@@ -57,35 +57,22 @@ class HttpMcpIntegration(
         val POLLED_MAX_AGE: Duration = 5.minutes
     }
     private val client = Client(implementation)
-    private val transport = when (protocol) {
-        HttpMcpProtocol.Streaming -> StreamableHttpClientTransport(
-            HttpClient {
-                install(SSE)
-                install(ContentNegotiation) {
-                    json()
-                }
-                if (authHeader != null) {
-                    defaultRequest {
-                        header("Authorization", authHeader)
-                    }
-                }
-            },
-            url
-        )
-        HttpMcpProtocol.Sse -> SseClientTransport(
-            HttpClient {
-                install(SSE)
-                install(ContentNegotiation) {
-                    json()
-                }
-                if (authHeader != null) {
-                    defaultRequest {
-                        header("Authorization", authHeader)
-                    }
-                }
-            },
-            url
-        )
+    private val httpClient = HttpClient {
+        install(SSE)
+        install(ContentNegotiation) {
+            json()
+        }
+        if (authHeader != null) {
+            defaultRequest {
+                header("Authorization", authHeader)
+            }
+        }
+    }
+
+    // A transport can't be started again once closed.
+    private fun newTransport() = when (protocol) {
+        HttpMcpProtocol.Streaming -> StreamableHttpClientTransport(httpClient, url)
+        HttpMcpProtocol.Sse -> SseClientTransport(httpClient, url)
     }
     private val endpoint = McpEndpoint(url, protocol, authHeader)
     private var entry: McpServerCacheEntry? = null
@@ -102,7 +89,7 @@ class HttpMcpIntegration(
         if (connectionLocks.incrementAndFetch() > 1) return
         try {
             registerListChangedHandlers(cacheEntry())
-            client.connect(transport)
+            client.connect(newTransport())
             cacheEntry().invalidateAll()
             connectionOpened = true
             logger.d { "Connected to MCP server: ${client.serverVersion}" }

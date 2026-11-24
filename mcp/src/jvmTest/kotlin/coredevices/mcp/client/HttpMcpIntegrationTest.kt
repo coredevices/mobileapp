@@ -86,6 +86,35 @@ class HttpMcpIntegrationTest {
         }
     }
 
+    @Test
+    fun reconnectsAfterClose() {
+        var port = initialPort
+        val server = try {
+            runSseMcpServer(port = port, wait = false)
+        } catch (e: IOException) {
+            port += 1
+            runSseMcpServer(port = port, wait = false)
+        }
+
+        try {
+            val integration = HttpMcpIntegration(
+                "test",
+                impl,
+                buildUrl(port, true),
+                HttpMcpProtocol.Sse
+            )
+            runBlocking(Dispatchers.IO) {
+                integration.connect()
+                integration.close()
+                integration.connect()
+                assert(integration.listTools().isNotEmpty())
+                integration.close()
+            }
+        } finally {
+            server.stop()
+        }
+    }
+
     // Also proves the transport delivers server-initiated notifications at all: without that the
     // cache would only ever refresh on its age ceiling.
 
