@@ -55,6 +55,17 @@ import coreapp.pebble.generated.resources.watch_pref_option_shift_up
 import coreapp.pebble.generated.resources.watch_pref_option_show
 import coreapp.pebble.generated.resources.watch_pref_option_smaller
 import coreapp.pebble.generated.resources.watch_pref_option_squish_up
+import coreapp.pebble.generated.resources.watch_pref_option_on
+import coreapp.pebble.generated.resources.watch_pref_option_schedule
+import coreapp.pebble.generated.resources.watch_pref_option_centered
+import coreapp.pebble.generated.resources.watch_pref_option_scaled_nearest
+import coreapp.pebble.generated.resources.watch_pref_option_scaled_bilinear
+import coreapp.pebble.generated.resources.watch_pref_option_never
+import coreapp.pebble.generated.resources.watch_pref_option_one_day
+import coreapp.pebble.generated.resources.watch_pref_option_one_week
+import coreapp.pebble.generated.resources.watch_pref_option_all
+import coreapp.pebble.generated.resources.watch_pref_option_bold
+import coreapp.pebble.generated.resources.watch_pref_option_big_bold
 import coreapp.pebble.generated.resources.watch_pref_option_standard
 import coreapp.pebble.generated.resources.watch_pref_option_standard_high
 import coreapp.pebble.generated.resources.watch_pref_option_standard_low
@@ -121,6 +132,17 @@ internal val WATCH_PREF_OPTION_LABELS: Map<String, StringResource> = mapOf(
     "Overlay" to Res.string.watch_pref_option_overlay,
     "Shift Up" to Res.string.watch_pref_option_shift_up,
     "Squish Up" to Res.string.watch_pref_option_squish_up,
+    "On" to Res.string.watch_pref_option_on,
+    "Schedule" to Res.string.watch_pref_option_schedule,
+    "Centered" to Res.string.watch_pref_option_centered,
+    "Scaled (Nearest)" to Res.string.watch_pref_option_scaled_nearest,
+    "Scaled (Bilinear)" to Res.string.watch_pref_option_scaled_bilinear,
+    "Never" to Res.string.watch_pref_option_never,
+    "1 Day" to Res.string.watch_pref_option_one_day,
+    "1 Week" to Res.string.watch_pref_option_one_week,
+    "All" to Res.string.watch_pref_option_all,
+    "Bold" to Res.string.watch_pref_option_bold,
+    "Big & Bold" to Res.string.watch_pref_option_big_bold,
 )
 
 internal val WATCH_PREF_COLOR_LABELS: Map<String, StringResource> = mapOf(

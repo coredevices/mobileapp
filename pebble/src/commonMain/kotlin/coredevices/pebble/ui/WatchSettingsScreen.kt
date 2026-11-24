@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
@@ -63,6 +64,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.Info
@@ -194,6 +196,7 @@ import coreapp.pebble.generated.resources.settings_group_menu_scrolling
 import coreapp.pebble.generated.resources.settings_group_permissions
 import coreapp.pebble.generated.resources.settings_group_phone_effects
 import coreapp.pebble.generated.resources.settings_group_quick_view
+import coreapp.pebble.generated.resources.settings_group_touch
 import coreapp.pebble.generated.resources.settings_group_vibration
 import coreapp.pebble.generated.resources.settings_group_your_details
 import coreapp.pebble.generated.resources.settings_health_sync_now
@@ -283,6 +286,8 @@ import coreapp.pebble.generated.resources.settings_section_debug
 import coreapp.pebble.generated.resources.settings_section_defaults
 import coreapp.pebble.generated.resources.settings_section_diagnostics
 import coreapp.pebble.generated.resources.settings_section_display
+import coreapp.pebble.generated.resources.settings_section_vibrations
+import coreapp.pebble.generated.resources.settings_section_themes
 import coreapp.pebble.generated.resources.settings_section_general
 import coreapp.pebble.generated.resources.settings_section_music
 import coreapp.pebble.generated.resources.settings_section_other
@@ -504,8 +509,10 @@ enum class Section(val title: StringResource, val icon: ImageVector) {
     Health(Res.string.health, Icons.AutoMirrored.Filled.DirectionsRun),
     Speech(Res.string.settings_section_speech, Icons.Default.Mic),
     Display(Res.string.settings_section_display, Icons.Default.DarkMode), // watch only
+    Themes(Res.string.settings_section_themes, Icons.Default.ColorLens), // watch only
     Weather(Res.string.settings_section_weather, Icons.Default.Cloud),
     Notifications(Res.string.notifications, Icons.Default.Notifications),
+    Vibrations(Res.string.settings_section_vibrations, Icons.Default.Vibration), // watch only
     Time(Res.string.settings_section_time, Icons.Default.Schedule), // watch only
     Timeline(Res.string.settings_section_timeline, Icons.Default.Timeline), // watch only
     QuietTime(Res.string.settings_section_quiet_time, Icons.Default.DoNotDisturb),
@@ -547,6 +554,7 @@ enum class SettingsGroup(val title: StringResource) {
     BacklightAmbient(Res.string.settings_group_ambient_light),
     Backlight(Res.string.settings_group_backlight),
     Vibration(Res.string.settings_group_vibration),
+    Touch(Res.string.settings_group_touch),
     QuickView(Res.string.settings_group_quick_view),
     HeartRate(Res.string.settings_group_heart_rate),
     Insights(Res.string.settings_group_insights),

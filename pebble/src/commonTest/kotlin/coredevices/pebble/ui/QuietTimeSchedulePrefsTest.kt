@@ -2,6 +2,7 @@ package coredevices.pebble.ui
 
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
+import io.rebble.libpebblecommon.database.entity.DarkModeSetting
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.database.entity.ScheduleWatchPref
@@ -27,13 +28,13 @@ class QuietTimeSchedulePrefsTest {
                 BoolWatchPref.QuietTimeWeekendScheduleEnabled,
                 EnumWatchPref.QuietTimeShowNotifications,
             ),
-            prefs(weekday = false, weekend = null).groupQuietTimeScheduleHours().map { it.pref },
+            prefs(weekday = false, weekend = null).groupScheduleHours().map { it.pref },
         )
     }
 
     @Test
     fun hoursFollowTheToggleTheyBelongTo() {
-        val grouped = prefs(weekday = true, weekend = true).groupQuietTimeScheduleHours()
+        val grouped = prefs(weekday = true, weekend = true).groupScheduleHours()
         assertEquals(
             listOf(
                 BoolWatchPref.QuietTimeManuallyEnabled,
@@ -61,7 +62,17 @@ class QuietTimeSchedulePrefsTest {
                 ScheduleWatchPref.QuietTimeWeekendSchedule,
                 EnumWatchPref.QuietTimeShowNotifications,
             ),
-            prefs(weekday = null, weekend = true).groupQuietTimeScheduleHours().map { it.pref },
+            prefs(weekday = null, weekend = true).groupScheduleHours().map { it.pref },
         )
+    }
+
+    @Test
+    fun darkModeHoursShowOnlyWhenScheduled() {
+        fun grouped(mode: DarkModeSetting) = listOf(
+            WatchPreference(EnumWatchPref.DarkMode, mode),
+            WatchPreference(ScheduleWatchPref.DarkModeSchedule, null),
+        ).groupScheduleHours().map { it.pref }
+        assertEquals(listOf(EnumWatchPref.DarkMode), grouped(DarkModeSetting.On))
+        assertEquals(listOf(EnumWatchPref.DarkMode, ScheduleWatchPref.DarkModeSchedule), grouped(DarkModeSetting.Scheduled))
     }
 }

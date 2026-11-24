@@ -898,6 +898,8 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_section_calendar">Calendar</string>
     <string name="settings_section_speech">Speech Recognition</string>
     <string name="settings_section_display">Display</string>
+    <string name="settings_section_themes">Themes</string>
+    <string name="settings_section_vibrations">Vibrations</string>
     <string name="settings_section_weather">Weather</string>
     <string name="settings_section_time">Time</string>
     <string name="settings_section_timeline">Timeline</string>
@@ -916,6 +918,7 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_group_ambient_light">Ambient Light Sensor</string>
     <string name="settings_group_backlight">Backlight</string>
     <string name="settings_group_vibration">Vibration</string>
+    <string name="settings_group_touch">Touch</string>
     <!-- Timeline feature showing upcoming events on the watchface -->
     <string name="settings_group_quick_view">Quick View</string>
     <string name="settings_group_heart_rate">Heart Rate</string>
@@ -1164,11 +1167,11 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_prefs_sunset">Sunset</string>
     <!-- Menu scrolling wraps from the last item to the first -->
     <string name="settings_prefs_wrap_around">Wrap Around</string>
+    <string name="settings_prefs_navigation">Navigation</string>
     <!-- Watch vibration intensity -->
     <string name="settings_prefs_system_intensity">System Intensity</string>
     <string name="settings_prefs_incoming_calls">Incoming Calls</string>
     <string name="settings_prefs_alarms">Alarms</string>
-    <string name="settings_prefs_vibe_delay">Delay Until Notification Is Visible</string>
     <string name="settings_prefs_show_upcoming_events">Show Upcoming Events</string>
     <string name="settings_prefs_minutes_before_event">Minutes Before Event</string>
     <!-- Quick View behaviour on watchfaces that don't support it -->
@@ -1296,6 +1299,10 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="watch_pref_dynamic_backlight_mode_desc">Automatically adjust backlight brightness to match your environment (using light sensor). Dimmer modes stay dimmer in bright light.</string>
     <string name="watch_pref_backlight_touch">Backlight on Tap</string>
     <string name="watch_pref_backlight_touch_desc">Turn on backlight when tapping the screen</string>
+    <string name="watch_pref_touch_enabled">Touch</string>
+    <string name="watch_pref_touch_enabled_desc">Enable the touchscreen</string>
+    <string name="watch_pref_touch_navigation_menu">Touch Navigation</string>
+    <string name="watch_pref_touch_navigation_menu_desc">Navigate system menus by touch</string>
     <string name="watch_pref_wind_speed">Wind Speed</string>
     <string name="watch_pref_wind_speed_desc">Automatic follows the Imperial Units setting.</string>
     <string name="watch_pref_temperature">Temperature</string>
@@ -1364,6 +1371,32 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="watch_pref_option_overlay">Overlay</string>
     <string name="watch_pref_option_shift_up">Shift Up</string>
     <string name="watch_pref_option_squish_up">Squish Up</string>
+    <string name="settings_prefs_hourly_notice">Hourly Notice</string>
+    <string name="settings_prefs_on_disconnect">On Disconnect</string>
+    <string name="watch_pref_vibe_score_hourly">Vibration - Hourly Notice</string>
+    <string name="watch_pref_vibe_score_on_disconnect">Vibration - On Disconnect</string>
+    <string name="watch_pref_theme_highlight_color">Accent Color</string>
+    <string name="watch_pref_dark_mode">Dark Mode</string>
+    <string name="watch_pref_dark_mode_schedule">Dark Mode - Schedule</string>
+    <string name="watch_pref_legacy_app_display">Legacy App Display</string>
+    <string name="watch_pref_speaker_muted">Mute Speaker</string>
+    <string name="watch_pref_speaker_volume">Speaker Volume</string>
+    <string name="watch_pref_notification_grouping">Group by Sender</string>
+    <string name="watch_pref_notification_grouping_desc">Group notifications from the same sender received within this time</string>
+    <string name="watch_pref_notification_status_bar">Notification Status Bar</string>
+    <string name="watch_pref_quiet_time_mute_speaker">Quiet Time - Mute Speaker</string>
+    <string name="watch_pref_quiet_time_mute_speaker_desc">Mute the speaker during Quiet Time</string>
+    <string name="watch_pref_option_on">On</string>
+    <string name="watch_pref_option_schedule">Schedule</string>
+    <string name="watch_pref_option_centered">Centered</string>
+    <string name="watch_pref_option_scaled_nearest">Scaled (Nearest)</string>
+    <string name="watch_pref_option_scaled_bilinear">Scaled (Bilinear)</string>
+    <string name="watch_pref_option_never">Never</string>
+    <string name="watch_pref_option_one_day">1 Day</string>
+    <string name="watch_pref_option_one_week">1 Week</string>
+    <string name="watch_pref_option_all">All</string>
+    <string name="watch_pref_option_bold">Bold</string>
+    <string name="watch_pref_option_big_bold">Big &amp; Bold</string>
     <!-- Backlight colour presets -->
     <string name="watch_pref_color_red">Red</string>
     <string name="watch_pref_color_orange">Orange</string>

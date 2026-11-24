@@ -88,6 +88,25 @@ import coreapp.pebble.generated.resources.watch_pref_menu_scroll_vibe
 import coreapp.pebble.generated.resources.watch_pref_legacy_vibe_intensity
 import coreapp.pebble.generated.resources.watch_pref_left_handed_mode_desc
 import coreapp.pebble.generated.resources.watch_pref_left_handed_mode
+import coreapp.pebble.generated.resources.watch_pref_theme_highlight_color
+import coreapp.pebble.generated.resources.watch_pref_dark_mode
+import coreapp.pebble.generated.resources.watch_pref_dark_mode_schedule
+import coreapp.pebble.generated.resources.watch_pref_legacy_app_display
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_hourly
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_on_disconnect
+import coreapp.pebble.generated.resources.settings_prefs_hourly_notice
+import coreapp.pebble.generated.resources.settings_prefs_on_disconnect
+import coreapp.pebble.generated.resources.watch_pref_speaker_muted
+import coreapp.pebble.generated.resources.watch_pref_speaker_volume
+import coreapp.pebble.generated.resources.watch_pref_notification_grouping
+import coreapp.pebble.generated.resources.watch_pref_notification_grouping_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_status_bar
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker_desc
+import coreapp.pebble.generated.resources.watch_pref_touch_enabled
+import coreapp.pebble.generated.resources.watch_pref_touch_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_touch_navigation_menu
+import coreapp.pebble.generated.resources.watch_pref_touch_navigation_menu_desc
 import coreapp.pebble.generated.resources.watch_pref_dynamic_backlight_mode_desc
 import coreapp.pebble.generated.resources.watch_pref_dynamic_backlight_mode
 import coreapp.pebble.generated.resources.watch_pref_clock24h
@@ -146,7 +165,7 @@ import coreapp.pebble.generated.resources.settings_prefs_threshold
 import coreapp.pebble.generated.resources.settings_prefs_timeout
 import coreapp.pebble.generated.resources.settings_prefs_to
 import coreapp.pebble.generated.resources.settings_prefs_unsupported_faces
-import coreapp.pebble.generated.resources.settings_prefs_vibe_delay
+import coreapp.pebble.generated.resources.settings_prefs_navigation
 import coreapp.pebble.generated.resources.settings_prefs_wrap_around
 import coreapp.util.generated.resources.Res as UtilRes
 import coreapp.util.generated.resources.cancel
@@ -164,6 +183,7 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.ColorWatchPref
+import io.rebble.libpebblecommon.database.entity.DarkModeSetting
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting
@@ -205,6 +225,11 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
+internal fun List<WatchPreference<*>>.hideTouchNavigationWhenTouchOff(): List<WatchPreference<*>> {
+    val touch = firstOrNull { it.pref == BoolWatchPref.TouchEnabled }?.valueOrDefault()
+    return if (touch == false) filterNot { it.pref == BoolWatchPref.TouchNavigationMenu } else this
+}
+
 private val BACKLIGHT_SUN_TIMES = setOf<WatchPref<*>>(
     NumberWatchPref.BacklightColorSunriseMinute,
     NumberWatchPref.BacklightColorSunsetMinute,
@@ -222,13 +247,14 @@ internal fun List<WatchPreference<*>>.hideUnusedBacklightColorPrefs(autoSunTimes
 private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
     BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
     BoolWatchPref.QuietTimeWeekendScheduleEnabled to ScheduleWatchPref.QuietTimeWeekendSchedule,
+    EnumWatchPref.DarkMode to ScheduleWatchPref.DarkModeSchedule,
 )
 
 /** Schedule hours sit directly under the toggle they belong to, and only while it is on. */
-internal fun List<WatchPreference<*>>.groupQuietTimeScheduleHours(): List<WatchPreference<*>> {
+internal fun List<WatchPreference<*>>.groupScheduleHours(): List<WatchPreference<*>> {
     val hours = filter { it.pref is ScheduleWatchPref }
     return filterNot { it.pref is ScheduleWatchPref }.flatMap { item ->
-        val pref = SCHEDULE_HOURS[item.pref]?.takeIf { item.valueOrDefault() == true }
+        val pref = SCHEDULE_HOURS[item.pref]?.takeIf { item.valueOrDefault().let { it == true || it == DarkModeSetting.Scheduled } }
         listOfNotNull(item, hours.firstOrNull { it.pref == pref })
     }
 }
@@ -244,7 +270,8 @@ fun watchPrefs(): List<SettingsItem> {
     val mapped = remember(settings, quickLaunchOptions, coreConfig) {
         settings.inLayoutOrder()
             .hidePresetManagedBacklightPrefs()
-            .groupQuietTimeScheduleHours()
+            .hideTouchNavigationWhenTouchOff()
+            .groupScheduleHours()
             .hideUnusedBacklightColorPrefs(coreConfig.backlightColorAutoSunriseSunset)
             .flatMap { item ->
                 val setting = when (val pref = item.pref) {
@@ -331,16 +358,19 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(NumberWatchPref.BacklightColorSunsetMinute, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_prefs_sunset, name = Res.string.watch_pref_backlight_color_sunset_minute),
     PrefLayout(BoolWatchPref.MenuScrollWrapAround, Section.Display, SettingsGroup.MenuScrolling, title = Res.string.settings_prefs_wrap_around, name = Res.string.watch_pref_menu_scroll_wrap_around, description = Res.string.watch_pref_menu_scroll_wrap_around_desc),
     PrefLayout(EnumWatchPref.MenuScrollVibe, Section.Display, SettingsGroup.MenuScrolling, title = Res.string.settings_group_vibration, name = Res.string.watch_pref_menu_scroll_vibe),
+    PrefLayout(BoolWatchPref.TouchEnabled, Section.Display, SettingsGroup.Touch, title = UtilRes.string.enable, name = Res.string.watch_pref_touch_enabled, description = Res.string.watch_pref_touch_enabled_desc),
+    PrefLayout(BoolWatchPref.TouchNavigationMenu, Section.Display, SettingsGroup.Touch, title = Res.string.settings_prefs_navigation, name = Res.string.watch_pref_touch_navigation_menu, description = Res.string.watch_pref_touch_navigation_menu_desc),
     PrefLayout(BoolWatchPref.LeftHandedMode, Section.Display, name = Res.string.watch_pref_left_handed_mode, description = Res.string.watch_pref_left_handed_mode_desc),
+    PrefLayout(EnumWatchPref.LegacyAppDisplay, Section.Display, name = Res.string.watch_pref_legacy_app_display),
+
+    PrefLayout(EnumWatchPref.DarkMode, Section.Themes, name = Res.string.watch_pref_dark_mode),
+    PrefLayout(ScheduleWatchPref.DarkModeSchedule, Section.Themes, name = Res.string.watch_pref_dark_mode_schedule),
+    PrefLayout(ColorWatchPref.ThemeHighlightColor, Section.Themes, name = Res.string.watch_pref_theme_highlight_color),
 
     PrefLayout(EnumWatchPref.Temperature, Section.Weather, name = Res.string.watch_pref_temperature, description = Res.string.watch_pref_temperature_desc),
     PrefLayout(EnumWatchPref.WindSpeed, Section.Weather, name = Res.string.watch_pref_wind_speed, description = Res.string.watch_pref_wind_speed_desc),
 
-    PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Notifications, SettingsGroup.Vibration, title = Res.string.settings_prefs_system_intensity, name = Res.string.watch_pref_legacy_vibe_intensity),
-    PrefLayout(EnumWatchPref.VibeScoreNotifications, Section.Notifications, SettingsGroup.Vibration, title = Res.string.notifications, name = Res.string.watch_pref_vibe_score_notifications),
-    PrefLayout(EnumWatchPref.VibeScoreCalls, Section.Notifications, SettingsGroup.Vibration, title = Res.string.settings_prefs_incoming_calls, name = Res.string.watch_pref_vibe_score_calls),
-    PrefLayout(EnumWatchPref.VibeScoreAlarms, Section.Notifications, SettingsGroup.Vibration, title = Res.string.settings_prefs_alarms, name = Res.string.watch_pref_vibe_score_alarms),
-    PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, SettingsGroup.Vibration, title = Res.string.settings_prefs_vibe_delay, name = Res.string.watch_pref_notification_vibe_delay, description = Res.string.watch_pref_notification_vibe_delay_desc),
+    PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, name = Res.string.watch_pref_notification_vibe_delay, description = Res.string.watch_pref_notification_vibe_delay_desc),
     PrefLayout(BoolWatchPref.NotificationBacklight, Section.Notifications, name = Res.string.watch_pref_notification_backlight, description = Res.string.watch_pref_notification_backlight_desc),
     PrefLayout(BoolWatchPref.RespectPhoneSilence, Section.Notifications, name = Res.string.watch_pref_respect_phone_silence, description = Res.string.watch_pref_respect_phone_silence_desc),
     PrefLayout(BoolWatchPref.NotificationDismissalSync, Section.Notifications, name = Res.string.watch_pref_notification_dismissal_sync, description = Res.string.watch_pref_notification_dismissal_sync_desc),
@@ -348,6 +378,17 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(EnumWatchPref.NotificationFilter, Section.Notifications, name = Res.string.watch_pref_notification_filter),
     PrefLayout(NumberWatchPref.NotificationTimeoutMs, Section.Notifications, name = Res.string.watch_pref_notification_timeout_ms, description = Res.string.watch_pref_notification_timeout_ms_desc),
     PrefLayout(BoolWatchPref.AlternativeNotificationStyle, Section.Notifications, name = Res.string.watch_pref_alternative_notification_style),
+    PrefLayout(EnumWatchPref.NotificationGrouping, Section.Notifications, name = Res.string.watch_pref_notification_grouping, description = Res.string.watch_pref_notification_grouping_desc),
+    PrefLayout(EnumWatchPref.NotificationStatusBar, Section.Notifications, name = Res.string.watch_pref_notification_status_bar),
+
+    PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_system_intensity, name = Res.string.watch_pref_legacy_vibe_intensity),
+    PrefLayout(EnumWatchPref.VibeScoreNotifications, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.notifications, name = Res.string.watch_pref_vibe_score_notifications),
+    PrefLayout(EnumWatchPref.VibeScoreCalls, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_incoming_calls, name = Res.string.watch_pref_vibe_score_calls),
+    PrefLayout(EnumWatchPref.VibeScoreAlarms, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_alarms, name = Res.string.watch_pref_vibe_score_alarms),
+    PrefLayout(EnumWatchPref.VibeScoreHourly, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_hourly_notice, name = Res.string.watch_pref_vibe_score_hourly),
+    PrefLayout(EnumWatchPref.VibeScoreOnDisconnect, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_on_disconnect, name = Res.string.watch_pref_vibe_score_on_disconnect),
+    PrefLayout(BoolWatchPref.SpeakerMuted, Section.Vibrations, name = Res.string.watch_pref_speaker_muted),
+    PrefLayout(NumberWatchPref.SpeakerVolume, Section.Vibrations, name = Res.string.watch_pref_speaker_volume),
 
     PrefLayout(BoolWatchPref.TimezoneSourceIsManual, Section.Time, name = Res.string.watch_pref_timezone_source_is_manual, description = Res.string.watch_pref_timezone_source_is_manual_desc),
     PrefLayout(BoolWatchPref.Clock24h, Section.Time, name = Res.string.watch_pref_clock24h),
@@ -366,6 +407,7 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(BoolWatchPref.QuietTimeTouchBacklight, Section.QuietTime, name = Res.string.watch_pref_quiet_time_touch_backlight, description = Res.string.watch_pref_quiet_time_touch_backlight_desc),
     PrefLayout(BoolWatchPref.QuietTimeNotificationBacklight, Section.QuietTime, name = Res.string.watch_pref_quiet_time_notification_backlight, description = Res.string.watch_pref_quiet_time_notification_backlight_desc),
     PrefLayout(BoolWatchPref.QuietTimeAutoDismiss, Section.QuietTime, name = Res.string.watch_pref_quiet_time_auto_dismiss, description = Res.string.watch_pref_quiet_time_auto_dismiss_desc),
+    PrefLayout(BoolWatchPref.QuietTimeMuteSpeaker, Section.QuietTime, name = Res.string.watch_pref_quiet_time_mute_speaker, description = Res.string.watch_pref_quiet_time_mute_speaker_desc),
     PrefLayout(EnumWatchPref.QuietTimeInterruptions, Section.QuietTime, name = Res.string.watch_pref_quiet_time_interruptions),
     PrefLayout(EnumWatchPref.QuietTimeShowNotifications, Section.QuietTime, name = Res.string.watch_pref_quiet_time_show_notifications),
 

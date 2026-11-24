@@ -287,6 +287,10 @@ public enum class BoolWatchPref(
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
+    TouchEnabled("touchEnabled", "Touch", true),
+    TouchNavigationMenu("touchNavMenuEnabled", "Touch Navigation", true),
+    SpeakerMuted("speakerMuted", "Mute Speaker", false),
+    QuietTimeMuteSpeaker("dndMuteSpeaker", "Quiet Time - Mute Speaker", false),
     ;
 
     override val type: WatchPrefType = WatchPrefType.TypeBoolean
@@ -342,6 +346,11 @@ public enum class ScheduleWatchPref(
         "dndWeekendSchedule",
         "Quiet Time - Weekend Hours",
         QuietTimeSchedule(0, 0, 6, 0),
+    ),
+    DarkModeSchedule(
+        "darkModeSchedule",
+        "Dark Mode - Schedule",
+        QuietTimeSchedule(19, 0, 7, 0),
     ),
     ;
 
@@ -448,6 +457,22 @@ internal enum class VibeScore(override val code: UByte, override val displayName
     Imperial(20u, "Imperial"),
 }
 
+private val HOURLY_DISCONNECT_VIBE_SCORES = listOf(
+    VibeScore.Disabled,
+    VibeScore.StandardShortPulseLow,
+    VibeScore.StandardShortPulseHigh,
+    VibeScore.Pulse,
+    VibeScore.NudgeNudge,
+    VibeScore.Jackhammer,
+    VibeScore.Mario,
+    VibeScore.DoublePulseMedium,
+    VibeScore.PebbleMorse,
+    VibeScore.Heartbeat,
+    VibeScore.DoubleTap,
+    VibeScore.Wave,
+    VibeScore.Imperial,
+)
+
 internal enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
     NoVibe(0u, "No Vibe"),
     VibeOnWrapAround(1u, "Vibe On Wrap Around"),
@@ -505,6 +530,35 @@ internal enum class BacklightTouchWakeMode(override val code: UByte, override va
     DoubleTap(0u, "Double Tap"),
     Tap(1u, "Tap"),
     Off(2u, "Off"),
+}
+
+// Matches DarkMode in pebble-firmware:src/fw/shell/prefs.h.
+public enum class DarkModeSetting(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    On(1u, "On"),
+    Scheduled(2u, "Schedule"),
+}
+
+// Matches LegacyAppRenderMode in pebble-firmware:src/fw/shell/prefs.h.
+internal enum class LegacyAppRenderMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Centered(0u, "Centered"),
+    ScaledNearest(1u, "Scaled (Nearest)"),
+    ScaledBilinear(2u, "Scaled (Bilinear)"),
+}
+
+// Matches NotificationGroupingRange in pebble-firmware:include/pbl/services/notifications/alerts_preferences_private.h.
+internal enum class NotificationGroupingRange(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Never(0u, "Never"),
+    OneDay(1u, "1 Day"),
+    OneWeek(2u, "1 Week"),
+    All(3u, "All"),
+}
+
+// Matches NotificationStatusBarStyle in pebble-firmware:include/pbl/services/notifications/alerts_preferences_private.h.
+internal enum class NotificationStatusBarStyle(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Default(0u, "Default"),
+    Bold(1u, "Bold"),
+    BigBold(2u, "Big & Bold"),
 }
 
 // Matches BacklightDynamicMode in pebble-firmware:src/fw/shell/prefs.h. Off disables dynamic
@@ -633,6 +687,12 @@ public enum class EnumWatchPref(
             VibeScore.Imperial,
         ),
     ),
+    VibeScoreHourly(
+        "vibeScoreHourly", "Vibration - Hourly Notice", VibeScore.Disabled, HOURLY_DISCONNECT_VIBE_SCORES,
+    ),
+    VibeScoreOnDisconnect(
+        "vibeScoreOnDisconnect", "Vibration - On Disconnect", VibeScore.Disabled, HOURLY_DISCONNECT_VIBE_SCORES,
+    ),
     MenuScrollVibe(
         "menuScrollVibeBehavior", "Menu Scrolling - Vibration", MenuScrollVibeBehaviour.NoVibe,
         MenuScrollVibeBehaviour.entries
@@ -685,6 +745,30 @@ public enum class EnumWatchPref(
         displayName = "Timeline Quick View - Unsupported Faces",
         defaultValue = TimelinePeekFaceMode.Overlay,
         options = TimelinePeekFaceMode.entries,
+    ),
+    DarkMode(
+        id = "darkMode",
+        displayName = "Dark Mode",
+        defaultValue = DarkModeSetting.Off,
+        options = DarkModeSetting.entries,
+    ),
+    LegacyAppDisplay(
+        id = "legacyAppRenderMode",
+        displayName = "Legacy App Display",
+        defaultValue = LegacyAppRenderMode.ScaledNearest,
+        options = LegacyAppRenderMode.entries,
+    ),
+    NotificationGrouping(
+        id = "notifGroupingRange",
+        displayName = "Group by Sender",
+        defaultValue = NotificationGroupingRange.Never,
+        options = NotificationGroupingRange.entries,
+    ),
+    NotificationStatusBar(
+        id = "notifStatusBarStyle",
+        displayName = "Notification Status Bar",
+        defaultValue = NotificationStatusBarStyle.Default,
+        options = NotificationStatusBarStyle.entries,
     ),
     ;
 
@@ -761,6 +845,15 @@ public enum class NumberWatchPref(
         min = 0,
         max = 1439,
         unit = "",
+    ),
+    SpeakerVolume(
+        id = "speakerVolume",
+        displayName = "Speaker Volume",
+        defaultValue = 100,
+        type = WatchPrefType.TypeUInt8,
+        min = 0,
+        max = 100,
+        unit = "%",
     ),
     ;
 
@@ -859,6 +952,23 @@ public enum class ColorWatchPref(
 //            TimelineColor.BrilliantRose,
 //        ),
 //    ),
+    ThemeHighlightColor(
+        "themeHighlightColor",
+        "Accent Color",
+        TimelineColor.VividCerulean,
+        availableColors = listOf(
+            TimelineColor.SunsetOrange,
+            TimelineColor.ChromeYellow,
+            TimelineColor.Yellow,
+            TimelineColor.Green,
+            TimelineColor.Cyan,
+            TimelineColor.VividCerulean,
+            TimelineColor.BabyBlueEyes,
+            TimelineColor.LavenderIndigo,
+            TimelineColor.ShockingPink,
+            TimelineColor.BrilliantRose,
+        ),
+    ),
     ;
 
     override val type: WatchPrefType = WatchPrefType.TypeColor
