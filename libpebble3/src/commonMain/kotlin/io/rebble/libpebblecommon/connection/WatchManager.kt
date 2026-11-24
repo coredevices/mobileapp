@@ -749,7 +749,7 @@ internal class WatchManager(
     }
 
     companion object {
-        private val DISCONNECT_TIMEOUT = 3.seconds
+        val DISCONNECT_TIMEOUT = 3.seconds
         private val APP_START_WAIT_TO_CONNECT = 2.5.seconds
         private val PERIPHERAL_NOT_FOUND_RETRY_DELAY = 5.seconds
         private const val SEEDED_BONDED_KEY = "seeded_bonded_watches_v1"

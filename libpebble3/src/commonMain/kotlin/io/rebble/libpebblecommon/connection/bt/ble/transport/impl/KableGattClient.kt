@@ -10,6 +10,7 @@ import com.juul.kable.WriteType
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PlatformIdentifier
+import io.rebble.libpebblecommon.connection.WatchManager.Companion.DISCONNECT_TIMEOUT
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
@@ -117,6 +118,14 @@ internal class KableGattConnector(
         if (!attemptedConnection.value) {
             logger.d { "Marking $identifier as disconnected (never attempted connection)" }
             _disconnected.complete(ConnectionFailureReason.NotAnError_NeverAttmpedConnection)
+        } else {
+            val reason = withTimeoutOrNull(DISCONNECT_TIMEOUT) { _disconnected.await() }
+            if (reason == null) {
+                // peripheral.disconnect() returns once state is Disconnected, so if the state watcher
+                // hasn't fired by now it missed the transition (StateFlow conflation) and never will.
+                logger.w { "Marking $identifier as disconnected (state watcher missed disconnection)" }
+                _disconnected.complete(ConnectionFailureReason.FailedToConnect)
+            }
         }
         logger.d { "/disconnect()..." }
     }
