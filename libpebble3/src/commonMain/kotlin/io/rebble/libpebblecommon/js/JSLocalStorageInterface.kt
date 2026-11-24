@@ -4,7 +4,6 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
 import io.rebble.libpebblecommon.connection.AppContext
-import kotlinx.serialization.json.Json
 
 internal expect fun createJSSettings(appContext: AppContext, id: String): Settings
 
@@ -16,20 +15,6 @@ internal abstract class JSLocalStorageInterface(
 
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size
-
-    open fun saveState(data: Any?) {
-        if (data !is String) return
-        val map = Json.decodeFromString<Map<String, String?>>(data)
-        clear()
-        for ((key, value) in map) {
-            setItem(key, value)
-        }
-    }
-
-    open fun restoreState(): String {
-        val map = settings.keys.associateWith { getItem(it)?.toString() }
-        return Json.encodeToString(map)
-    }
 
     open fun getItem(key: Any?): Any? = settings.get<String>(key?.toString() ?: "null")
 

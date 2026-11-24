@@ -72,4 +72,9 @@ internal class PKJSRunnerTestsAndroid: PKJSRunnerTests(::createJsRunner) {
     override fun testLocalStorageEarlyExecution() {
         super.testLocalStorageEarlyExecution()
     }
+
+    @Test
+    override fun testLocalStorageSharedLive() {
+        super.testLocalStorageSharedLive()
+    }
 }

@@ -125,11 +125,7 @@ private class NativeConfigBridge(
     }
 }
 
-internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
-    // no-op
-}
-
-internal actual fun persistLocalStorage(webView: NativeWebView) {
+internal actual suspend fun installLocalStorage(webView: NativeWebView) {
     // no-op
 }
 

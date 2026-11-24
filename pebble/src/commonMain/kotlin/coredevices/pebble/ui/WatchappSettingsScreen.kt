@@ -147,8 +147,7 @@ internal fun configPageUrlFilter(scheme: String, domain: String) =
 /** [domains] each cover their subdomains; null leaves the page unrestricted. */
 internal expect suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?): ConfigPageNetwork
 
-internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
-internal expect fun persistLocalStorage(webView: NativeWebView)
+internal expect suspend fun installLocalStorage(webView: NativeWebView)
 
 @Composable
 internal expect fun rememberPlatformWebViewParams(mayLoad: (String) -> Boolean): PlatformWebViewParams?
@@ -204,13 +203,11 @@ fun WatchappSettingsScreen(
         }
         val deepLinks: PebbleDeepLinkHandler = koinInject()
         val scope = rememberCoroutineScope()
-        // Leaves the page for the linked app's page in the locker. Called on the main thread, which
-        // persistLocalStorage blocks on.
+        // Leaves the page for the linked app's page in the locker.
         val openStoreAppLink = { url: String ->
             val isStoreLink = RealPebbleDeepLinkHandler.storeAppLink(url) != null
             if (isStoreLink) {
                 scope.launch(Dispatchers.Default) {
-                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     deepLinks.openStoreAppLink(url)
                 }
             }
@@ -220,14 +217,12 @@ fun WatchappSettingsScreen(
             SettingsRequestInterceptor(
                 openStoreAppLink = openStoreAppLink,
                 onSuccess = { data ->
-                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     session?.onPageClosed(data)
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
                     }
                 },
                 onError = {
-                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
                     }
@@ -359,7 +354,7 @@ fun WatchappSettingsScreen(
             if (state.loadingState is LoadingState.Loading) {
                 logger.d { "Page load finished, applying shims" }
                 val nativeWebView = runCatching { state.nativeWebView }.getOrNull() ?: return@LaunchedEffect
-                restoreLocalStorage(nativeWebView)
+                installLocalStorage(nativeWebView)
             }
         }
 
