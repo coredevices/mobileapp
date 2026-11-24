@@ -52,16 +52,19 @@ iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, no
 
 Make the smallest change that fixes the problem. Do not bundle extra "improvements," retry logic, or defensive code alongside a root-cause fix. If a bug is a one-line fix, the PR should be a one-line fix. Reviewers will extract the minimal fix and discard the rest.
 
+Before writing a fix, sketch the smallest diff against main that fixes the reported symptom — usually changing a condition, not a flow. Anything beyond it (new fields, helpers, tests, extra behaviour changes) needs a reason the sketch can't do the job; say it in the PR description.
+
 - **Bad:** Fixing a stale token bug (`authStateChanged` → `idTokenChanged`) + adding retry loops + adding token refresh in UI layer. Reviewer merged only the one-line fix.
 - **Bad:** Fixing a dispatcher issue (`Dispatchers.IO` → `Dispatchers.Default`) + restructuring file writes to be async fire-and-forget. Reviewer took only the dispatcher change.
 
 ### 2. Use existing abstractions at the correct scope — don't reinvent
 
-Before writing new code, search for existing services, injectables, and utilities that already do what you need. This codebase uses dependency injection extensively. If something feels like it should exist, it probably does. When adding state, put it at the correct DI scope — per-watch state belongs in per-watch services, not in singletons.
+Before writing new code, search for existing services, injectables, and utilities that already do what you need. This codebase uses dependency injection extensively. If something feels like it should exist, it probably does. When adding state, put it at the correct DI scope — per-watch state belongs in per-watch services, not in singletons. Before adding a field, look for an existing one with a similar meaning on the same type and extend it.
 
 - **Bad:** Manually querying DAOs and iterating trace sessions to find the right one to append to. The injectable `RingTraceSession` already tracks the current session.
 - **Bad:** Writing temp files for audio playback. In-memory `MediaDataSource` (Android) avoids temp file management entirely.
 - **Bad:** Putting per-watch timezone tracking state in `LibPebble3` (singleton). It belongs in `SystemService` (per-watch). Reviewer moved it.
+- **Bad:** Adding `CommonAppType.Locker.phoneConfigPage` when `CommonApp.hasPlugin` already existed and only needed setting for locker apps.
 
 ### 3. Understand root causes before fixing
 
@@ -97,6 +100,8 @@ PRs are not needed to run CI - ust push a branch. If you need to publish an inte
 ### 8. Include tests for new logic
 
 Non-trivial new logic (parsers, encoders, state machines) must have unit tests. When Alice rewrote the M4A feature, she included 324 lines of tests for the M4A parser. The original PR had zero.
+
+Don't extract trivial conditions into helpers just to test them; a one-line boolean doesn't need its own test file.
 
 ### 9. Prefer simple architectures over clever ones
 
