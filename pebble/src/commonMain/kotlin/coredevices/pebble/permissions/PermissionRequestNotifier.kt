@@ -10,10 +10,18 @@ import coredevices.util.setWatchNotificationActionHandler
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.perm_request_unknown_app
@@ -45,7 +53,7 @@ expect fun removePermissionRequestNotification(appContext: AppContext, key: Int)
 
 /**
  * One notification per running app with requests waiting on the user, removed once they're
- * answered (here or elsewhere in the app) or the app stops.
+ * answered (here or elsewhere in the app) or the app stops, but not until [MIN_NOTIFICATION_LIFETIME] after it was posted.
  */
 class PermissionRequestNotifier(
     private val libPebble: LibPebble,
@@ -64,22 +72,42 @@ class PermissionRequestNotifier(
     }
 
     fun init() {
-        GlobalScope.launch {
-            var shown = emptyMap<Uuid, List<String>>()
-            libPebble.activePermissionRequests().collect { active ->
-                val current = active.groupBy({ it.appUuid }, { it.permission })
-                // Only something new is worth a notification: answering one of several shouldn't re-alert.
-                // The app's open config page asks instead.
-                current.filter { (appUuid, keys) ->
-                    !shown[appUuid].orEmpty().containsAll(keys) && appUuid != visibleConfigPage.app.value
-                }
-                    .forEach { (appUuid, keys) -> notify(notificationFor(appUuid, keys)) }
-                (shown.keys - current.keys).forEach { appUuid ->
-                    removePermissionRequestNotification(appContext, keyOf(appUuid))
-                    watchNotifier.remove(watchKey(appUuid))
-                }
-                shown = current
+        GlobalScope.launch(Dispatchers.Default.limitedParallelism(1)) {
+            val shown = mutableMapOf<Uuid, List<String>>()
+            val postedAt = mutableMapOf<Uuid, TimeMark>()
+            val removals = mutableMapOf<Uuid, Job>()
+            fun remove(appUuid: Uuid) {
+                removals.remove(appUuid)?.cancel()
+                shown.remove(appUuid)
+                postedAt.remove(appUuid)
+                removePermissionRequestNotification(appContext, keyOf(appUuid))
+                watchNotifier.remove(watchKey(appUuid))
             }
+            combine(libPebble.activePermissionRequests(), libPebble.appsWithPendingPermissionRequests, ::Pair)
+                .collect { (active, waiting) ->
+                    val current = active.groupBy({ it.appUuid }, { it.permission })
+                    current.forEach { (appUuid, keys) ->
+                        removals.remove(appUuid)?.cancel()
+                        // Only something new is worth a notification: answering one of several shouldn't re-alert.
+                        // The app's open config page asks instead.
+                        if (!shown[appUuid].orEmpty().containsAll(keys) && appUuid != visibleConfigPage.app.value) {
+                            notify(notificationFor(appUuid, keys))
+                            postedAt[appUuid] = TimeSource.Monotonic.markNow()
+                        }
+                        shown[appUuid] = keys
+                    }
+                    (shown.keys - current.keys).forEach { appUuid ->
+                        when {
+                            appUuid !in waiting -> remove(appUuid)
+                            // Background apps may only run for a second: give the user time to see it.
+                            appUuid !in removals -> removals[appUuid] = launch {
+                                delay(postedAt[appUuid]?.let { MIN_NOTIFICATION_LIFETIME - it.elapsedNow() } ?: Duration.ZERO)
+                                removals.remove(appUuid)
+                                remove(appUuid)
+                            }
+                        }
+                    }
+                }
         }
     }
 
@@ -114,6 +142,8 @@ class PermissionRequestNotifier(
     }
 
     companion object {
+        private val MIN_NOTIFICATION_LIFETIME = 5.minutes
+
         fun keyOf(appUuid: Uuid) = "permissions/$appUuid".hashCode()
 
         /** As many of [labels] as the watch can show, then how many more; and whether that's all of them. */
@@ -153,8 +183,7 @@ class PermissionRequestNotifier(
 
 /** Answers those of [permissions] still waiting: the notification may be older than an answer given in the app. */
 suspend fun answerPermissionRequests(libPebble: LibPebble, appUuid: Uuid, permissions: List<String>, granted: Boolean) {
-    val waiting = libPebble.activePermissionRequests().first()
-        .filter { it.appUuid == appUuid && it.permission in permissions }
-        .map { it.permission }
+    val decided = libPebble.permissionDecisions().first().filter { it.appUuid == appUuid }.map { it.permission }
+    val waiting = permissions - decided.toSet()
     libPebble.setPermissionDecisions(appUuid, waiting.associateWith { granted })
 }
