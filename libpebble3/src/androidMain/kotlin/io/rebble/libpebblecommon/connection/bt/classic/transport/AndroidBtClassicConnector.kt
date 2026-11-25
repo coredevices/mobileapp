@@ -54,6 +54,12 @@ internal class AndroidBtClassicConnector(
             logger.w(e) { "Failed to connect BT classic socket" }
             return ClassicConnectionResult.Failure
         }
+        synchronized(this) {
+            if (_disconnected.isCompleted) {
+                runCatching { btSocket.close() }
+                return ClassicConnectionResult.Failure
+            }
+        }
 
         connectionCoroutineScope.launch(Dispatchers.IO) {
             val data = ByteArray(500)
@@ -80,8 +86,10 @@ internal class AndroidBtClassicConnector(
     }
 
     override suspend fun disconnect() {
-        _disconnected.complete(ConnectionFailureReason.ClassicDisconnected)
-        socket?.close()
+        synchronized(this) {
+            _disconnected.complete(ConnectionFailureReason.ClassicDisconnected)
+            socket?.close()
+        }
     }
 
     override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
