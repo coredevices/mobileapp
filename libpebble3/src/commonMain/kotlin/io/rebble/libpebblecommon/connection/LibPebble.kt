@@ -1,7 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import androidx.compose.runtime.Stable
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.paging.PagingSource
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.ErrorTracker
@@ -44,6 +42,7 @@ import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -115,7 +114,6 @@ public sealed class PebbleConnectionEvent {
     public data class PebbleDisconnectedEvent internal constructor(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
 }
 
-@Stable
 public interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
@@ -471,10 +469,9 @@ public interface Contacts {
     public fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
     public fun getContact(id: String): Flow<ContactWithCount?>
     public fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
-    public suspend fun getContactImage(lookupKey: String): ImageBitmap?
+    public suspend fun getContactImage(lookupKey: String): PebbleBitmap?
 }
 
-@Stable
 public interface NotificationApps {
     public fun notificationApps(): Flow<List<AppWithCount>>
     public fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
@@ -504,7 +501,7 @@ public interface NotificationApps {
     public fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */
-    public suspend fun getAppIcon(packageName: String): ImageBitmap?
+    public suspend fun getAppIcon(packageName: String): PebbleBitmap?
 }
 
 public interface Vibrations {

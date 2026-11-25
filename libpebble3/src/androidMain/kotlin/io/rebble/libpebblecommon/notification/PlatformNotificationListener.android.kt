@@ -2,17 +2,17 @@ package io.rebble.libpebblecommon.notification
 
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.image.PebbleBitmap
+import io.rebble.libpebblecommon.util.toPebbleBitmap
 import kotlin.math.roundToInt
 
 // Hardware canvas refuses to draw bitmaps over 100MB; some apps' icons rasterise far bigger.
 private const val MAX_ICON_PX = 256
 
-internal actual fun iconFor(packageName: String, appContext: AppContext): ImageBitmap? =
-    appIconBitmap(packageName, appContext)?.asImageBitmap()
+internal actual fun iconFor(packageName: String, appContext: AppContext): PebbleBitmap? =
+    appIconBitmap(packageName, appContext)?.toPebbleBitmap()
 
 internal fun appIconBitmap(packageName: String, appContext: AppContext): Bitmap? = try {
     appContext.context.packageManager.getApplicationIcon(packageName).toBoundedBitmap()

@@ -85,6 +85,7 @@ import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coredevices.pebble.rememberWatches
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
+import coredevices.pebble.ui.toImageBitmap
 import coredevices.pebble.ui.toPngBytes
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import coredevices.ui.CoreLinearProgressIndicator
@@ -526,7 +527,7 @@ fun BugReportScreen(
                         screenshotLoading = true
                         scope.launch {
                             try {
-                                watchScreenshot = connectedScreenshotWatch.takeScreenshot()
+                                watchScreenshot = connectedScreenshotWatch.takeScreenshot()?.toImageBitmap()
                             } catch (e: Exception) {
                                 Logger.withTag("BugReportScreen").e(e) { "Failed to capture screenshot" }
                             } finally {

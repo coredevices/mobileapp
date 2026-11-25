@@ -122,7 +122,6 @@ kotlin {
             implementation(libs.ktor.server.websockets)
             api(libs.kotlinx.datetime)
             implementation(libs.koin.core)
-            implementation(libs.compose.ui)
             implementation(project(":blobannotations"))
             implementation(libs.settings)
             implementation(libs.settings.serialization)

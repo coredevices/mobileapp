@@ -1,6 +1,7 @@
 package coredevices.pebble.ui
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.material.icons.Icons
@@ -12,12 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import co.touchlab.kermit.Logger
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.CompanionDevice
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
 import org.koin.compose.koinInject
@@ -31,6 +34,9 @@ actual fun ImageBitmap.toPngBytes(): ByteArray {
     asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
     return out.toByteArray()
 }
+
+actual fun PebbleBitmap.toImageBitmap(): ImageBitmap =
+    Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
 
 actual fun scanPermission(): Permission? {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

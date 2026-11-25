@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.notification
 
-import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
@@ -17,6 +16,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.VibePatternEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
@@ -155,7 +155,7 @@ internal class NotificationApi(
         }
     }
 
-    override suspend fun getAppIcon(packageName: String): ImageBitmap? {
+    override suspend fun getAppIcon(packageName: String): PebbleBitmap? {
         return withContext(Dispatchers.IO) {
             iconFor(packageName, appContext)
         }
@@ -193,4 +193,4 @@ internal class NotificationApi(
     }
 }
 
-internal expect fun iconFor(packageName: String, appContext: AppContext): ImageBitmap?
+internal expect fun iconFor(packageName: String, appContext: AppContext): PebbleBitmap?

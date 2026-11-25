@@ -7,10 +7,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.image.PebbleBitmap
+import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import kotlinx.cinterop.ByteVar
@@ -42,6 +48,20 @@ actual fun ImageBitmap.toPngBytes(): ByteArray {
     val skiaBitmap = asSkiaBitmap()
     skiaBitmap.setAlphaType(org.jetbrains.skia.ColorAlphaType.OPAQUE)
     return Image.makeFromBitmap(skiaBitmap).encodeToData(EncodedImageFormat.PNG)!!.bytes
+}
+
+actual fun PebbleBitmap.toImageBitmap(): ImageBitmap {
+    val bytes = ByteArray(pixels.size * 4)
+    for (i in pixels.indices) {
+        val p = pixels[i]
+        bytes[i * 4] = (p and 0xFF).toByte()
+        bytes[i * 4 + 1] = ((p shr 8) and 0xFF).toByte()
+        bytes[i * 4 + 2] = ((p shr 16) and 0xFF).toByte()
+        bytes[i * 4 + 3] = ((p shr 24) and 0xFF).toByte()
+    }
+    val bitmap = Bitmap()
+    bitmap.installPixels(ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.UNPREMUL), bytes, width * 4)
+    return bitmap.asComposeImageBitmap()
 }
 
 actual fun scanPermission(): Permission? {

@@ -240,6 +240,7 @@ import coreapp.util.generated.resources.install
 import coreapp.util.generated.resources.ok
 import coreapp.util.generated.resources.remove
 import coreapp.util.generated.resources.save
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import org.jetbrains.compose.resources.StringResource
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
@@ -1484,6 +1485,8 @@ expect fun openSystemBluetoothSettings(appContext: AppContext)
 
 expect fun ImageBitmap.toPngBytes(): ByteArray
 
+expect fun PebbleBitmap.toImageBitmap(): ImageBitmap
+
 @Composable
 fun WatchItem(
     watch: PebbleDevice,
@@ -2097,7 +2100,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
 
     suspend fun takeScreenshot() {
         screenshot = null
-        screenshot = watch.takeScreenshot()
+        screenshot = watch.takeScreenshot()?.toImageBitmap()
         logger.v { "screenshot = $screenshot" }
     }
 
@@ -2200,10 +2203,10 @@ private fun WatchColorIndicator(color: WatchColor?) {
     val round = color?.platform == WatchType.CHALK || color?.platform == WatchType.GABBRO
     val shape = if (round) CircleShape else RoundedCornerShape(6.dp)
     val modifier = if (round) Modifier.size(16.dp) else Modifier.size(width = 13.dp, height = 17.dp)
-    val accent = color?.accentColor
+    val accent = color?.accentColor?.let { Color(it) }
     Box(
         modifier
-            .background(color?.color ?: MaterialTheme.colorScheme.surfaceVariant, shape)
+            .background(color?.color?.let { Color(it) } ?: MaterialTheme.colorScheme.surfaceVariant, shape)
             .border(
                 if (accent != null) 2.5.dp else 1.dp,
                 accent ?: MaterialTheme.colorScheme.outline,

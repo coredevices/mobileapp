@@ -1,8 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import androidx.paging.PagingSource
 import io.ktor.util.PlatformUtils
 import io.rebble.libpebblecommon.LibPebbleConfig
@@ -46,6 +43,7 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -358,12 +356,9 @@ public class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override suspend fun getAppIcon(packageName: String): ImageBitmap? {
+    override suspend fun getAppIcon(packageName: String): PebbleBitmap? {
         // Return a green square as a placeholder
-        val width = 48
-        val height = 48
-        val buffer = IntArray(width * height) { Color.Green.toArgb() }
-        return ImageBitmap(width, height).apply { readPixels(buffer) }
+        return PebbleBitmap(48, 48, IntArray(48 * 48) { 0xFF00FF00.toInt() })
     }
 
     // CallManagement interface
@@ -408,7 +403,7 @@ public class FakeLibPebble : LibPebble {
     ) {
     }
 
-    override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
+    override suspend fun getContactImage(lookupKey: String): PebbleBitmap? {
         return null
     }
 
@@ -849,12 +844,9 @@ internal class FakeConnectedDevice(
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
     override val devConnectionError: StateFlow<String?> = MutableStateFlow(null)
     override val batteryLevel: Int? = 50
-    override suspend fun takeScreenshot(): ImageBitmap {
+    override suspend fun takeScreenshot(): PebbleBitmap {
         // Return an orange square as a placeholder
-        val width = 144
-        val height = 168
-        val buffer = IntArray(width * height) { Color(0xFFFA4A36).toArgb() }
-        return ImageBitmap(width, height).apply { readPixels(buffer) }
+        return PebbleBitmap(144, 168, IntArray(144 * 168) { 0xFFFA4A36.toInt() })
     }
 
     override suspend fun setActiveLanguage(pack: WatchLanguagePack?): Boolean = false

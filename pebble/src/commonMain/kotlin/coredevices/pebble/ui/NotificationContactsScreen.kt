@@ -271,7 +271,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
 fun ContactImage(entry: ContactWithCount, modifier: Modifier) {
     val libPebble = rememberLibPebble()
     val icon by produceState<ImageBitmap?>(initialValue = null, entry.contact.lookupKey) {
-        value = libPebble.getContactImage(entry.contact.lookupKey)
+        value = libPebble.getContactImage(entry.contact.lookupKey)?.toImageBitmap()
     }
     icon.let {
         if (it != null) {

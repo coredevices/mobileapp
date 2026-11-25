@@ -1,7 +1,5 @@
 package io.rebble.libpebblecommon.js
 
-import androidx.compose.ui.text.intl.Locale
-import androidx.compose.ui.text.toLowerCase
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import io.rebble.libpebblecommon.WatchConfigFlow
@@ -66,7 +64,7 @@ public class RemoteTimelineEmulator internal constructor(
         }
 //        logger.v { "shouldIntercept: uri=$uri path=${uri.path}" }
         return TIMELINE_API_AUTHORITIES.any { it.equals(uri.authority, ignoreCase = true) }
-                && uri.path?.toLowerCase(Locale.current)?.startsWith("/v1/user/pins") == true
+                && uri.path?.lowercase()?.startsWith("/v1/user/pins") == true
     }
 
     override suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse {

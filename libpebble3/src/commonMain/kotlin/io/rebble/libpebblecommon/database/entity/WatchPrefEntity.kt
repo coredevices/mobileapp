@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.database.entity
 
-import androidx.compose.runtime.Immutable
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
@@ -48,7 +47,6 @@ import kotlin.uuid.Uuid
 public fun watchReceivesWatchPrefs(capabilities: Set<ProtocolCapsFlag>, config: LibPebbleConfig): Boolean =
     ProtocolCapsFlag.SupportsBlobDbVersion in capabilities && config.watchConfig.enableWatchSettingsSync
 
-@Immutable
 @GenerateRoomEntity(
     primaryKey = "id",
     databaseId = BlobDatabase.WatchPrefs,
@@ -193,7 +191,6 @@ internal class QLMappable(
  * A daily window in the watch's local time. A window whose end is before its start runs overnight
  * (e.g. 22:00 to 07:00).
  */
-@Immutable
 @Serializable
 public data class QuietTimeSchedule(
     val fromHour: Int,

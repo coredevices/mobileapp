@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.database.entity
 
-import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
@@ -28,7 +27,6 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Instant
 
-@Immutable
 @GenerateRoomEntity(
     primaryKey = "packageName",
     databaseId = BlobDatabase.CannedResponses,
@@ -163,7 +161,6 @@ public enum class MuteState(public val value: UByte) {
     }
 }
 
-@Immutable
 @Serializable
 public data class ChannelGroup(
     val id: String,
@@ -171,7 +168,6 @@ public data class ChannelGroup(
     val channels: List<ChannelItem>,
 )
 
-@Immutable
 @Serializable
 public data class ChannelItem internal constructor(
     val id: String,

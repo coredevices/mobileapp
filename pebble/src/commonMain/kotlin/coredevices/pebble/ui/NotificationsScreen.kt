@@ -266,7 +266,7 @@ fun AppIconImage(
         // Android: load from OS
         Platform.Android -> {
             val icon by produceState<ImageBitmap?>(initialValue = null, app.packageName) {
-                value = notificationApps.getAppIcon(app.packageName)
+                value = notificationApps.getAppIcon(app.packageName)?.toImageBitmap()
             }
             icon.let {
                 if (it != null) {

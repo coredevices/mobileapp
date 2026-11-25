@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection.bt.ble.ppog
 
-import androidx.compose.ui.util.fastForEachReversed
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.BleConfigFlow
@@ -213,7 +212,7 @@ internal class PPoG(
         }
 
         fun resendInflightPackets() {
-            inflightPackets.fastForEachReversed { packet ->
+            inflightPackets.asReversed().forEach { packet ->
                 val resendPacket = packet.copy(attemptCount = packet.attemptCount + 1)
                 if (resendPacket.attemptCount > MAX_NUM_RETRIES) {
                     logger.w("Exceeded max retries")

@@ -1,5 +1,6 @@
 package coredevices.pebble.actions.watch
 
+import coredevices.pebble.ui.toImageBitmap
 import coredevices.pebble.watchesOrEmpty
 import coredevices.util.imageBitmapToPngBase64
 import coredevices.util.imageBitmapToPngBytes
@@ -49,7 +50,7 @@ suspend fun getWatchScreenshotBase64(libPebble: LibPebble): String {
     if (watch is ConnectedPebble.Screenshot) {
         val bitmap = watch.takeScreenshot()
         if (bitmap != null) {
-            return imageBitmapToPngBase64(bitmap)
+            return imageBitmapToPngBase64(bitmap.toImageBitmap())
         }
     }
     return ""
@@ -65,7 +66,7 @@ suspend fun getWatchScreenshotBytes(libPebble: LibPebble): ByteArray? {
         .firstOrNull()
     if (watch is ConnectedPebble.Screenshot) {
         val bitmap = watch.takeScreenshot() ?: return null
-        return imageBitmapToPngBytes(bitmap)
+        return imageBitmapToPngBytes(bitmap.toImageBitmap())
     }
     return null
 }

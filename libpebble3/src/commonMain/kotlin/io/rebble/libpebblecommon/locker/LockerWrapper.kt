@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.locker
 
-import androidx.compose.runtime.Immutable
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.serialization.Serializable
@@ -35,7 +34,6 @@ public enum class AppCapability(public val code: String) {
     }
 }
 
-@Immutable
 public data class AppPlatform internal constructor(
     val watchType: WatchType,
     val screenshotImageUrl: String? = null,
@@ -74,7 +72,6 @@ public data class AppBasicProperties internal constructor(
     val developerName: String,
 )
 
-@Immutable
 public sealed class LockerWrapper {
     public abstract val properties: AppProperties
 
