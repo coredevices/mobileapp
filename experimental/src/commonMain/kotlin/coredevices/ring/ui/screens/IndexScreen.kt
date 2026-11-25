@@ -10,7 +10,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,17 +59,6 @@ fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
                 topBarParams.showSnackbar("Imported WAV file")
             }
         }
-    }
-    // The chrome's TopAppBar is hidden tab-wide by WatchHomeScreen
-    // whenever currentTab == Index, so we don't manage `setHidden`
-    // here — doing it per-screen would race with detail screens
-    // (their own DetailTopBar + the chrome would show double until
-    // the next compositional pass).
-    DisposableEffect(Unit) {
-        topBarParams.title("")
-        topBarParams.searchAvailable(null)
-        topBarParams.actions { /* moved into IndexFeedScreen.IndexHeader */ }
-        onDispose { /* nothing to clean up */ }
     }
     IndexThemeHost {
         IndexFeedScreen(

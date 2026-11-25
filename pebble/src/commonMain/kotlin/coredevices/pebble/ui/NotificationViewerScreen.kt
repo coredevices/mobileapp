@@ -37,6 +37,7 @@ import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.notif_app_title
 import coreapp.pebble.generated.resources.notif_viewer_recent_for
 import coreapp.pebble.generated.resources.notif_viewer_recent_for_channel
 import coreapp.pebble.generated.resources.notif_viewer_empty
@@ -52,6 +53,7 @@ import coreapp.pebble.generated.resources.notif_decision_contact_muted
 import coreapp.pebble.generated.resources.notif_decision_screen_on
 import coreapp.pebble.generated.resources.notif_decision_rule_filtered
 import coreapp.pebble.generated.resources.notif_decision_empty
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -65,6 +67,7 @@ fun AppNotificationViewerScreen(
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(null)
             topBarParams.actions {}
+            topBarParams.title(getString(Res.string.notif_app_title))
         }
         val libPebble = rememberLibPebble()
         val appWrapperFlow = remember(packageName) {

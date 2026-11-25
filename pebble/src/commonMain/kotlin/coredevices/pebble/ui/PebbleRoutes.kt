@@ -195,7 +195,7 @@ inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
 
 fun NavGraphBuilder.addNavBarRoutes(
     nav: NavBarNav,
-    topBarParams: TopBarParams,
+    screen: @Composable (NavBackStackEntry, @Composable (TopBarParams) -> Unit) -> Unit,
     indexScreen: @Composable (TopBarParams, NavBarNav, CoreNav) -> Unit,
     /** A CoreNav scoped to the inner controller so RingRoute navigations
      *  stay inside the bottom-nav chrome. Forwarded to [indexScreen]. */
@@ -203,155 +203,217 @@ fun NavGraphBuilder.addNavBarRoutes(
     viewModel: WatchHomeViewModel,
 ) {
     composableWithAnimations<PebbleNavBarRoutes.WatchesRoute>(viewModel) {
-        WatchesScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            WatchesScreen(nav, topBarParams)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchfacesRoute>(viewModel) {
-        LockerScreen(
-            nav,
-            topBarParams,
-        )
+        screen(it) { topBarParams ->
+            LockerScreen(
+                nav,
+                topBarParams,
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.LockerAppRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.LockerAppRoute = it.toRoute()
-        LockerAppScreen(
-            topBarParams,
-            route.uuid?.let { Uuid.parse(it) },
-            nav,
-            route.storedId,
-            route.storeSource,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.LockerAppRoute = it.toRoute()
+            LockerAppScreen(
+                topBarParams,
+                route.uuid?.let { Uuid.parse(it) },
+                nav,
+                route.storedId,
+                route.storeSource,
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
-        NotificationsScreen(topBarParams, nav)
+        screen(it) { topBarParams ->
+            NotificationsScreen(topBarParams, nav)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.HealthRoute>(viewModel) {
-        HealthScreen(topBarParams, nav)
+        screen(it) { topBarParams ->
+            HealthScreen(topBarParams, nav)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
-        indexScreen(topBarParams, nav, scopedCoreNav)
+        screen(it) { topBarParams ->
+            indexScreen(topBarParams, nav, scopedCoreNav)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationAppRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.NotificationAppRoute = it.toRoute()
-        NotificationAppScreen(topBarParams, route.packageName, nav)
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.NotificationAppRoute = it.toRoute()
+            NotificationAppScreen(topBarParams, route.packageName, nav)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchSettingsRoute>(viewModel) {
-        WatchSettingsScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            WatchSettingsScreen(nav, topBarParams)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.BatterySettingsRoute>(viewModel) {
-        BatterySettingsScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            BatterySettingsScreen(nav, topBarParams)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.PermissionsRoute>(viewModel) {
-        PermissionsScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            PermissionsScreen(nav, topBarParams)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.AppNotificationViewerRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.AppNotificationViewerRoute = it.toRoute()
-        AppNotificationViewerScreen(
-            topBarParams = topBarParams,
-            nav = nav,
-            packageName = route.packageName,
-            channelId = route.channelId,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.AppNotificationViewerRoute = it.toRoute()
+            AppNotificationViewerScreen(
+                topBarParams = topBarParams,
+                nav = nav,
+                packageName = route.packageName,
+                channelId = route.channelId,
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.ContactNotificationViewerRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.ContactNotificationViewerRoute = it.toRoute()
-        ContactNotificationViewerScreen(
-            topBarParams = topBarParams,
-            nav = nav,
-            contactId = route.contactId,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.ContactNotificationViewerRoute = it.toRoute()
+            ContactNotificationViewerScreen(
+                topBarParams = topBarParams,
+                nav = nav,
+                contactId = route.contactId,
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.AppStoreCollectionRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.AppStoreCollectionRoute = it.toRoute()
-        AppStoreCollectionScreen(
-            navBarNav = nav,
-            topBarParams = topBarParams,
-            sourceId = route.sourceId,
-            path = route.path,
-            title = route.title,
-            appType = route.appType?.let { AppType.fromString(it) },
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.AppStoreCollectionRoute = it.toRoute()
+            AppStoreCollectionScreen(
+                navBarNav = nav,
+                topBarParams = topBarParams,
+                sourceId = route.sourceId,
+                path = route.path,
+                title = route.title,
+                appType = route.appType?.let { AppType.fromString(it) },
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.TopChartsRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.TopChartsRoute = it.toRoute()
-        TopChartsScreen(
-            navBarNav = nav,
-            topBarParams = topBarParams,
-            sourceId = route.sourceId,
-            type = AppType.fromString(route.appType) ?: AppType.Watchface,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.TopChartsRoute = it.toRoute()
+            TopChartsScreen(
+                navBarNav = nav,
+                topBarParams = topBarParams,
+                sourceId = route.sourceId,
+                type = AppType.fromString(route.appType) ?: AppType.Watchface,
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.MyCollectionRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.MyCollectionRoute = it.toRoute()
-        MyCollectionScreen(
-            navBarNav = nav,
-            topBarParams = topBarParams,
-            appType = AppType.fromString(route.appType)!!,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.MyCollectionRoute = it.toRoute()
+            MyCollectionScreen(
+                navBarNav = nav,
+                topBarParams = topBarParams,
+                appType = AppType.fromString(route.appType)!!,
+            )
+        }
     }
     composable<PebbleNavBarRoutes.CalendarsRoute> {
-        CalendarScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            CalendarScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.WeatherRoute> {
-        WeatherScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            WeatherScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.ComplicationsRoute> {
-        ComplicationsScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            ComplicationsScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.PreferredSourcesRoute> {
-        PreferredSourcesScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            PreferredSourcesScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.PermissionUsageRoute> {
-        PermissionUsageScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            PermissionUsageScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.AppDataUsageRoute> {
-        AppDataUsageScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            AppDataUsageScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.AppActivityRoute> {
-        AppActivityScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            AppActivityScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.ActionLogRoute> {
-        val route: PebbleNavBarRoutes.ActionLogRoute = it.toRoute()
-        ActionLogScreen(nav, topBarParams, route.callerUuid?.let(Uuid::parse), route.pluginUuid?.let(Uuid::parse))
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.ActionLogRoute = it.toRoute()
+            ActionLogScreen(nav, topBarParams, route.callerUuid?.let(Uuid::parse), route.pluginUuid?.let(Uuid::parse))
+        }
     }
     composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
-        val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()
-        PermissionHoldersScreen(nav, topBarParams, route.permission)
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()
+            PermissionHoldersScreen(nav, topBarParams, route.permission)
+        }
     }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
-        CannedRepliesScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            CannedRepliesScreen(nav, topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.NavBarTabsRoute> {
-        NavBarTabsScreen(topBarParams)
+        screen(it) { topBarParams ->
+            NavBarTabsScreen(topBarParams)
+        }
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
-        val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
-        AppstoreSettingsScreen(nav, topBarParams, route.addSourceName, route.addSourceUrl)
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
+            AppstoreSettingsScreen(nav, topBarParams, route.addSourceName, route.addSourceUrl)
+        }
     }
     composable<PebbleNavBarRoutes.OfflineModelsRoute> {
-        ModelManagementScreen(nav, topBarParams)
+        screen(it) { topBarParams ->
+            ModelManagementScreen(nav, topBarParams)
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchSettingsCategoryRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.WatchSettingsCategoryRoute = it.toRoute()
-        WatchSettingsCategoryScreen(
-            nav,
-            topBarParams,
-            Section.valueOf(route.section),
-            TopLevelType.valueOf(route.topLevelType),
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.WatchSettingsCategoryRoute = it.toRoute()
+            WatchSettingsCategoryScreen(
+                nav,
+                topBarParams,
+                Section.valueOf(route.section),
+                TopLevelType.valueOf(route.topLevelType),
+            )
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.NativePluginRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.NativePluginRoute = it.toRoute()
-        NativePluginScreen(nav, topBarParams, Uuid.parse(route.uuid))
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.NativePluginRoute = it.toRoute()
+            NativePluginScreen(nav, topBarParams, Uuid.parse(route.uuid))
+        }
     }
     composableWithAnimations<PebbleNavBarRoutes.PluginSourceRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.PluginSourceRoute = it.toRoute()
-        PluginSourceScreen(
-            topBarParams = topBarParams,
-            uuid = route.uuid?.let { id -> Uuid.parse(id) },
-            pbwUrl = route.pbwUrl,
-            script = route.script,
-            title = route.title,
-        )
+        screen(it) { topBarParams ->
+            val route: PebbleNavBarRoutes.PluginSourceRoute = it.toRoute()
+            PluginSourceScreen(
+                topBarParams = topBarParams,
+                uuid = route.uuid?.let { id -> Uuid.parse(id) },
+                pbwUrl = route.pbwUrl,
+                script = route.script,
+                title = route.title,
+            )
+        }
     }
 }
 
