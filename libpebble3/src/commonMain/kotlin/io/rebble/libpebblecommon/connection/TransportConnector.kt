@@ -288,7 +288,7 @@ internal class RealPebbleConnector(
         appFetchProvider.init(watchInfo.platform.watchType)
         appMessageService.init()
         companionAppLifecycleManager.init(identifier, watchInfo)
-        phoneControlManager.init()
+        phoneControlManager.init(watchInfo.capabilities)
         musicControlManager.init()
         notificationImageProvider.register(imagingService)
         imagingService.init()

@@ -5,8 +5,10 @@ import io.rebble.libpebblecommon.calendar.AndroidCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calls.AndroidSystemCallFilter
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
+import io.rebble.libpebblecommon.calls.SystemCallFilter
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -79,6 +81,7 @@ internal actual val platformModule: Module = module {
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     singleOf(::AndroidCalendarActionHandler) bind PlatformCalendarActionHandler::class
     singleOf(::AndroidSystemCallLog) bind SystemCallLog::class
+    singleOf(::AndroidSystemCallFilter) bind SystemCallFilter::class
     singleOf(::AndroidSystemMusicControl) bind SystemMusicControl::class
     singleOf(::AndroidSystemGeolocation) bind SystemGeolocation::class
     singleOf(::AndroidPackageChangedReceiver)

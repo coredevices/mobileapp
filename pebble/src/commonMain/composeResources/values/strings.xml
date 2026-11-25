@@ -1022,7 +1022,7 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_always_send_notifications">Always send notifications</string>
     <string name="settings_always_send_notifications_desc">Send notifications to the watch even when the phone screen is on</string>
     <string name="settings_respect_dnd_legacy">Respect Phone Do Not Disturb (legacy watches)</string>
-    <string name="settings_respect_dnd_legacy_desc">Older watches: notifications won't be sent if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings). Does not apply on newer watches (see Watch / Notifications / Respect Phone Do Not Disturb)</string>
+    <string name="settings_respect_dnd_legacy_desc">Older watches: notifications and calls won't be sent if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings). Does not apply on newer watches (see Watch / Notifications / Respect Phone Do Not Disturb)</string>
     <string name="settings_mute_notification_effects">Mute phone notification effects</string>
     <string name="settings_mute_notification_effects_desc">Mutes the phone's own notification vibration/sound while the watch is connected</string>
     <string name="settings_mute_call_effects">Mute phone call effects</string>
@@ -1256,7 +1256,7 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="watch_pref_notification_backlight">Notifications - Backlight</string>
     <string name="watch_pref_notification_backlight_desc">Turn on the backlight when a notification arrives</string>
     <string name="watch_pref_respect_phone_silence">Respect Phone Do Not Disturb</string>
-    <string name="watch_pref_respect_phone_silence_desc">Notifications silenced by the phone's Do Not Disturb / Focus are delivered quietly (no popup, vibration or backlight)</string>
+    <string name="watch_pref_respect_phone_silence_desc">Notifications silenced by the phone's Do Not Disturb / Focus are delivered quietly (no popup, vibration or backlight). On Android, calls blocked by Do Not Disturb aren't sent to the watch</string>
     <string name="watch_pref_notification_dismissal_sync">Sync Notification Dismissals</string>
     <string name="watch_pref_notification_dismissal_sync_desc">Notifications dismissed or acted on are removed from the watch's notification history completely (otherwise they are just removed if visible in the notification popup)</string>
     <string name="watch_pref_menu_scroll_wrap_around">Menu Scrolling - Wrap Around</string>
