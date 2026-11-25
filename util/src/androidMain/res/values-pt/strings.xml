@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">Baixando modelo</string>
+    <string name="misc_model_notif_downloading_text">Baixando modelo: %1$s.\nIsso pode levar alguns minutos...</string>
+    <string name="misc_model_notif_downloaded_title">Modelo baixado</string>
+    <string name="misc_model_notif_downloaded_text">Modelo baixado com sucesso: %1$s</string>
+    <string name="misc_model_notif_failed_title">Falha ao baixar modelo</string>
+    <string name="misc_model_notif_timed_out_text">O download expirou: %1$s</string>
+    <string name="misc_model_notif_failed_text">Falha ao baixar o modelo: %1$s</string>
+    <string name="misc_model_notif_paused_title">Download do modelo pausado</string>
+    <string name="misc_model_notif_error_title">Erro no download do modelo</string>
+    <string name="misc_model_notif_cancelled_title">Download do modelo cancelado</string>
+    <string name="misc_model_notif_paused_text">Download pausado devido às condições da rede.</string>
+    <string name="misc_model_notif_stop_timeout_text">Tempo esgotado ao baixar o modelo: %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Download cancelado.</string>
+    <string name="misc_model_notif_channel_name">Downloads de modelos</string>
+    <string name="misc_model_notif_channel_description">Progresso do download de modelos de fala e linguagem</string>
+    <string name="bug_report_channel_name">Processamento de relatórios de bug</string>
+    <string name="bug_report_channel_description">Mostra o progresso ao processar relatórios de bug</string>
+    <string name="pebble_service_channel_name">Serviço Pebble</string>
+    <string name="pebble_service_notification_text">Mantendo a conexão com o Pebble ativa</string>
+    <string name="bug_report_service_title">Relatório de bug</string>
+    <string name="bug_report_service_creating">Criando relatório de bug...</string>
+</resources>

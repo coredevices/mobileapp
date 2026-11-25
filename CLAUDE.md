@@ -174,7 +174,7 @@ No hard-coded user-visible strings. Add them to the module's `composeResources/v
 
 - Placeholders are positional (`%1$s`, `%1$d`); use `<plurals>` for counts. Write apostrophes literally (no `\'`).
 - Don't translate logs, debug-only UI, product names, or text sent to the watch or LLM.
-- Translations come from Weblate as PRs on the public repo; don't edit `values-*/` by hand. When a new language is added, also add it to `androidApp/src/main/res/xml/locales_config.xml` and `CFBundleLocalizations` in `iosApp/iosApp/Info.plist`.
+- Translations come from Weblate as PRs on the public repo; don't edit `values-*/` by hand. When a new language is added, also add it to `androidApp/src/main/res/xml/locales_config.xml` and `CFBundleLocalizations` in `iosApp/iosApp/Info.plist`. Chinese uses script directories (`values-b+zh+Hans`), not regions, so Simplified and Traditional never fall back to each other.
 
 ## Useful references
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">モデルをダウンロード中</string>
+    <string name="misc_model_notif_downloading_text">モデルをダウンロード中：%1$s\n数分かかる場合があります…</string>
+    <string name="misc_model_notif_downloaded_title">モデルのダウンロード完了</string>
+    <string name="misc_model_notif_downloaded_text">モデルをダウンロードしました：%1$s</string>
+    <string name="misc_model_notif_failed_title">モデルのダウンロードに失敗しました</string>
+    <string name="misc_model_notif_timed_out_text">ダウンロードがタイムアウトしました：%1$s</string>
+    <string name="misc_model_notif_failed_text">モデルをダウンロードできませんでした：%1$s</string>
+    <string name="misc_model_notif_paused_title">モデルのダウンロードを一時停止</string>
+    <string name="misc_model_notif_error_title">モデルのダウンロードエラー</string>
+    <string name="misc_model_notif_cancelled_title">モデルのダウンロードをキャンセルしました</string>
+    <string name="misc_model_notif_paused_text">ネットワークの状態により、ダウンロードを一時停止しました。</string>
+    <string name="misc_model_notif_stop_timeout_text">モデルのダウンロード中にタイムアウトしました：%1$s</string>
+    <string name="misc_model_notif_cancelled_text">ダウンロードをキャンセルしました。</string>
+    <string name="misc_model_notif_channel_name">モデルのダウンロード</string>
+    <string name="misc_model_notif_channel_description">音声・言語モデルのダウンロード状況</string>
+    <string name="bug_report_channel_name">バグレポートの処理</string>
+    <string name="bug_report_channel_description">バグレポートの処理中に進行状況を表示します</string>
+    <string name="pebble_service_channel_name">Pebbleサービス</string>
+    <string name="pebble_service_notification_text">Pebbleとの接続を維持しています</string>
+    <string name="bug_report_service_title">バグレポート</string>
+    <string name="bug_report_service_creating">バグレポートを作成中…</string>
+</resources>

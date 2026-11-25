@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">正在下载模型</string>
+    <string name="misc_model_notif_downloading_text">正在下载模型：%1$s。\n这可能需要几分钟…</string>
+    <string name="misc_model_notif_downloaded_title">模型已下载</string>
+    <string name="misc_model_notif_downloaded_text">模型下载成功：%1$s</string>
+    <string name="misc_model_notif_failed_title">模型下载失败</string>
+    <string name="misc_model_notif_timed_out_text">下载超时：%1$s</string>
+    <string name="misc_model_notif_failed_text">模型下载失败：%1$s</string>
+    <string name="misc_model_notif_paused_title">模型下载已暂停</string>
+    <string name="misc_model_notif_error_title">模型下载出错</string>
+    <string name="misc_model_notif_cancelled_title">模型下载已取消</string>
+    <string name="misc_model_notif_paused_text">受网络状况影响，下载已暂停。</string>
+    <string name="misc_model_notif_stop_timeout_text">模型下载超时：%1$s。</string>
+    <string name="misc_model_notif_cancelled_text">下载已取消。</string>
+    <string name="misc_model_notif_channel_name">模型下载</string>
+    <string name="misc_model_notif_channel_description">语音和语言模型的下载进度</string>
+    <string name="bug_report_channel_name">错误报告处理</string>
+    <string name="bug_report_channel_description">处理错误报告时显示进度</string>
+    <string name="pebble_service_channel_name">Pebble 服务</string>
+    <string name="pebble_service_notification_text">正在保持 Pebble 连接</string>
+    <string name="bug_report_service_title">错误报告</string>
+    <string name="bug_report_service_creating">正在创建错误报告…</string>
+</resources>

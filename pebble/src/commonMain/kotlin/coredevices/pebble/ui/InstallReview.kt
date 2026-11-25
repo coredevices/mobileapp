@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import coredevices.pebble.rememberLibPebble
@@ -606,7 +607,8 @@ internal fun rememberPluginPermissions(): Map<String, PluginDefinedPermission> {
     return remember { libPebble.pluginPermissions() }.collectAsState(emptyMap()).value
 }
 
-private fun String.asRequest() = replaceFirstChar { c -> c.lowercase() }
+// German capitalises nouns, so a label's first letter can't be lowercased mid-sentence.
+private fun String.asRequest() = if (Locale.current.language == "de") this else replaceFirstChar { c -> c.lowercase() }
 
 suspend fun requestLabels(keys: List<String>, defined: Map<String, PluginDefinedPermission>): List<String> =
     keys.map { permissionLabelText(it, defined).asRequest() }

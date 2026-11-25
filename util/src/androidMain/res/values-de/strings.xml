@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">Modell wird geladen</string>
+    <string name="misc_model_notif_downloading_text">Modell wird geladen: %1$s.\nDas kann einige Minuten dauern …</string>
+    <string name="misc_model_notif_downloaded_title">Modell geladen</string>
+    <string name="misc_model_notif_downloaded_text">Modell erfolgreich geladen: %1$s</string>
+    <string name="misc_model_notif_failed_title">Modell-Download fehlgeschlagen</string>
+    <string name="misc_model_notif_timed_out_text">Zeitüberschreitung beim Download: %1$s</string>
+    <string name="misc_model_notif_failed_text">Modell konnte nicht geladen werden: %1$s</string>
+    <string name="misc_model_notif_paused_title">Modell-Download pausiert</string>
+    <string name="misc_model_notif_error_title">Fehler beim Modell-Download</string>
+    <string name="misc_model_notif_cancelled_title">Modell-Download abgebrochen</string>
+    <string name="misc_model_notif_paused_text">Download wegen der Netzwerkverbindung pausiert.</string>
+    <string name="misc_model_notif_stop_timeout_text">Zeitüberschreitung beim Laden des Modells: %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Download abgebrochen.</string>
+    <string name="misc_model_notif_channel_name">Modell-Downloads</string>
+    <string name="misc_model_notif_channel_description">Download-Fortschritt der Sprach- und Spracherkennungsmodelle</string>
+    <string name="bug_report_channel_name">Fehlerberichte</string>
+    <string name="bug_report_channel_description">Zeigt den Fortschritt beim Erstellen von Fehlerberichten</string>
+    <string name="pebble_service_channel_name">Pebble-Dienst</string>
+    <string name="pebble_service_notification_text">Pebble-Verbindung wird aufrechterhalten</string>
+    <string name="bug_report_service_title">Fehlerbericht</string>
+    <string name="bug_report_service_creating">Fehlerbericht wird erstellt …</string>
+</resources>

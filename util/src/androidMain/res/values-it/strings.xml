@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">Download del modello</string>
+    <string name="misc_model_notif_downloading_text">Download del modello: %1$s.\nPotrebbe richiedere qualche minuto...</string>
+    <string name="misc_model_notif_downloaded_title">Modello scaricato</string>
+    <string name="misc_model_notif_downloaded_text">Modello scaricato: %1$s</string>
+    <string name="misc_model_notif_failed_title">Download del modello non riuscito</string>
+    <string name="misc_model_notif_timed_out_text">Tempo scaduto per il download: %1$s</string>
+    <string name="misc_model_notif_failed_text">Impossibile scaricare il modello: %1$s</string>
+    <string name="misc_model_notif_paused_title">Download del modello in pausa</string>
+    <string name="misc_model_notif_error_title">Errore di download del modello</string>
+    <string name="misc_model_notif_cancelled_title">Download del modello annullato</string>
+    <string name="misc_model_notif_paused_text">Download in pausa a causa delle condizioni di rete.</string>
+    <string name="misc_model_notif_stop_timeout_text">Tempo scaduto durante il download del modello: %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Download annullato.</string>
+    <string name="misc_model_notif_channel_name">Download dei modelli</string>
+    <string name="misc_model_notif_channel_description">Avanzamento del download dei modelli vocali e linguistici</string>
+    <string name="bug_report_channel_name">Elaborazione segnalazioni bug</string>
+    <string name="bug_report_channel_description">Mostra l\'avanzamento durante l\'elaborazione delle segnalazioni di bug</string>
+    <string name="pebble_service_channel_name">Servizio Pebble</string>
+    <string name="pebble_service_notification_text">Connessione con Pebble attiva</string>
+    <string name="bug_report_service_title">Segnalazione bug</string>
+    <string name="bug_report_service_creating">Creazione della segnalazione bug...</string>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="misc_model_notif_downloading_title">Téléchargement du modèle</string>
+    <string name="misc_model_notif_downloading_text">Téléchargement du modèle : %1$s.\nCela peut prendre quelques minutes…</string>
+    <string name="misc_model_notif_downloaded_title">Modèle téléchargé</string>
+    <string name="misc_model_notif_downloaded_text">Modèle téléchargé : %1$s</string>
+    <string name="misc_model_notif_failed_title">Échec du téléchargement du modèle</string>
+    <string name="misc_model_notif_timed_out_text">Délai de téléchargement dépassé : %1$s</string>
+    <string name="misc_model_notif_failed_text">Impossible de télécharger le modèle : %1$s</string>
+    <string name="misc_model_notif_paused_title">Téléchargement du modèle en pause</string>
+    <string name="misc_model_notif_error_title">Erreur de téléchargement du modèle</string>
+    <string name="misc_model_notif_cancelled_title">Téléchargement du modèle annulé</string>
+    <string name="misc_model_notif_paused_text">Téléchargement en pause en raison de l\'état du réseau.</string>
+    <string name="misc_model_notif_stop_timeout_text">Délai dépassé lors du téléchargement du modèle : %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Téléchargement annulé.</string>
+    <string name="misc_model_notif_channel_name">Téléchargements de modèles</string>
+    <string name="misc_model_notif_channel_description">Progression du téléchargement des modèles vocaux et linguistiques</string>
+    <string name="bug_report_channel_name">Traitement des rapports de bug</string>
+    <string name="bug_report_channel_description">Affiche la progression du traitement des rapports de bug</string>
+    <string name="pebble_service_channel_name">Service Pebble</string>
+    <string name="pebble_service_notification_text">Maintien de la connexion Pebble</string>
+    <string name="bug_report_service_title">Rapport de bug</string>
+    <string name="bug_report_service_creating">Création du rapport de bug…</string>
+</resources>

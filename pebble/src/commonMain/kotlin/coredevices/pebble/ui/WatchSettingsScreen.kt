@@ -178,7 +178,7 @@ import coreapp.pebble.generated.resources.settings_error_try_again
 import coreapp.pebble.generated.resources.settings_foreground_service
 import coreapp.pebble.generated.resources.settings_foreground_service_desc
 import coreapp.pebble.generated.resources.settings_gender
-import coreapp.pebble.generated.resources.settings_gender_desc
+import coreapp.pebble.generated.resources.settings_health_platform_sync_desc
 import coreapp.pebble.generated.resources.settings_gender_female
 import coreapp.pebble.generated.resources.settings_gender_male
 import coreapp.pebble.generated.resources.settings_gender_other
@@ -1819,7 +1819,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthPlatformSyncEnabled,
-                    description = SettingsText(Res.string.settings_gender_desc),
+                    description = SettingsText(Res.string.settings_health_platform_sync_desc),
                     show = { healthSettings.trackingEnabled && healthPlatformAvailable },
                     onCheckChanged = { enabled ->
                         scope.launch {

@@ -1073,7 +1073,7 @@ Data charges may apply, Wi-Fi is recommended.</string>
     <string name="settings_year_of_birth">Year of birth</string>
     <string name="settings_year_of_birth_desc">Used for heart-rate zone calculations</string>
     <string name="settings_gender">Gender</string>
-    <string name="settings_gender_desc">Write steps, heart rate, sleep, and workouts to your phone's health platform</string>
+    <string name="settings_health_platform_sync_desc">Write steps, heart rate, sleep, and workouts to your phone's health platform</string>
     <string name="settings_health_sync_now">Sync Now</string>
     <string name="settings_open_google_fit">Open Google Fit</string>
     <string name="settings_open_google_fit_desc">View your synced health data in Google Fit</string>

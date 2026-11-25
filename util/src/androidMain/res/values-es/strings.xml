@@ -1,4 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="misc_model_notif_downloading_title">Descargando modelo</string>
+    <string name="misc_model_notif_downloading_text">Descargando modelo: %1$s.\nPuede tardar unos minutos...</string>
+    <string name="misc_model_notif_downloaded_title">Modelo descargado</string>
+    <string name="misc_model_notif_downloaded_text">Modelo descargado correctamente: %1$s</string>
+    <string name="misc_model_notif_failed_title">Error al descargar el modelo</string>
+    <string name="misc_model_notif_timed_out_text">Se agotó el tiempo de descarga: %1$s</string>
+    <string name="misc_model_notif_failed_text">No se pudo descargar el modelo: %1$s</string>
+    <string name="misc_model_notif_paused_title">Descarga del modelo en pausa</string>
+    <string name="misc_model_notif_error_title">Error en la descarga del modelo</string>
+    <string name="misc_model_notif_cancelled_title">Descarga del modelo cancelada</string>
+    <string name="misc_model_notif_paused_text">Descarga en pausa debido al estado de la red.</string>
+    <string name="misc_model_notif_stop_timeout_text">Se agotó el tiempo al intentar descargar el modelo: %1$s.</string>
+    <string name="misc_model_notif_cancelled_text">Descarga cancelada.</string>
+    <string name="misc_model_notif_channel_name">Descargas de modelos</string>
+    <string name="misc_model_notif_channel_description">Progreso de descarga de modelos de voz y de lenguaje</string>
+    <string name="bug_report_channel_name">Procesamiento de informes de error</string>
+    <string name="bug_report_channel_description">Muestra el progreso al procesar informes de error</string>
+    <string name="pebble_service_channel_name">Servicio de Pebble</string>
     <string name="pebble_service_notification_text">Manteniendo la conexión con Pebble</string>
+    <string name="bug_report_service_title">Informe de error</string>
+    <string name="bug_report_service_creating">Creando informe de error...</string>
 </resources>
