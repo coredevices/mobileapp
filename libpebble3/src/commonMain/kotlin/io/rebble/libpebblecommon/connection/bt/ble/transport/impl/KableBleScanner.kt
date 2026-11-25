@@ -47,4 +47,4 @@ internal class KableBleScanner(
     }
 }
 
-public expect fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier
+internal expect fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier

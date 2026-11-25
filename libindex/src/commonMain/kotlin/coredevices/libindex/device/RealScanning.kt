@@ -1,13 +1,12 @@
 package coredevices.libindex.device
 
 import co.touchlab.kermit.Logger
+import com.juul.kable.Advertisement
 import com.juul.kable.Scanner
 import coredevices.haversine.KMPHaversineAdvertisement
 import coredevices.haversine.fingerprintMatchesFailsafe
 import coredevices.haversine.fingerprintMatchesPTF
 import coredevices.libindex.Scanning
-import io.rebble.libpebblecommon.connection.BleScanResult
-import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.asPebbleBleIdentifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +16,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
@@ -35,7 +33,7 @@ class RealScanning(
         private val logger = Logger.withTag("RealScanning")
     }
 
-    private fun scan(): Flow<BleScanResult> {
+    private fun scan(): Flow<Advertisement> {
         return Scanner {
             filters {
                 match {
@@ -43,16 +41,6 @@ class RealScanning(
                 }
             }
         }.advertisements
-            .mapNotNull {
-                val name = it.name ?: return@mapNotNull null
-                val manufacturerData = it.manufacturerData ?: return@mapNotNull null
-                BleScanResult(
-                    identifier = it.identifier.asPebbleBleIdentifier(),
-                    name = name,
-                    rssi = it.rssi,
-                    manufacturerData = manufacturerData
-                )
-            }
     }
 
     override fun startScan() {
@@ -68,9 +56,12 @@ class RealScanning(
             }
             try {
                 scanResults.collect {
-                    val fingerprint = KMPHaversineAdvertisement.parseToStateFingerprint(it.manufacturerData.data)
+                    val name = it.name ?: return@collect
+                    val manufacturerData = it.manufacturerData?.data ?: return@collect
+                    val address = it.identifier.toString()
+                    val fingerprint = KMPHaversineAdvertisement.parseToStateFingerprint(manufacturerData)
                     if (fingerprint == null) {
-                        logger.w { "No fingerprint found in advertisement from ${it.identifier.asString}, ignoring advertisement" }
+                        logger.w { "No fingerprint found in advertisement from $address, ignoring advertisement" }
                         return@collect
                     }
                     val currentImage = when {
@@ -78,14 +69,14 @@ class RealScanning(
                         fingerprintMatchesPTF(fingerprint) -> IndexImage.ProductionTest
                         else -> IndexImage.Primary
                     }
-                    logger.d { "Found index device: ${it.identifier.asString}, name=${it.name}, rssi=${it.rssi}, currentImage=$currentImage, fingerprint=$fingerprint" }
+                    logger.d { "Found index device: $address, name=$name, rssi=${it.rssi}, currentImage=$currentImage, fingerprint=$fingerprint" }
                     indexDeviceManager.addScanResult(
                         IndexScanResult(
-                            identifier = IndexIdentifier.fromPlatformAddress(it.identifier.asString),
-                            name = it.name,
+                            identifier = IndexIdentifier.fromPlatformAddress(address),
+                            name = name,
                             rssi = it.rssi,
                             currentImage = currentImage,
-                            manufacturerData = it.manufacturerData.data,
+                            manufacturerData = manufacturerData,
                         )
                     )
                 }

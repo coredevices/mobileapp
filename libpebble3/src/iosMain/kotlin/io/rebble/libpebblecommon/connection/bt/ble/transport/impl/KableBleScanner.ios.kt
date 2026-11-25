@@ -36,4 +36,4 @@ internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Ad
     }
 }.advertisements
 
-public actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier = PebbleBleIdentifier(uuid = Uuid.parse(toString()))
+internal actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier = PebbleBleIdentifier(uuid = Uuid.parse(toString()))

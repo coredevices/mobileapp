@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-public data class BleScanResult(
+internal data class BleScanResult(
     val identifier: PebbleBleIdentifier,
     val name: String,
     val rssi: Int,

@@ -20,7 +20,7 @@ internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Ad
     }
 }.advertisements
 
-public actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier =
+internal actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier =
     PebbleBleIdentifier(macAddress = toString())
 
 internal actual fun configureKableCentral(stateRestoration: Boolean) {

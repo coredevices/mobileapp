@@ -222,7 +222,6 @@ kotlin {
                 implementation(project(":libindex"))
                 implementation(project(":libpebble3"))
                 implementation(libs.settings)
-                implementation(libs.kable)
                 implementation(libs.uri)
                 implementation(libs.kmpnotifier)
             }
