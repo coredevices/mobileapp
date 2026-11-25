@@ -131,12 +131,14 @@ internal class JsPlugin(
         val id = nextObserverId.getAndIncrement()
         observers.update { it + (id to Observer(category, item, properties, iconPixelSize, limit, prompt) { update -> trySend(update) }) }
         val job = launch {
+            var firstRequest = true
             while (true) {
                 if (retired) {
                     close(IllegalStateException("$name was updated or removed; subscribe again"))
                     break
                 }
-                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, limit, null), prompt, setOf(id))
+                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, limit, null, firstRequest), prompt, setOf(id))
+                firstRequest = false
                 send(answerOf(raw))
                 withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
@@ -157,6 +159,7 @@ internal class JsPlugin(
         iconPixelSize: IconPixelSize?,
         limit: Int?,
         trigger: SourceRequest?,
+        first: Boolean = false,
     ): String {
         val size = iconPixelSize?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }.orEmpty()
         val wanted = properties?.joinToString(",") { quote(it) }?.let { ""","properties":[$it]""" }.orEmpty()
@@ -164,7 +167,8 @@ internal class JsPlugin(
         val triggered = trigger
             ?.let { ""","trigger":{"category":${quote(it.category)},"item":${quote(it.item)}}""" }
             .orEmpty()
-        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$max$triggered}"""
+        val isFirst = if (first) ""","first":true""" else ""
+        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$max$triggered$isFirst}"""
     }
 
     private fun answerOf(raw: String?): SourceUpdate =
