@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.ProtocolService
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
@@ -13,8 +14,8 @@ import kotlin.uuid.Uuid
 /**
  * Singleton that handles receiving of timeline actions.
  */
-class TimelineService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
-    val actionInvocations = protocolHandler.inboundMessages
+internal class TimelineService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+    val actionInvocations: Flow<TimelineService.TimelineActionInvocation> = protocolHandler.inboundMessages
         .filterIsInstance<TimelineAction.InvokeAction>()
         .map {
             val actionId = it.actionID.get()
@@ -23,7 +24,7 @@ class TimelineService(private val protocolHandler: PebbleProtocolHandler) : Prot
             TimelineActionInvocation(itemId, actionId, attributes)
         }
 
-    val displayedItems = protocolHandler.inboundMessages
+    val displayedItems: Flow<Uuid?> = protocolHandler.inboundMessages
         .filterIsInstance<TimelineAction.DisplayedItem>()
         .map { it.itemID.get().takeIf { id -> id != TimelineAction.NOTHING_DISPLAYED } }
 
@@ -36,8 +37,8 @@ class TimelineService(private val protocolHandler: PebbleProtocolHandler) : Prot
     }
 }
 
-class TimelineActionResult(val success: Boolean, val icon: TimelineIcon, val title: String) {
-    fun toPebblePacket(): TimelineAction.ActionResponse = TimelineAction.ActionResponse(
+public class TimelineActionResult(public val success: Boolean, public val icon: TimelineIcon, public val title: String) {
+    internal fun toPebblePacket(): TimelineAction.ActionResponse = TimelineAction.ActionResponse(
         Uuid.NIL,
         if (success) 0u else 1u,
         listOf(

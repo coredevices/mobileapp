@@ -5,8 +5,8 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 
-open class LogDump(val message: Message): PebblePacket(ProtocolEndpoint.LOG_DUMP) {
-    val command = SUByte(m, message.value)
+internal open class LogDump(val message: Message): PebblePacket(ProtocolEndpoint.LOG_DUMP) {
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -20,21 +20,21 @@ open class LogDump(val message: Message): PebblePacket(ProtocolEndpoint.LOG_DUMP
     }
 
     class RequestLogDump(logGeneration: UByte, cookie: UInt): LogDump(Message.RequestLogDump) {
-        val generation = SUByte(m, logGeneration)
-        val cookie = SUInt(m, cookie)
+        val generation: SUByte = SUByte(m, logGeneration)
+        val cookie: SUInt = SUInt(m, cookie)
     }
 
     sealed class ReceivedLogDumpMessage(message: Message): LogDump(message) {
-        val cookie = SUInt(m)
+        val cookie: SUInt = SUInt(m)
     }
 
     class LogLine: ReceivedLogDumpMessage(Message.LogLine) {
-        val timestamp = SUInt(m)
-        val level = SUByte(m)
-        val length = SUByte(m)
-        val line = SUShort(m)
-        val filename = SFixedString(m, 16)
-        val messageText = SFixedString(m, 0)
+        val timestamp: SUInt = SUInt(m)
+        val level: SUByte = SUByte(m)
+        val length: SUByte = SUByte(m)
+        val line: SUShort = SUShort(m)
+        val filename: SFixedString = SFixedString(m, 16)
+        val messageText: SFixedString = SFixedString(m, 0)
 
         init {
             messageText.linkWithSize(length)
@@ -46,7 +46,7 @@ open class LogDump(val message: Message): PebblePacket(ProtocolEndpoint.LOG_DUMP
     class NoLogs: ReceivedLogDumpMessage(Message.NoLogs)
 }
 
-fun logDumpPacketsRegister() {
+internal fun logDumpPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.LOG_DUMP, LogDump.Message.NoLogs.value) {
         LogDump.NoLogs()
     }

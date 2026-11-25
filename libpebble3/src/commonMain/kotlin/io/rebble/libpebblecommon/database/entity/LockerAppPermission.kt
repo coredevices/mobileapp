@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import kotlin.uuid.Uuid
 
@@ -7,7 +8,7 @@ import kotlin.uuid.Uuid
     tableName = "AppPermission",
     primaryKeys = ["appUuid", "permission"],
 )
-data class LockerAppPermission(
+public data class LockerAppPermission(
     val appUuid: Uuid,
     /** A grant key: see `permissionOf`. */
     val permission: String,
@@ -27,6 +28,9 @@ data class LockerAppPermission(
     val reason: String? = null,
     /** From the same declaration; null when the app doesn't say which permissions are required. */
     val required: Boolean? = null,
+    /** The installed version of the app declares this permission in its manifest. */
+    @ColumnInfo(defaultValue = "0")
+    val declared: Boolean = false,
 )
 
-data class PermissionDeclaration(val reason: String?, val required: Boolean?)
+internal data class PermissionDeclaration(val reason: String?, val required: Boolean?)

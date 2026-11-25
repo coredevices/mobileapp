@@ -9,10 +9,10 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
 import coredevices.ring.database.Preferences
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import coredevices.util.KeywordMatch
 import coredevices.util.LocalizedKeywords
 import coredevices.util.MultilingualKeywords
@@ -20,64 +20,17 @@ import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.connection.LibPebble
-import kotlinx.coroutines.CancellationException
-import kotlinx.datetime.TimeZone
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import kotlinx.coroutines.CancellationException
+import kotlinx.datetime.TimeZone
+import kotlinx.serialization.Serializable
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class CreateCalendarEventTool : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "title" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The title of the calendar event e.g. 'Lunch with Sam'"
-                        ).toJson()
-                    ),
-                    "start_date_time_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The start date and time in human readable format, use English keywords e.g. 'tomorrow at 3pm', 'next Monday at 9am', 'on July 5th at 14:30'"
-                        ).toJson()
-                    ),
-                    "end_date_time_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If the user gives an explicit end time, the end time in human readable format e.g. 'at 5pm', 'tomorrow at 4pm'. Interpreted relative to the start. If omitted, the event defaults to 1 hour long."
-                        ).toJson()
-                    ),
-                    "duration_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If the user gives a duration instead of an end time, the duration in human readable format e.g. '30 minutes', '1 hour', '1 hour and 30 minutes'. Takes precedence over end_date_time_human."
-                        ).toJson()
-                    ),
-                    "location" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If provided by the user, the location of the event"
-                        ).toJson()
-                    ),
-                    "description" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If provided by the user, additional notes/description for the event"
-                        ).toJson()
-                    ),
-                )
-            ),
-            required = listOf("title", "start_date_time_human")
-        )
-    ),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
         'create_calendar_event' is ONLY for requests where the user literally says one of
         ${CALENDAR_KEYWORDS.promptList()} while asking to create one, e.g. "add an event to my
@@ -120,8 +73,8 @@ class CreateCalendarEventTool : BuiltInMcpTool(
             )
         )
 
-        val TOOL_DESCRIPTION = "Add an event to the user's phone calendar at a specific date and time. " +
-            "Use ONLY when the user literally says one of ${CALENDAR_KEYWORDS.promptList()} while asking to create one " +
+        const val TOOL_DESCRIPTION = "Add an event to the user's phone calendar at a specific date and time. " +
+            "Use ONLY when the user literally says one of 'calendar', 'event', 'events', 'カレンダー', 'イベント' while asking to create one " +
             "(e.g. 'add an event to my calendar', 'create a calendar event'). Words like 'schedule', " +
             "'create', 'book', 'meeting', 'appointment' or 'time' alone must NOT trigger this tool — " +
             "use the reminder/note tools for those. Do NOT use for reminders, to-dos, timers, or alarms. " +
@@ -171,13 +124,20 @@ class CreateCalendarEventTool : BuiltInMcpTool(
             HumanDateTimeParser(timeZone = tz).parse(startHuman) is InterpretedDateTime.AbsoluteDate
     }
 
+    @ToolDefinition(servlet = CalendarServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     private data class CreateEventArgs(
+        @ToolParam("The title of the calendar event e.g. 'Lunch with Sam'")
         val title: String,
+        @ToolParam("The start date and time in human readable format, use English keywords e.g. 'tomorrow at 3pm', 'next Monday at 9am', 'on July 5th at 14:30'")
         val start_date_time_human: String,
+        @ToolParam("If the user gives an explicit end time, the end time in human readable format e.g. 'at 5pm', 'tomorrow at 4pm'. Interpreted relative to the start. If omitted, the event defaults to 1 hour long.")
         val end_date_time_human: String? = null,
+        @ToolParam("If the user gives a duration instead of an end time, the duration in human readable format e.g. '30 minutes', '1 hour', '1 hour and 30 minutes'. Takes precedence over end_date_time_human.")
         val duration_human: String? = null,
+        @ToolParam("If provided by the user, the location of the event")
         val location: String? = null,
+        @ToolParam("If provided by the user, additional notes/description for the event")
         val description: String? = null,
     )
 

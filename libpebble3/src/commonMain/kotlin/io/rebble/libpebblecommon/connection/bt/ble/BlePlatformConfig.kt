@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WIN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import kotlin.time.Duration
 
-data class BlePlatformConfig(
+internal data class BlePlatformConfig(
     val pinAddress: Boolean = true,
     val phoneRequestsPairing: Boolean = true,
     val writeConnectivityTrigger: Boolean = true,
@@ -18,6 +18,7 @@ data class BlePlatformConfig(
     val delayBleDisconnections: Boolean = true,
     val fallbackToResetRequest: Boolean = false,
     val closeGattServerWhenBtDisabled: Boolean = true,
+    val republishGattServicesOnPpogInitTimeout: Boolean = false,
     val supportsBtClassic: Boolean = false,
     val supportsPpogResetCharacteristic: Boolean = false,
     val supportsGattAutoConnect: Boolean = false,

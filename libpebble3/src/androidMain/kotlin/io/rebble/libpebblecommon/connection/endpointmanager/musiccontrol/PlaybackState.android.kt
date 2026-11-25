@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol
 
 import io.rebble.libpebblecommon.music.PlaybackState
 
-fun android.media.session.PlaybackState.toLibPebbleState(): PlaybackState {
+internal fun android.media.session.PlaybackState.toLibPebbleState(): PlaybackState {
     return when (state) {
         android.media.session.PlaybackState.STATE_PLAYING -> PlaybackState.Playing
         android.media.session.PlaybackState.STATE_PAUSED -> PlaybackState.Paused

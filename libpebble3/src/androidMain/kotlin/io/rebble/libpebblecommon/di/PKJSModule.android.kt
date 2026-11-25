@@ -6,7 +6,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
-actual val pkjsPlatformModule: Module = module {
+internal actual val pkjsPlatformModule: Module = module {
     factory { params ->
         WebViewJsRunner(
             appContext = get(),
@@ -26,6 +26,7 @@ actual val pkjsPlatformModule: Module = module {
             pluginRegistry = get(),
             permissions = get(),
             pluginClient = get(),
+            dataUsage = get(),
             httpClient = get(),
         )
     } bind JsRunner::class

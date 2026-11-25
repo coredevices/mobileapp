@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.web
 
 import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import kotlinx.serialization.KSerializer
+import io.rebble.libpebblecommon.plugin.PluginPermission
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -14,7 +15,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlin.uuid.Uuid
 
-data class LockerModelWrapper(
+public data class LockerModelWrapper(
     val locker: LockerModel,
     val failedToFetchUuids: Set<Uuid>,
     /** The user's decisions from other devices and the web store, by app; newest wins. */
@@ -22,18 +23,18 @@ data class LockerModelWrapper(
 )
 
 @Serializable
-data class LockerModel(
+public data class LockerModel(
     val applications: List<LockerEntry>,
     val nextPageURL: String? = null,
 )
 
 @Serializable
-data class LockerAddResponse(
+public data class LockerAddResponse internal constructor(
     val application: LockerEntry,
 )
 
 @Serializable
-data class LockerEntry(
+public data class LockerEntry(
     val id: String,
     val uuid: String,
     @SerialName("user_token") val userToken: String? = null,
@@ -57,24 +58,26 @@ data class LockerEntry(
     @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
     @SerialName("config_page") val configPage: String? = null,
     @SerialName("icon_tintable") val iconTintable: Boolean = false,
+    @SerialName("uses_permissions") val usesPermissions: List<PluginPermission>? = null,
+    @SerialName("pebblekit2_packages") val pebbleKit2Packages: List<String>? = null,
 )
 
 @Serializable
-data class LockerEntryLinks(
+public data class LockerEntryLinks(
     val remove: String,
     val href: String,
     val share: String
 )
 
 @Serializable
-data class LockerEntryDeveloper(
+public data class LockerEntryDeveloper(
     val id: String,
     val name: String,
     @SerialName("contact_email") val contactEmail: String
 )
 
 @Serializable
-data class LockerEntryPlatform(
+public data class LockerEntryPlatform(
     @SerialName("sdk_version") val sdkVersion: String,
     @SerialName("pebble_process_info_flags") val pebbleProcessInfoFlags: Int,
     val name: String,
@@ -83,14 +86,14 @@ data class LockerEntryPlatform(
 )
 
 @Serializable
-data class LockerEntryPlatformImages(
+public data class LockerEntryPlatformImages(
     val icon: String,
     val list: String,
     val screenshot: String
 )
 
 @Serializable
-data class LockerEntryCompatibility(
+public data class LockerEntryCompatibility internal constructor(
     val ios: LockerEntryCompatibilityPhonePlatformDetails,
     val android: LockerEntryCompatibilityPhonePlatformDetails,
     val aplite: LockerEntryCompatibilityWatchPlatformDetails,
@@ -103,7 +106,7 @@ data class LockerEntryCompatibility(
 )
 
 @Serializable
-data class LockerEntryCompatibilityPhonePlatformDetails(
+public data class LockerEntryCompatibilityPhonePlatformDetails internal constructor(
     val supported: Boolean,
     @SerialName("min_js_version") val minJsVersion: Int? = null
 )
@@ -128,7 +131,7 @@ private object LenientBooleanSerializer : KSerializer<Boolean?> {
 }
 
 @Serializable
-data class LockerEntryCompatibilityWatchPlatformDetails(
+public data class LockerEntryCompatibilityWatchPlatformDetails internal constructor(
     val supported: Boolean,
     val firmware: LockerEntryFirmwareVersion,
     @SerialName("has_binary")
@@ -137,20 +140,20 @@ data class LockerEntryCompatibilityWatchPlatformDetails(
 )
 
 @Serializable
-data class LockerEntryFirmwareVersion(
+public data class LockerEntryFirmwareVersion internal constructor(
     val major: Int,
     val minor: Int? = null,
     val patch: Int? = null
 )
 
 @Serializable
-data class LockerEntryCompanions(
+public data class LockerEntryCompanions internal constructor(
     val android: LockerEntryCompanionApp?,
     val ios: LockerEntryCompanionApp?,
 )
 
 @Serializable
-data class LockerEntryCompanionApp(
+public data class LockerEntryCompanionApp internal constructor(
     val id: Int,
     val icon: String,
     val name: String,
@@ -160,7 +163,7 @@ data class LockerEntryCompanionApp(
 )
 
 @Serializable
-data class LockerEntryPBW(
+public data class LockerEntryPBW(
     val file: String,
     @SerialName("icon_resource_id") val iconResourceId: Int,
     @SerialName("release_id") val releaseId: String

@@ -16,8 +16,8 @@ import kotlin.uuid.Uuid
  * [Request] naming the type, encoding and dimensions, and the phone replies with chunked [Response]
  * messages.
  */
-open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING) {
-    val command = SUByte(m, message.value)
+internal open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING) {
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -57,11 +57,11 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
         width: UShort = 0u,
         height: UShort = 0u,
     ) : Imaging(Message.Request) {
-        val token = SUByte(m, token)
-        val imageType = SUByte(m, imageType.value)
-        val format = SUByte(m, format)
-        val width = SUShort(m, width, endianness = Endian.Little)
-        val height = SUShort(m, height, endianness = Endian.Little)
+        val token: SUByte = SUByte(m, token)
+        val imageType: SUByte = SUByte(m, imageType.value)
+        val format: SUByte = SUByte(m, format)
+        val width: SUShort = SUShort(m, width, endianness = Endian.Little)
+        val height: SUShort = SUShort(m, height, endianness = Endian.Little)
     }
 
     /**
@@ -77,8 +77,8 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
         title: String = "",
         artist: String = "",
     ) : Request(ImageType.AlbumArt, token, format, width, height) {
-        val title = SString(m, title)
-        val artist = SString(m, artist)
+        val title: SString = SString(m, title)
+        val artist: SString = SString(m, artist)
     }
 
     /**
@@ -92,7 +92,7 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
         height: UShort = 0u,
         itemId: Uuid = Uuid.NIL,
     ) : Request(ImageType.NotificationImage, token, format, width, height) {
-        val itemId = SUUID(m, itemId)
+        val itemId: SUUID = SUUID(m, itemId)
     }
 
     /**
@@ -100,11 +100,11 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
      * header on the first chunk, and the pixel data) and serialised as raw trailing bytes.
      */
     class Response(body: UByteArray = ubyteArrayOf()) : Imaging(Message.Response) {
-        val body = SBytes(m, body.size, body)
+        val body: SBytes = SBytes(m, body.size, body)
     }
 }
 
-fun imagingPacketsRegister() {
+internal fun imagingPacketsRegister() {
     // All requests share the Request command byte; the image-type byte (after the 4-byte frame
     // header, command and token) selects the concrete request class to decode into.
     val imageTypeOffset = 4 + 1 + 1

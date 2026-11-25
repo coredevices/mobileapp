@@ -25,7 +25,7 @@ private const val CHANNEL_ID = "find_my_phone"
 private const val NOTIFICATION_ID = 74901
 private const val ACTION_STOP_RINGING = "io.rebble.libpebblecommon.STOP_FIND_MY_PHONE_RINGING"
 
-actual class PhoneSoundPlayer(
+internal actual class PhoneSoundPlayer(
     private val appContext: AppContext,
 ) {
     private val logger = Logger.withTag("PhoneSoundPlayer")

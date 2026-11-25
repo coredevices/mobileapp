@@ -18,7 +18,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-class FirmwareDownloader(
+internal class FirmwareDownloader(
     private val httpClient: HttpClient,
     private val appContext: AppContext,
 ) {
@@ -52,9 +52,9 @@ class FirmwareDownloader(
     }
 }
 
-expect fun getFirmwareDownloadDirectory(context: AppContext): Path
+internal expect fun getFirmwareDownloadDirectory(context: AppContext): Path
 
-suspend fun <T> withTimeoutOr(timeout: Duration, block: suspend CoroutineScope.() -> T, onTimeout: () -> T): T {
+internal suspend fun <T> withTimeoutOr(timeout: Duration, block: suspend CoroutineScope.() -> T, onTimeout: () -> T): T {
     return try {
         withTimeout(timeout, block)
     } catch (e: TimeoutCancellationException) {

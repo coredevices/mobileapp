@@ -55,7 +55,7 @@ class BackupManager(
         preferences.setLastBackupCount(count.toInt())
     }
 
-    suspend fun deleteCloudBackup(onProgress: (BackupDeleteProgress) -> Unit = {}) = withContext(Dispatchers.IO) {
+    suspend fun deleteCloudBackup(onProgress: suspend (BackupDeleteProgress) -> Unit = {}) = withContext(Dispatchers.IO) {
         onProgress(BackupDeleteProgress.CollectingAudio)
         val audioFileIds = mutableListOf<String>()
         var cursor: DocumentSnapshot? = null
@@ -100,7 +100,7 @@ class BackupManager(
      * [ExportedBackup.decryptSkipped]. [onProgress] receives (done, total) where total is null
      * if the count lookup failed.
      */
-    suspend fun exportAll(onProgress: (done: Int, total: Int?) -> Unit = { _, _ -> }): ExportedBackup =
+    suspend fun exportAll(onProgress: suspend (done: Int, total: Int?) -> Unit = { _, _ -> }): ExportedBackup =
         withContext(Dispatchers.IO) {
             val user = Firebase.auth.currentUser ?: throw IllegalStateException("Not signed in")
             logger.i { "Starting full backup for user ${user.uid}" }

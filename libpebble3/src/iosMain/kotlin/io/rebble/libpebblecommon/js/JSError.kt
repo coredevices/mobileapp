@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.js
 
-data class JSError(
+internal data class JSError(
     val cause: String?,
     val message: String?,
     val stack: String?,

@@ -10,7 +10,7 @@ private val logger = Logger.withTag("HealthDaoExt")
  * Inserts health data with priority based on step count. If data already exists for a timestamp,
  * only replaces it if the new data has more steps.
  */
-suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>) {
+internal suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>) {
     var inserted = 0
     var skipped = 0
     var replaced = 0
@@ -53,7 +53,7 @@ suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>)
  * An overlay entry is considered duplicate if it has the same startTime and type.
  * When duplicates exist, keeps the entry with the longer duration to prevent data loss.
  */
-suspend fun HealthDao.insertOverlayDataWithDeduplication(data: List<OverlayDataEntity>) {
+internal suspend fun HealthDao.insertOverlayDataWithDeduplication(data: List<OverlayDataEntity>) {
     if (data.isEmpty()) return
 
     var inserted = 0

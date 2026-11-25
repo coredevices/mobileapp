@@ -20,10 +20,11 @@ import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.FORBIDDEN
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.OK
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Layout.Companion.fromCode
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout.Companion.fromCode
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.plugin.PluginPermissions
@@ -45,7 +46,7 @@ import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("RemoteTimelineEmulator")
 
-class RemoteTimelineEmulator(
+public class RemoteTimelineEmulator internal constructor(
     private val watchConfigFlow: WatchConfigFlow,
     private val json: Json,
     private val timelinePinRealDao: TimelinePinRealDao,
@@ -53,6 +54,8 @@ class RemoteTimelineEmulator(
     private val timelineNotificationRealDao: TimelineNotificationRealDao,
     private val permissions: AppPermissions,
 ) : HttpInterceptor {
+    override val servedLocally: Boolean = true
+
     override fun shouldIntercept(url: String): Boolean {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
             return false
@@ -92,7 +95,7 @@ class RemoteTimelineEmulator(
         return OK
     }
 
-    suspend fun insertPin(pinJson: String, appUuid: Uuid) {
+    internal suspend fun insertPin(pinJson: String, appUuid: Uuid) {
 //        logger.v { "insertPin: pinJson=$pinJson" }
         val pin = try {
             json.decodeFromString(TimelinePinJson.serializer(), pinJson)
@@ -108,7 +111,7 @@ class RemoteTimelineEmulator(
     }
 
     /** Callers check the app may add pins (`mayAddPins`). */
-    suspend fun insertPin(appUuid: Uuid, pin: TimelinePinJson) {
+    internal suspend fun insertPin(appUuid: Uuid, pin: TimelinePinJson) {
         val existingPin = timelinePinRealDao.getPinsForWatchapp(appUuid).find { it.backingId == pin.id }
         val pinUuid = existingPin?.itemId ?: Uuid.random()
         val timelinePin = asPin(jsonPin = pin, appUuid = appUuid, pinUuid = pinUuid)
@@ -130,7 +133,7 @@ class RemoteTimelineEmulator(
         }
     }
 
-    suspend fun showNotification(appUuid: Uuid, notificationJson: String) {
+    internal suspend fun showNotification(appUuid: Uuid, notificationJson: String) {
         val notification = try {
             json.decodeFromString(TimelineNotificationJson.serializer(), notificationJson)
         } catch (e: SerializationException) {
@@ -144,11 +147,11 @@ class RemoteTimelineEmulator(
         asNotification(notification, appUuid)?.let { timelineNotificationRealDao.insertOrReplace(it) }
     }
 
-    suspend fun showSimpleNotification(appUuid: Uuid, title: String, body: String) {
+    internal suspend fun showSimpleNotification(appUuid: Uuid, title: String, body: String) {
         if (!mayShowNotifications(appUuid)) return
         timelineNotificationRealDao.insertOrReplace(
             buildTimelineNotification(parentId = appUuid, timestamp = Clock.System.now()) {
-                layout = TimelineItem.Layout.GenericNotification
+                layout = TimelineItemLayout.GenericNotification
                 attributes {
                     title { title }
                     body { body }
@@ -160,10 +163,10 @@ class RemoteTimelineEmulator(
     private suspend fun mayShowNotifications(appUuid: Uuid): Boolean =
         permissions.request(appUuid, PluginPermissions.SHOW_NOTIFICATIONS) == PermissionDecision.Granted
 
-    suspend fun mayAddPins(appUuid: Uuid): Boolean =
+    internal suspend fun mayAddPins(appUuid: Uuid): Boolean =
         permissions.request(appUuid, PluginPermissions.TIMELINE) == PermissionDecision.Granted
 
-    suspend fun deletePin(appUuid: Uuid, pinIdentifier: String): Boolean {
+    internal suspend fun deletePin(appUuid: Uuid, pinIdentifier: String): Boolean {
         logger.v { "deletePin: pinIdentifier=$pinIdentifier" }
         val existingPin = timelinePinRealDao.getPinsForWatchapp(appUuid).find { it.backingId == pinIdentifier }
         if (existingPin == null) {
@@ -174,7 +177,7 @@ class RemoteTimelineEmulator(
         return true
     }
 
-    companion object {
+    public companion object {
         private val TIMELINE_API_AUTHORITIES = setOf(
             "timeline-api.rebble.io",
             "timeline-api.getpebble.com",
@@ -197,10 +200,10 @@ internal fun asReminder(jsonReminder: TimelineReminderJson, pinUuid: Uuid): Time
             applyAttributesFrom(jsonReminder.layout)
         }
         actions {
-            action(TimelineItem.Action.Type.Dismiss) {
+            action(TimelineActionType.Dismiss) {
                 attributes { title { "Dismiss" } }
             }
-            action(TimelineItem.Action.Type.OpenPin) {
+            action(TimelineActionType.OpenPin) {
                 attributes { title { "More" } }
             }
         }
@@ -228,7 +231,7 @@ internal fun asPin(jsonPin: TimelinePinJson, appUuid: Uuid, pinUuid: Uuid): Time
         }
         actions {
             applyActionsFrom(jsonPin.actions)
-            action(TimelineItem.Action.Type.Remove) {
+            action(TimelineActionType.Remove) {
                 attributes { title { "Remove" } }
             }
         }
@@ -241,7 +244,7 @@ internal fun TimelinePinJson.notificationFor(existing: TimelinePin?, updated: Ti
 
 internal fun asNotification(jsonNotification: TimelineNotificationJson, appUuid: Uuid): TimelineNotification? {
     val timelineLayout = fromCode(jsonNotification.layout.type)
-        ?.takeIf { it == TimelineItem.Layout.GenericNotification || it == TimelineItem.Layout.CommNotification }
+        ?.takeIf { it == TimelineItemLayout.GenericNotification || it == TimelineItemLayout.CommNotification }
     if (timelineLayout == null) {
         logger.w { "Not a notification layout: ${jsonNotification.layout.type}" }
         return null
@@ -265,7 +268,7 @@ private fun ActionsListBuilder.applyActionsFrom(jsonActions: List<TimelineAction
         when (a.type) {
             // Handled entirely on the watch: launches the item's parent app with
             // the launch code in launch_get_args().
-            "openWatchApp" -> action(TimelineItem.Action.Type.OpenWatchapp) {
+            "openWatchApp" -> action(TimelineActionType.OpenWatchapp) {
                 attributes {
                     title { a.title }
                     a.launchCode?.let { code -> launchCode { code } }
@@ -274,7 +277,7 @@ private fun ActionsListBuilder.applyActionsFrom(jsonActions: List<TimelineAction
             "pluginAction" -> if (a.action == null) {
                 logger.w { "pluginAction without an action: ${a.title}" }
             } else {
-                val type = if (a.inputArg == null) TimelineItem.Action.Type.Generic else TimelineItem.Action.Type.Response
+                val type = if (a.inputArg == null) TimelineActionType.Generic else TimelineActionType.Response
                 action(type) {
                     attributes {
                         title { a.title }
@@ -380,7 +383,7 @@ private fun String.asDisplayRecurring(): UByte? = when (this) {
 }
 
 @Serializable
-data class TimelinePinJson(
+internal data class TimelinePinJson internal constructor(
     val id: String,
     val time: Instant,
     @SerialName("duration")
@@ -393,20 +396,20 @@ data class TimelinePinJson(
 )
 
 @Serializable
-data class TimelineNotificationJson(
+internal data class TimelineNotificationJson internal constructor(
     val layout: TimelineLayoutJson,
     val time: Instant? = null,
     val actions: List<TimelineActionJson>? = null,
 )
 
 @Serializable
-data class TimelineReminderJson(
+internal data class TimelineReminderJson internal constructor(
     val layout: TimelineLayoutJson,
     val time: Instant,
 )
 
 @Serializable
-data class TimelineActionJson(
+internal data class TimelineActionJson internal constructor(
     val title: String,
     val type: String,
     /** uint32 passed to the watchapp via launch args (openWatchApp actions only). */
@@ -425,7 +428,7 @@ data class TimelineActionJson(
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
-data class TimelineLayoutJson(
+internal data class TimelineLayoutJson internal constructor(
     val type: String,
     val title: String? = null,
     val subtitle: String? = null,

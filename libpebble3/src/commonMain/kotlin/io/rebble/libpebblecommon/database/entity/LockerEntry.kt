@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
+import io.rebble.libpebblecommon.packets.blobdb.WatchPermission
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlinx.serialization.SerialName
@@ -26,8 +27,9 @@ private val logger = Logger.withTag("LockerEntry")
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = true,
 )
-data class LockerEntry(
+internal data class LockerEntry(
     val id: Uuid,
     val version: String,
     val title: String,
@@ -54,8 +56,9 @@ data class LockerEntry(
     val capabilities: List<String>? = null,
     @ColumnInfo(defaultValue = "NULL")
     val grantedPermissions: List<String>? = null,
+    /** [WatchPermission] bits. */
     @ColumnInfo(defaultValue = "0")
-    val microphoneGranted: Boolean = false,
+    val watchPermissions: Int = 0,
     /** Serialized [io.rebble.libpebblecommon.plugin.PluginManifest] when this pbw carries a plugin. Phone-only; not synced to the watch. */
     @ColumnInfo(defaultValue = "NULL")
     val pluginManifest: String? = null,
@@ -71,8 +74,8 @@ data class LockerEntry(
     override fun value(params: ValueParams): UByteArray? {
         return asMetadata(
             params.platform,
-            microphoneGranted = if (ProtocolCapsFlag.SupportsAppPermissions in params.capabilities) {
-                microphoneGranted
+            watchPermissions = if (ProtocolCapsFlag.SupportsAppPermissions in params.capabilities) {
+                watchPermissions.toUInt()
             } else null,
         )?.toBytes()
     }
@@ -88,12 +91,12 @@ data class LockerEntry(
         result = 31 * result + sideloaded.hashCode()
         result = 31 * result + (sideloadeTimestamp?.hashCode() ?: 0)
         result = 31 * result + platforms.recordHashCode()
-        result = 31 * result + microphoneGranted.hashCode()
+        result = 31 * result + watchPermissions
         return result
     }
 }
 
-fun LockerEntry.asMetadata(platform: WatchType, microphoneGranted: Boolean? = null): AppMetadata? {
+internal fun LockerEntry.asMetadata(platform: WatchType, watchPermissions: UInt? = null): AppMetadata? {
     // Pick the best-matching variant for this watch.
     val entryPlatform = platform.getCompatibleAppVariants().firstNotNullOfOrNull { variant ->
         platforms.firstOrNull { it.name == variant.codename }
@@ -125,14 +128,14 @@ fun LockerEntry.asMetadata(platform: WatchType, microphoneGranted: Boolean? = nu
         sdkVersionMajor = sdkVersionMajor.toVersionByte(),
         sdkVersionMinor = sdkVersionMinor.toVersionByte(),
         appName = title,
-        microphoneGranted = microphoneGranted,
+        watchPermissions = watchPermissions,
     )
 }
 
 private fun String.toVersionByte(): UByte =
     toUIntOrNull()?.coerceAtMost(UByte.MAX_VALUE.toUInt())?.toUByte() ?: 0u
 
-data class LockerEntryAppstoreData(
+internal data class LockerEntryAppstoreData internal constructor(
     val hearts: Int,
     val developerId: String,
     val timelineEnabled: Boolean,
@@ -145,7 +148,7 @@ data class LockerEntryAppstoreData(
 )
 
 @Serializable
-data class CompanionApp(
+public data class CompanionApp(
     val id: Int,
     val icon: String,
     val name: String,
@@ -155,7 +158,7 @@ data class CompanionApp(
 )
 
 @Serializable
-data class LockerEntryPlatform(
+internal data class LockerEntryPlatform(
     val lockerEntryId: Uuid,
     val sdkVersion: String,
     val processInfoFlags: Int,
@@ -169,14 +172,14 @@ data class LockerEntryPlatform(
 )
 
 // Only some fields should trigger a watch resync if changed:
-fun LockerEntryPlatform.recordHashCode(): Int {
+internal fun LockerEntryPlatform.recordHashCode(): Int {
     var result = sdkVersion.hashCode()
     result = 31 * result + processInfoFlags.hashCode()
     result = 31 * result + pbwIconResourceId
     return result
 }
 
-fun List<LockerEntryPlatform>.recordHashCode(): Int {
+internal fun List<LockerEntryPlatform>.recordHashCode(): Int {
     var result = 0
     for (platform in this) {
         result = 31 * result + platform.recordHashCode()
@@ -184,4 +187,4 @@ fun List<LockerEntryPlatform>.recordHashCode(): Int {
     return result
 }
 
-val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")
+public val APP_VERSION_REGEX: Regex = Regex("(\\d+)\\.(\\d+)(:?-.*)?")

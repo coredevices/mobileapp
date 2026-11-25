@@ -16,13 +16,13 @@ import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
 
-data class AppWithCount(
+public data class AppWithCount internal constructor(
     @Embedded val app: NotificationAppItem,
     val count: Int,
 )
 
 @Dao
-interface NotificationAppRealDao : NotificationAppItemDao {
+internal interface NotificationAppRealDao : NotificationAppItemDao {
     @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
     suspend fun allApps(): List<NotificationAppItem>
 

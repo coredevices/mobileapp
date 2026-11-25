@@ -36,7 +36,7 @@ actual class AudioRecorder(context: Context): AutoCloseable {
         audioRecorder.startRecording()
         return object: RawSource {
             override fun close() {
-                audioRecorder.stop()
+                stopIfInitialized()
                 isRecording = false
             }
 
@@ -57,9 +57,18 @@ actual class AudioRecorder(context: Context): AutoCloseable {
 
     actual suspend fun stopRecording() {
         isRecording = false
-        audioRecorder.stop()
+        stopIfInitialized()
     }
 
+    // stop() throws if the AudioRecord failed to initialize or was already released.
+    @Synchronized
+    private fun stopIfInitialized() {
+        if (audioRecorder.state == AudioRecord.STATE_INITIALIZED) {
+            audioRecorder.stop()
+        }
+    }
+
+    @Synchronized
     actual override fun close() {
         audioRecorder.release()
     }

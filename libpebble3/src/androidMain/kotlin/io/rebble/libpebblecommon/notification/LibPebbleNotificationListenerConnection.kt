@@ -27,7 +27,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class AndroidPebbleNotificationListenerConnection(
+internal class AndroidPebbleNotificationListenerConnection(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val notificationHandler: NotificationHandler,
     private val notificationConfig: NotificationConfigFlow,

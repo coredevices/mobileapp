@@ -34,7 +34,18 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.util.formatHourOfDay
+import coredevices.util.formatTimeOfDay
+import coredevices.util.isLocale24HourFormat
 import io.rebble.libpebblecommon.health.OverlayType
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.health_light_sleep
+import coreapp.pebble.generated.resources.health_awake
+import coreapp.pebble.generated.resources.health_time_and_state
+import coreapp.pebble.generated.resources.health_legend_light
+import coreapp.pebble.generated.resources.health_legend_deep
+import coreapp.pebble.generated.resources.health_deep_sleep
+import org.jetbrains.compose.resources.stringResource
 
 internal val ActivityHeaderColor = Color(0xFF00A982)
 internal val ActivityBgColor = Color(0xFF009579)
@@ -250,13 +261,12 @@ internal fun StackedBarChart(data: List<StackedSleepEntry>, scrub: ScrubState, t
 @Composable
 internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, deepH: Float) {
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
+    val is24Hour = remember { isLocale24HourFormat() }
     val scrubTime = scrubFraction?.let { frac ->
         val windowHours = 18f
         val hourOfDay = (18f + frac * windowHours) % 24f
         val h = hourOfDay.toInt(); val m = ((hourOfDay - h) * 60).toInt()
-        val ampm = if (h < 12 || h == 24) "AM" else "PM"
-        val h12 = if (h == 0 || h == 24) 12 else if (h > 12) h - 12 else h
-        "$h12:${m.toString().padStart(2, '0')} $ampm"
+        formatTimeOfDay(h, m, is24Hour)
     }
     val scrubInSegment = scrubFraction?.let { frac ->
         // Deep segments are drawn after light segments and visually overlap; pick the last
@@ -267,14 +277,14 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (scrubTime != null) {
             Text(
-                "$scrubTime · ${if (scrubInSegment?.isDeep == true) "Deep sleep" else if (scrubInSegment != null) "Light sleep" else "Awake"}",
+                stringResource(Res.string.health_time_and_state, scrubTime, stringResource(if (scrubInSegment?.isDeep == true) Res.string.health_deep_sleep else if (scrubInSegment != null) Res.string.health_light_sleep else Res.string.health_awake)),
                 style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f),
             )
             Spacer(Modifier.height(4.dp))
         }
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            for (l in listOf("6 PM", "12 AM", "6 AM", "12 PM"))
-                Text(l, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+            for (h in listOf(18, 0, 6, 12))
+                Text(formatHourOfDay(h, is24Hour), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
         }
         Spacer(Modifier.height(4.dp))
         Canvas(
@@ -303,8 +313,8 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(24.dp)) {
-            LegendDot(LightSleepBarColor, "Light ${formatHours(totalH - deepH)}")
-            LegendDot(DeepSleepBarColor, "Deep ${formatHours(deepH)}")
+            LegendDot(LightSleepBarColor, stringResource(Res.string.health_legend_light, formatHours(totalH - deepH)))
+            LegendDot(DeepSleepBarColor, stringResource(Res.string.health_legend_deep, formatHours(deepH)))
         }
     }
 }

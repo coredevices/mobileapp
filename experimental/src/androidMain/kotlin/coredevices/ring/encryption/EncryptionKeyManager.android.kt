@@ -1,6 +1,14 @@
 package coredevices.ring.encryption
 
 import PlatformUiContext
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.encryption_key_cancelled
+import coreapp.ring.generated.resources.encryption_key_gpm_not_found
+import coreapp.ring.generated.resources.encryption_key_gpm_not_set_up
+import coreapp.ring.generated.resources.encryption_key_gpm_read_failed
+import coreapp.ring.generated.resources.encryption_key_gpm_save_failed
+import coreapp.ring.generated.resources.encryption_key_save_cancelled
+import org.jetbrains.compose.resources.getString
 import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
@@ -86,12 +94,12 @@ actual class EncryptionKeyManager(
             credentialManager.createCredential(activity, request)
             logger.i { "Key saved to Google Password Manager" }
         } catch (e: CreateCredentialCancellationException) {
-            throw Exception("Save cancelled. You can save the key later from the Backup menu.")
+            throw Exception(getString(Res.string.encryption_key_save_cancelled))
         } catch (e: CreateCredentialException) {
             val msg = when {
                 e.message?.contains("provider", ignoreCase = true) == true ->
-                    "Google Password Manager is not set up. Go to Settings > Passwords & Accounts to configure it."
-                else -> "Could not save to Password Manager: ${e.message}"
+                    getString(Res.string.encryption_key_gpm_not_set_up)
+                else -> getString(Res.string.encryption_key_gpm_save_failed, e.message.toString())
             }
             throw Exception(msg)
         }
@@ -109,17 +117,17 @@ actual class EncryptionKeyManager(
                 credential.password
             } else {
                 logger.w { "No matching credential found in Password Manager" }
-                throw Exception("No encryption key found in Google Password Manager. Generate a new key first.")
+                throw Exception(getString(Res.string.encryption_key_gpm_not_found))
             }
         } catch (e: NoCredentialException) {
-            throw Exception("No encryption key found in Google Password Manager. Generate a new key first.")
+            throw Exception(getString(Res.string.encryption_key_gpm_not_found))
         } catch (e: GetCredentialCancellationException) {
-            throw Exception("Cancelled by user.")
+            throw Exception(getString(Res.string.encryption_key_cancelled))
         } catch (e: GetCredentialException) {
             val msg = when {
                 e.message?.contains("provider", ignoreCase = true) == true ->
-                    "Google Password Manager is not set up. Go to Settings > Passwords & Accounts to configure it."
-                else -> "Could not read from Password Manager: ${e.message}"
+                    getString(Res.string.encryption_key_gpm_not_set_up)
+                else -> getString(Res.string.encryption_key_gpm_read_failed, e.message.toString())
             }
             throw Exception(msg)
         }

@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -97,7 +98,8 @@ abstract class TranscribedRecordingOperation(
         }
     }
 
-    override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
+    /** Creates this recording's feed entry, or reuses the one an earlier attempt created. */
+    protected suspend fun createRecordingEntry(handle: RecordingProcessingQueue.TaskHandle?): Long {
         val entryId = withContext(Dispatchers.IO) {
             if (handle?.stage is RecordingProcessingStage.RecordingEntryCreated) {
                 val id = (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
@@ -133,6 +135,11 @@ abstract class TranscribedRecordingOperation(
                 entryId
             )
         }
+        return entryId
+    }
+
+    override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
+        val entryId = createRecordingEntry(handle)
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
         // Stage the upload for the sync queue on the long-lived background scope. The local
         // cache file is already fully written by the time we get here, so the rest of the
@@ -274,6 +281,7 @@ open class DefaultRecordingOperation(
     fileId: String,
     trace: RingTraceSession,
     private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
+    private val agentRouter: IntentAgentRouter? = null,
 ) : TranscribedRecordingOperation(recordingId, transferId, fileId, trace) {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -302,7 +310,7 @@ open class DefaultRecordingOperation(
                 recordingId = recordingId,
                 recordingEntryId = entryId,
                 mcpSession = mcpSession,
-                agent = chatAgent,
+                agent = agentRouter?.route(chatAgent, text, mcpSession, canCapture = forcedTool != null) ?: chatAgent,
                 forcedTool = forcedTool?.let { { assistantMessage, sessionContext -> it(text, assistantMessage, sessionContext) } },
                 text = text
             )

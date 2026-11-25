@@ -11,6 +11,11 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -158,6 +163,8 @@
 	<string>$(PRODUCT_NAME) needs access to your reminders to create reminders from your Index.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app transcribes your speech to create voice notes and chat with AI.</string>
+	<key>RemindersAppGroup</key>
+	<string>group.$(BUNDLE_ID)$(TEAM_ID)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

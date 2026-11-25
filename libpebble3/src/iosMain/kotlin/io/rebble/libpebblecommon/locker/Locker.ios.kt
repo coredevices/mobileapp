@@ -9,7 +9,7 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 
-actual fun getLockerPBWCacheDirectory(context: AppContext): Path {
+public actual fun getLockerPBWCacheDirectory(context: AppContext): Path {
     val fileManager = NSFileManager.defaultManager
     val supportDir = fileManager.URLsForDirectory(NSApplicationSupportDirectory, inDomains = NSUserDomainMask).firstOrNull()
         as? NSURL
@@ -19,7 +19,7 @@ actual fun getLockerPBWCacheDirectory(context: AppContext): Path {
     return path
 }
 
-actual fun getLockerPBWCacheLegacyDirectory(context: AppContext): Path? {
+internal actual fun getLockerPBWCacheLegacyDirectory(context: AppContext): Path? {
     val fileManager = NSFileManager.defaultManager
     val cachesDir = fileManager.URLsForDirectory(NSCachesDirectory, inDomains = NSUserDomainMask).firstOrNull()
         as? NSURL ?: return null

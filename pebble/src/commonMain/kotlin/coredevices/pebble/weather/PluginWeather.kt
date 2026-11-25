@@ -151,6 +151,8 @@ private class Properties(private val instance: SourceInstance) {
     fun hours(midnight: Long, units: WeatherUnit, isNight: (Long) -> Boolean): List<HourlyForecast>? {
         val temps = series(WeatherPlugin.PROPERTY_HOURLY_TEMPERATURE) ?: return null
         val codes = series(WeatherPlugin.PROPERTY_HOURLY_CONDITION_CODE)
+        val chances = series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION)
+        val amounts = series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT)
         val start = temps.start ?: return null
         val step = temps.stepSec ?: return null
         val values = temps.numericValue?.let { celsius(it.values, it.unit) } ?: return null
@@ -162,9 +164,18 @@ private class Properties(private val instance: SourceInstance) {
             HourlyForecast(
                 iconCode = iconCode(code ?: "unknown", night = isNight(at)),
                 temp = nearestValue(values, index)!!.inUnits(units),
+                pop = chances?.numberAt(at)?.roundToInt(),
+                precipMm = amounts?.numberAt(at),
             )
         }
     }
+}
+
+private fun SeriesShape.numberAt(at: Long): Double? {
+    val start = start ?: return null
+    val step = stepSec?.takeIf { it > 0 } ?: return null
+    if (at < start) return null
+    return numericValue?.values?.getOrNull(((at - start) / step).toInt())
 }
 
 private fun <T> nearestValue(values: List<T?>, index: Int): T? =

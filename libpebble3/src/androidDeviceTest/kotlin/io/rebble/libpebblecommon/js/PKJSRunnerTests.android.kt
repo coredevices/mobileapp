@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 import org.junit.Test
 
-fun createJsRunner(
+internal fun createJsRunner(
     libPebble: LibPebble,
     scope: CoroutineScope,
     appInfo: PbwAppInfo,
@@ -47,7 +47,7 @@ fun createJsRunner(
 }
 
 @MediumTest
-class PKJSRunnerTestsAndroid: PKJSRunnerTests(::createJsRunner) {
+internal class PKJSRunnerTestsAndroid: PKJSRunnerTests(::createJsRunner) {
     @Test
     override fun testJSExecution() {
         super.testJSExecution()
@@ -71,5 +71,10 @@ class PKJSRunnerTestsAndroid: PKJSRunnerTests(::createJsRunner) {
     @Test
     override fun testLocalStorageEarlyExecution() {
         super.testLocalStorageEarlyExecution()
+    }
+
+    @Test
+    override fun testLocalStorageSharedLive() {
+        super.testLocalStorageSharedLive()
     }
 }

@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
-class ContactsApi(
+internal class ContactsApi(
     private val contactDao: ContactDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val systemContacts: SystemContacts,

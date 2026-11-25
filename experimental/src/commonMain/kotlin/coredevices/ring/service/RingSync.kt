@@ -1,6 +1,10 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
+import org.jetbrains.compose.resources.getString
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_sync_bug_prompt_body
+import coreapp.ring.generated.resources.ring_sync_bug_prompt_title
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.haversine.BluetoothFailureReason
@@ -15,6 +19,7 @@ import coredevices.haversine.fingerprintMatchesPTF
 import coredevices.haversine.removeDCBias
 import coredevices.resampler.Resampler
 import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.ring.battery.RingBatteryLifeStore
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -28,7 +33,6 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.util.SecondaryProfileWarning
-import coredevices.util.flow.takeUntil
 import coredevices.util.isIOS
 import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +46,10 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -140,6 +148,11 @@ sealed interface RingEvent {
     data class BluetoothPeerPairingIssue(
         override val ringId: String,
     ) : RingEvent
+
+    data class CollectionsEvicted(
+        override val ringId: String,
+        val count: Int,
+    ) : RingEvent
 }
 
 class RingSync(
@@ -154,7 +167,8 @@ class RingSync(
     private val usersDao: UsersDao,
     private val scope: RecordingBackgroundScope,
     private val trace: RingTraceSession,
-    private val deviceManager: IndexDeviceManager
+    private val deviceManager: IndexDeviceManager,
+    private val batteryLifeStore: RingBatteryLifeStore,
 ): KoinComponent {
     companion object {
         private val logger = Logger.withTag("RingSync")
@@ -168,8 +182,6 @@ class RingSync(
         }
     }
     private var syncJob: Job? = null
-    private val scanRestartRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    private var scanRestartRequested = false
     private var lastConnectionActivity: TimeMark? = null
     private val saveSemaphore = Semaphore(permits = 8)
     private val pairingKeyMonitor = RingPairingKeyMonitor(prefs)
@@ -262,7 +274,7 @@ class RingSync(
         }
     }
 
-    @OptIn(FlowPreview::class)
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun startSyncJob(satelliteManager: KMPHaversineSatelliteManager) {
         logger.d { "startSyncJob()" }
         syncJob?.cancel()
@@ -302,6 +314,14 @@ class RingSync(
             satelliteManager.lastRing.onEach {
                 _lastRing.value = it
             }.launchIn(this)
+            // Lets the battery estimate find the paired ring's serial without waiting for a recording.
+            satelliteManager.lastRing.flatMapLatest { satellite ->
+                satellite?.state?.filterNotNull()?.map { satellite to it } ?: emptyFlow()
+            }.onEach { (satellite, state) ->
+                val serial = (state.programmedSerialNumber ?: state.serialNumber).takeIf { it.isNotBlank() }
+                val pairedId = prefs.ringPaired.value?.takeIf { isPairedRing(satellite.id) }
+                if (serial != null && pairedId != null) batteryLifeStore.rememberPairedRing(serial, pairedId)
+            }.launchIn(this)
             val secondaryProfileWarning = get<SecondaryProfileWarning>()
             if (secondaryProfileWarning.pending) {
                 logger.i { "Waiting for secondary profile prompt before starting ring sync" }
@@ -339,7 +359,6 @@ class RingSync(
                                 .catch {
                                     logger.e(it) { "Error during satellite scanning: ${it.message}" }
                                 }
-                                .takeUntil(scanRestartRequests)
                                 .collect { satelliteStatus ->
                                     val t = Clock.System.now()
                                     if (satelliteStatus !is SatelliteStatus.BluetoothFailure) {
@@ -420,6 +439,10 @@ class RingSync(
                                                                 transferStatus.satellite.state.value?.programmedSerialNumber
                                                                     ?: transferStatus.satellite.state.value?.serialNumber
                                                         )?.let { serial ->
+                                                            // Before the cloud writes, so offline transfers still feed the on-phone estimate.
+                                                            val pairedId = prefs.ringPaired.value?.takeIf { isPairedRing(transferStatus.satellite.id) }
+                                                            transferStatus.lifetimeCollectionCount?.let { batteryLifeStore.recordCollections(serial, it.toInt(), pairedId) }
+                                                            batteryLifeStore.recordVoltage(serial, transferStatus.batteryVoltageMilliV?.toInt())
                                                             transferStatus.lifetimeCollectionCount?.let { count ->
                                                                 lifetimeCollectionCount.emit(serial to count.toInt())
                                                             } ?: logger.w {
@@ -494,6 +517,24 @@ class RingSync(
                                                                 }
                                                             }
                                                         }
+                                                    }
+
+                                                    is TransferStatus.CollectionsEvicted -> {
+                                                        val evicted = transferStatus.evictedRange
+                                                        logger.w { "Ring storage was full, collections $evicted were lost before transfer" }
+                                                        trace.markEvent("collections_evicted",
+                                                            TraceEventData.CollectionsEvicted(
+                                                                satellite = satelliteSerial,
+                                                                firstIndex = evicted.first,
+                                                                lastIndex = evicted.last,
+                                                            )
+                                                        )
+                                                        _ringEvents.emit(
+                                                            RingEvent.CollectionsEvicted(
+                                                                ringId = transferStatus.satellite.id,
+                                                                count = evicted.count(),
+                                                            )
+                                                        )
                                                     }
 
                                                     is TransferStatus.TransferFailed -> {
@@ -958,11 +999,7 @@ class RingSync(
                                     }
                                     //logger.d { "Handled satellite status ${satelliteStatus::class.simpleName} in $dur" }
                                 }
-                            if (scanRestartRequested) {
-                                scanRestartRequested = false
-                            } else {
-                                delay(SCAN_INTERVAL)
-                            }
+                            delay(SCAN_INTERVAL)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -982,11 +1019,8 @@ class RingSync(
         reportText: String,
     ) {
         indexNotificationManager.sendBugReportPrompt(
-            "Index ran into a problem",
-            """
-                We detected a data transfer error with a recent recording from your Index 01.
-                Sorry about that! Please help us improve by sending a bug report.
-            """.trimIndent(),
+            getString(Res.string.ring_sync_bug_prompt_title),
+            getString(Res.string.ring_sync_bug_prompt_body),
             context = context,
             reportText = reportText
         )
@@ -999,13 +1033,6 @@ class RingSync(
     /** Whether a connection (transfer, firmware update or programming) started, progressed or ended recently. */
     fun hadRecentConnection(): Boolean =
         lastConnectionActivity?.let { it.elapsedNow() < RECENT_CONNECTION_WINDOW } == true
-
-    /** Tears the scan down; the sync loop brings it straight back up. */
-    fun restartScan() {
-        logger.w { "Restarting ring scan" }
-        scanRestartRequested = true
-        scanRestartRequests.tryEmit(Unit)
-    }
 
     suspend fun lastRingSummary(): String? = lastRing.value?.let {
         val state = it.state.value

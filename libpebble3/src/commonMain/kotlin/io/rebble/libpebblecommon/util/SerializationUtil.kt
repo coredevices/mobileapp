@@ -7,7 +7,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-object SerializationUtil {
+internal object SerializationUtil {
     private val json = Json { ignoreUnknownKeys = true }
     @Throws(SerializationException::class)
     fun serializeAppInfo(appInfo: PbwAppInfo): String = json.encodeToString(appInfo)

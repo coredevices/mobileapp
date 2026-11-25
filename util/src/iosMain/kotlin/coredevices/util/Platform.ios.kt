@@ -1,4 +1,6 @@
 package coredevices.util
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.crashlytics.crashlytics
 import io.ktor.utils.io.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +15,9 @@ class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
     override val deviceModelName: String
         get() = UIDevice.currentDevice.model
+
+    override val previousRunCrashed: Boolean
+        get() = Firebase.crashlytics.didCrashOnPreviousExecution()
 
     override suspend fun openUrl(url: String) {
         val completable = CompletableDeferred<Unit>()

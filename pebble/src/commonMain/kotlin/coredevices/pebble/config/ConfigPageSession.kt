@@ -61,12 +61,6 @@ class ConfigPageSession(
 /** Resolves a uuid to the scripts that can configure it, and keeps up as watchapps come and go. */
 class ConfigPageSessions(private val libPebble: LibPebble) {
 
-    /**
-     * Config messaging is part of the plugin API, so it is off with the rest of it — and a page
-     * that can reach nothing is given no `Pebble` object at all.
-     */
-    val enabled: Boolean get() = libPebble.config.value.watchConfig.enablePlugins
-
     @OptIn(ExperimentalCoroutinesApi::class)
     fun sessionsFor(uuid: String, title: String): Flow<ConfigPageSession> = libPebble.watches
         .map { watches -> watches.filterIsInstance<ConnectedPebbleDevice>() }
@@ -79,12 +73,10 @@ class ConfigPageSessions(private val libPebble: LibPebble) {
         .distinctUntilChanged()
         .map { pkjs ->
             ConfigPageSession(
-                scripts = if (!enabled) emptyMap() else {
-                    buildMap {
-                        pkjs?.let { put(ConfigScriptIds.PKJS, ConfigScript(title, it)) }
-                        libPebble.configMessageTarget(uuid)?.let {
-                            put(ConfigScriptIds.PLUGIN, ConfigScript(title, it))
-                        }
+                scripts = buildMap {
+                    pkjs?.let { put(ConfigScriptIds.PKJS, ConfigScript(title, it)) }
+                    libPebble.configMessageTarget(uuid)?.let {
+                        put(ConfigScriptIds.PLUGIN, ConfigScript(title, it))
                     }
                 },
                 pkjs = pkjs,

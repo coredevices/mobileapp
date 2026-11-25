@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
  * [IosSystemCalendar.supportsPinActions]), so this handler shouldn't be called unless something
  * weird happened.
  */
-class IosCalendarActionHandler : PlatformCalendarActionHandler {
+internal class IosCalendarActionHandler : PlatformCalendarActionHandler {
     private val logger = Logger.withTag("IosCalendarActionHandler")
 
     override suspend fun invoke(pin: TimelinePin, action: BaseAction): TimelineActionResult {

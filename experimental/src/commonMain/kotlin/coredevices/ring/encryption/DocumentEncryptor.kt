@@ -4,6 +4,7 @@ package coredevices.ring.encryption
 
 import coredevices.indexai.data.entity.AssistantSessionDocument
 import coredevices.indexai.data.entity.EncryptedEnvelope
+import coredevices.indexai.data.entity.GeofenceLocationDocument
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.ListDocument
 import coredevices.indexai.data.entity.RecordingDocument
@@ -159,6 +160,38 @@ class DocumentEncryptor(
         return doc.copy(title = sensitive.title, encrypted = null)
     }
 
+    /** Encrypt everything that identifies a saved place into an [EncryptedEnvelope]. */
+    fun encryptGeofenceLocation(doc: GeofenceLocationDocument, keyBase64: String): GeofenceLocationDocument {
+        val sensitive = GeofenceLocationSensitiveFields(doc.name, doc.lat, doc.long, doc.radiusMeters, doc.address)
+        val plaintext = json.encodeToString(GeofenceLocationSensitiveFields.serializer(), sensitive)
+            .encodeToByteArray()
+        return doc.copy(
+            name = "",
+            lat = 0.0,
+            long = 0.0,
+            radiusMeters = 0.0,
+            address = null,
+            encrypted = encryptToEnvelope(plaintext, keyBase64),
+        )
+    }
+
+    /** Decrypt a [GeofenceLocationDocument] that carries an [EncryptedEnvelope]. */
+    fun decryptGeofenceLocation(doc: GeofenceLocationDocument, keyBase64: String): GeofenceLocationDocument {
+        val envelope = doc.encrypted ?: return doc
+        val sensitive = json.decodeFromString(
+            GeofenceLocationSensitiveFields.serializer(),
+            decryptEnvelope(envelope, keyBase64).decodeToString(),
+        )
+        return doc.copy(
+            name = sensitive.name,
+            lat = sensitive.lat,
+            long = sensitive.long,
+            radiusMeters = sensitive.radiusMeters,
+            address = sensitive.address,
+            encrypted = null,
+        )
+    }
+
     private fun encryptToEnvelope(plaintext: ByteArray, keyBase64: String): EncryptedEnvelope {
         val encrypted = AesCbcHmacCrypto.encrypt(plaintext, keyBase64) // IV(16) || HMAC(32) || ciphertext
         return EncryptedEnvelope(
@@ -220,4 +253,13 @@ private data class ItemSensitiveFields(
 @Serializable
 private data class ListSensitiveFields(
     val title: String,
+)
+
+@Serializable
+private data class GeofenceLocationSensitiveFields(
+    val name: String,
+    val lat: Double,
+    val long: Double,
+    val radiusMeters: Double,
+    val address: String?,
 )

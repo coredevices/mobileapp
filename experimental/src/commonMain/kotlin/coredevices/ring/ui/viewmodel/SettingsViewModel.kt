@@ -1,6 +1,9 @@
 package coredevices.ring.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_diagnostics_unreachable
+import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.libindex.device.IndexDeviceManager
@@ -11,6 +14,7 @@ import coredevices.ring.RingDelegate
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
+import coredevices.ring.battery.RingBatteryLifeRepository
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.Preferences
 import coredevices.util.CommonBuildKonfig
@@ -50,8 +54,11 @@ class SettingsViewModel(
     private val indexDeviceManager: IndexDeviceManager,
     private val ringDelegate: RingDelegate,
     legacy: LegacyDestinations,
+    batteryLifeRepository: RingBatteryLifeRepository,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
+    // Eagerly: the section sits low in a lazy list, and should be ready by the time it scrolls in.
+    val batteryLife = batteryLifeRepository.state.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val username = Firebase.auth.authStateChanged
         .map { it?.emailOrNull }
         .stateIn(viewModelScope, SharingStarted.Lazily, Firebase.auth.currentUser?.email)
@@ -61,6 +68,7 @@ class SettingsViewModel(
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
     val autoDismissActionNotifications = preferences.autoDismissActionNotifications
+    val actionValidationEnabled = preferences.actionValidationEnabled
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
@@ -134,7 +142,7 @@ class SettingsViewModel(
                 }
             }
             _diagnosticsState.value = DiagnosticsState.Error(
-                lastError?.message ?: "Couldn't reach your Index 01"
+                lastError?.message ?: getString(Res.string.ring_diagnostics_unreachable)
             )
         }.apply {
             invokeOnCompletion {
@@ -167,6 +175,10 @@ class SettingsViewModel(
 
     fun toggleAutoDismissActionNotifications() {
         preferences.setAutoDismissActionNotifications(!autoDismissActionNotifications.value)
+    }
+
+    fun toggleActionValidation() {
+        preferences.setActionValidationEnabled(!actionValidationEnabled.value)
     }
 
     fun showNoteShortcutDialog() {

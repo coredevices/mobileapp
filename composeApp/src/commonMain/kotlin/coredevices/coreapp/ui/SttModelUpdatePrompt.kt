@@ -38,6 +38,19 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.stt_update_action
+import coreapp.composeapp.generated.resources.stt_update_body
+import coreapp.composeapp.generated.resources.stt_update_downloading
+import coreapp.composeapp.generated.resources.stt_update_failed
+import coreapp.composeapp.generated.resources.stt_update_later
+import coreapp.composeapp.generated.resources.stt_update_title
+import coreapp.composeapp.generated.resources.stt_update_title_downloading
+import coreapp.composeapp.generated.resources.stt_update_title_failed
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.retry
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun SttModelUpdatePrompt() {
@@ -118,9 +131,9 @@ fun SttModelUpdatePrompt() {
         title = {
             Text(
                 when {
-                    downloading -> "Updating voice model"
-                    failed -> "Update failed"
-                    else -> "Voice model update"
+                    downloading -> stringResource(Res.string.stt_update_title_downloading)
+                    failed -> stringResource(Res.string.stt_update_title_failed)
+                    else -> stringResource(Res.string.stt_update_title)
                 }
             )
         },
@@ -129,21 +142,21 @@ fun SttModelUpdatePrompt() {
                 TextButton(onClick = {
                     modelManager.cancelDownload()
                     downloading = false
-                }) { Text("Cancel") }
+                }) { Text(stringResource(UtilRes.string.cancel)) }
             } else {
-                TextButton(onClick = { needsUpdate = false }) { Text("Later") }
-                TextButton(onClick = { startDownload() }) { Text(if (failed) "Retry" else "Update") }
+                TextButton(onClick = { needsUpdate = false }) { Text(stringResource(Res.string.stt_update_later)) }
+                TextButton(onClick = { startDownload() }) { Text(if (failed) stringResource(UtilRes.string.retry) else stringResource(Res.string.stt_update_action)) }
             }
         },
     ) {
         when {
             downloading -> {
-                Text("Downloading the updated model. This may take a few minutes.")
+                Text(stringResource(Res.string.stt_update_downloading))
                 Spacer(Modifier.height(24.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            failed -> Text("The download didn't finish. Check your connection and try again.")
-            else -> Text("We've improved on-device voice recognition. Update the model to keep transcribing offline.")
+            failed -> Text(stringResource(Res.string.stt_update_failed))
+            else -> Text(stringResource(Res.string.stt_update_body))
         }
     }
 }

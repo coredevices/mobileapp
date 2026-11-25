@@ -6,12 +6,13 @@ import androidx.room.RewriteQueriesToDropUnusedColumns
 import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
+import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
-interface LockerEntryRealDao : LockerEntryDao {
+internal interface LockerEntryRealDao : LockerEntryDao {
     @Query("""
         SELECT * FROM LockerEntryEntity
         WHERE deleted = 0
@@ -88,31 +89,32 @@ interface LockerEntryRealDao : LockerEntryDao {
 
     @Query("""
         UPDATE LockerEntryEntity
-        SET microphoneGranted = :granted, recordHashcode = :hashcode
-        WHERE id = :id AND microphoneGranted != :granted
+        SET watchPermissions = :permissions, recordHashcode = :hashcode
+        WHERE id = :id AND watchPermissions != :permissions
     """)
-    suspend fun updateMicrophoneGrant(id: Uuid, granted: Boolean, hashcode: Int)
+    suspend fun updateWatchPermissions(id: Uuid, permissions: Int, hashcode: Int)
 
+    /** Apps missing from [permissions] have none. */
     @Transaction
-    suspend fun syncMicrophoneGrants(grants: Set<Uuid>) {
+    suspend fun syncWatchPermissions(permissions: Map<Uuid, Int>) {
         getAll().forEach { entry ->
-            val granted = entry.id in grants
-            if (entry.microphoneGranted != granted) {
-                updateMicrophoneGrant(entry.id, granted, entry.copy(microphoneGranted = granted).recordHashCode())
+            val bits = permissions[entry.id] ?: 0
+            if (entry.watchPermissions != bits) {
+                updateWatchPermissions(entry.id, bits, entry.copy(watchPermissions = bits).recordHashCode())
             }
         }
     }
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
-        insertOrReplace(entry)
+        insertOrReplace(entry.asEntity())
         updateOrder(entry.type)
         updateSync(syncLimit)
     }
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entries: List<LockerEntry>, syncLimit: Int) {
-        insertOrReplace(entries)
+        insertOrReplaceAll(entries.map { it.asEntity() })
         AppType.entries.forEach {
             updateOrder(it.code)
         }
@@ -226,3 +228,5 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     fun getActiveWatchface(): Flow<LockerEntry?>
 }
+
+private fun LockerEntry.asEntity() = LockerEntryEntity(recordHashcode = recordHashCode(), deleted = false, record = this)

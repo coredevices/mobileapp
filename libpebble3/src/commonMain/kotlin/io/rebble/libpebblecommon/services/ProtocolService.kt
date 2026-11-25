@@ -1,3 +1,3 @@
 package io.rebble.libpebblecommon.services
 
-interface ProtocolService
+internal interface ProtocolService

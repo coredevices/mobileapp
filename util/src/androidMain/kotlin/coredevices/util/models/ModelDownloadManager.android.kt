@@ -1,5 +1,6 @@
 package coredevices.util.models
 
+import coredevices.util.R
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -232,8 +233,8 @@ class ModelDownloadService : JobService(), KoinComponent {
         logger.i { "Starting download job for model: $modelSlug, stt = $isStt" }
         createChannel()
         val notification = notifBuilder()
-            .setContentTitle("Downloading Model")
-            .setContentText("Downloading model: $modelSlug.\nThis could take a few minutes...")
+            .setContentTitle(getString(R.string.misc_model_notif_downloading_title))
+            .setContentText(getString(R.string.misc_model_notif_downloading_text, modelSlug))
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(0, 0, true)
             .setOngoing(true)
@@ -261,8 +262,8 @@ class ModelDownloadService : JobService(), KoinComponent {
                 notificationManager.notify(
                     modelSlug.hashCode(),
                     notifBuilder()
-                        .setContentTitle("Model Downloaded")
-                        .setContentText("Successfully downloaded model: $modelSlug")
+                        .setContentTitle(getString(R.string.misc_model_notif_downloaded_title))
+                        .setContentText(getString(R.string.misc_model_notif_downloaded_text, modelSlug))
                         .setSmallIcon(android.R.drawable.stat_sys_download_done)
                         .setOngoing(false)
                         .build()
@@ -273,8 +274,8 @@ class ModelDownloadService : JobService(), KoinComponent {
                 notificationManager.notify(
                     modelSlug.hashCode(),
                     notifBuilder()
-                        .setContentTitle("Model Download Failed")
-                        .setContentText("Download timed out: $modelSlug")
+                        .setContentTitle(getString(R.string.misc_model_notif_failed_title))
+                        .setContentText(getString(R.string.misc_model_notif_timed_out_text, modelSlug))
                         .setSmallIcon(android.R.drawable.stat_notify_error)
                         .setOngoing(false)
                         .build()
@@ -290,8 +291,8 @@ class ModelDownloadService : JobService(), KoinComponent {
                 notificationManager.notify(
                     modelSlug.hashCode(),
                     notifBuilder()
-                        .setContentTitle("Model Download Failed")
-                        .setContentText("Failed to download model: $modelSlug")
+                        .setContentTitle(getString(R.string.misc_model_notif_failed_title))
+                        .setContentText(getString(R.string.misc_model_notif_failed_text, modelSlug))
                         .setSmallIcon(android.R.drawable.stat_notify_error)
                         .setOngoing(false)
                         .build()
@@ -334,14 +335,14 @@ class ModelDownloadService : JobService(), KoinComponent {
             heartbeatStore.clear(modelSlug)
         }
         val title = when (reason) {
-            JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> "Model Download Paused"
-            JobParameters.STOP_REASON_TIMEOUT -> "Model Download Error"
-            else -> "Model Download Cancelled"
+            JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> getString(R.string.misc_model_notif_paused_title)
+            JobParameters.STOP_REASON_TIMEOUT -> getString(R.string.misc_model_notif_error_title)
+            else -> getString(R.string.misc_model_notif_cancelled_title)
         }
         val text = when (reason) {
-            JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> "Download paused due to network conditions."
-            JobParameters.STOP_REASON_TIMEOUT -> "Timed out trying to download model: $modelSlug."
-            else -> "Cancelled download."
+            JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> getString(R.string.misc_model_notif_paused_text)
+            JobParameters.STOP_REASON_TIMEOUT -> getString(R.string.misc_model_notif_stop_timeout_text, modelSlug)
+            else -> getString(R.string.misc_model_notif_cancelled_text)
         }
         val icon = when (reason) {
             JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> android.R.drawable.stat_sys_warning
@@ -376,10 +377,10 @@ class ModelDownloadService : JobService(), KoinComponent {
     private fun createChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Model Downloads",
+            getString(R.string.misc_model_notif_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Speech and language model download progress"
+            description = getString(R.string.misc_model_notif_channel_description)
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)

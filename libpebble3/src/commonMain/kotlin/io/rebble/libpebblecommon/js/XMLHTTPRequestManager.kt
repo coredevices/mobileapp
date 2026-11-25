@@ -10,19 +10,28 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsBytes
-import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.authority
+import io.ktor.http.charset
 import io.ktor.http.isSecure
 import io.ktor.http.takeFrom
+import io.ktor.util.decodeBase64Bytes
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
+import io.ktor.utils.io.charsets.Charsets
 import io.ktor.utils.io.charsets.MalformedInputException
+import io.ktor.utils.io.charsets.decode
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.requestBytes
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
+import kotlinx.atomicfu.atomic
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -31,8 +40,12 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer as KotlinxBuffer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okio.Buffer
+import okio.GzipSource
+import okio.buffer
 import kotlin.uuid.Uuid
 
 private const val UNSENT = 0
@@ -41,13 +54,14 @@ private const val HEADERS = 2
 private const val LOADING = 3
 private const val DONE = 4
 
-class XMLHTTPRequestManager(
+internal class XMLHTTPRequestManager(
     private val scope: CoroutineScope,
     private val eval: (String) -> Unit,
     private val httpInterceptorManager: HttpInterceptorManager,
     private val appUuid: Uuid,
     private val client: HttpClient,
     private val networkAccess: NetworkAccess,
+    private val dataUsage: DataUsageRecorder,
     /**
      * The JS object responses are delivered into: `<jsTarget>._instances.get(id)`. PKJS gets the
      * `XMLHttpRequest` class it writes against; a plugin gets `fetch`'s own registry, so nothing
@@ -55,13 +69,15 @@ class XMLHTTPRequestManager(
      */
     private val jsTarget: String = "XMLHttpRequest",
 ): JsEngineInterface, AutoCloseable {
+    // Calls arrive on the engine's bridge thread while requests finish on the scope's.
+    private val lock = SynchronizedObject()
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
     private val logger = Logger.withTag("XMLHTTPRequestManager")
     private val noRedirectClientLazy = lazy { client.config { followRedirects = false } }
     private val noRedirectClient by noRedirectClientLazy
 
-    override val methods = listOf(
+    override val methods: List<String> = listOf(
         "getXHRInstanceID",
         "open",
         "setRequestHeader",
@@ -69,9 +85,9 @@ class XMLHTTPRequestManager(
         "abort",
     )
 
-    override val name = "_XMLHTTPRequestManager"
+    override val name: String = "_XMLHTTPRequestManager"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+    override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
         "getXHRInstanceID" -> getXHRInstanceID()
         "open" -> {
             open(
@@ -89,46 +105,51 @@ class XMLHTTPRequestManager(
             null
         }
         "setRequestHeader" -> { setRequestHeader((args[0] as Number).toDouble(), args[1].toString(), args[2] ?: ""); null }
-        "send" -> { send((args[0] as Number).toDouble(), args[1]?.toString() ?: "", args.getOrNull(2)); null }
+        "send" -> send((args[0] as Number).toDouble(), args[1]?.toString() ?: "", args.getOrNull(2), args.getOrNull(3) == true)
         "abort" -> { abort((args[0] as Number).toDouble()); null }
         else -> error("Unknown method: $method")
     }
 
-    private fun getXHRInstanceID(): Int {
+    private fun getXHRInstanceID(): Int = synchronized(lock) {
         val id = ++lastInstance
         instances[id] = XHRInstance(id)
-        return id
+        id
     }
+
+    private fun instance(id: Double): XHRInstance? = synchronized(lock) { instances[id.toInt()] }
 
     // JSC uses double for numbers
     private fun open(instanceId: Double, method: String, url: String, async: Boolean, user: String, password: String) {
         logger.d { "Instance $instanceId open()" }
         val userNullable = user.ifEmpty { null }
         val passwordNullable = password.ifEmpty { null }
-        instances[instanceId.toInt()]?.open(method, url, async, userNullable, passwordNullable)
+        // A finished request is forgotten, but the same object can be opened again.
+        val instance = synchronized(lock) { instances.getOrPut(instanceId.toInt()) { XHRInstance(instanceId.toInt()) } }
+        instance.open(method, url, async, userNullable, passwordNullable)
     }
 
     private fun setRequestHeader(instanceId: Double, header: String, value: Any) {
-        instances[instanceId.toInt()]?.setRequestHeader(header, value)
+        instance(instanceId)?.setRequestHeader(header, value)
     }
 
-    private fun send(instanceId: Double, responseType: String, data: Any?) {
+    /** [binary]: [data] is a binary body, as base64. */
+    private fun send(instanceId: Double, responseType: String, data: Any?, binary: Boolean): String? {
         logger.d { "Instance $instanceId send()" }
         val responseTypeNullable = responseType.ifEmpty { null }
         val bytes = when (data) {
             is ByteArray -> data
-            is String -> data.encodeToByteArray()
+            is String -> if (binary) data.decodeBase64Bytes() else data.encodeToByteArray()
             null -> null
             else -> {
                 logger.e { "Invalid data type for send: ${data::class.simpleName}" }
                 null
             }
         }
-        instances[instanceId.toInt()]?.send(bytes, responseTypeNullable)
+        return instance(instanceId)?.send(bytes, responseTypeNullable)
     }
 
     private fun abort(instanceId: Double) {
-        instances[instanceId.toInt()]?.abort()
+        instance(instanceId)?.abort()
     }
 
     inner class XHRInstance(val id: Int) {
@@ -139,6 +160,8 @@ class XMLHTTPRequestManager(
         private var password: String? = null
         private val headers = mutableMapOf<String, Any>()
         var requestJob: Job? = null
+        /** Answered, or aborted: whichever comes first is all the script hears. */
+        private val settled = atomic(false)
 
         private val jsInstance = "$jsTarget._instances.get($id)"
 
@@ -148,10 +171,9 @@ class XMLHTTPRequestManager(
         }
 
         private fun dispatchEvent(event: XHREvent) {
-            val evt = "{\"type\": \"${event.toJsName()}\"}"
             // The fetch shim drops its instance on the resolving event, so a trailing one (load is
             // followed by loadend) would otherwise call a method on undefined.
-            eval("$jsInstance && $jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
+            eval("$jsInstance && $jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, {type: ${Json.encodeToString(event.toJsName())}})")
         }
 
         fun open(method: String, url: String, async: Boolean?, user: String?, password: String?) {
@@ -161,6 +183,7 @@ class XMLHTTPRequestManager(
             this.user = user
             this.password = password
             this.headers.clear()
+            settled.value = false
             if (!this.async) {
                 logger.w { "Synchronous XHR opened" }
             }
@@ -186,37 +209,36 @@ class XMLHTTPRequestManager(
             dispatchEvent(XHREvent.Error)
         }
 
-        fun send(data: ByteArray?, responseType: String?) {
+        /** For a synchronous request, the outcome for the shim to apply before `send()` returns. */
+        fun send(data: ByteArray?, responseType: String?): String? {
             // What was checked is what's sent, whatever open()/setRequestHeader() do meanwhile.
             val url = url!!
             val method = method!!
             val user = user
             val password = password
             val headers = headers.toMap()
-            suspend fun execute() {
-                if (async) {
-                    dispatchEvent(XHREvent.LoadStart)
-                }
+            val sentBytes = requestBytes(method.value, url, headers, data?.size?.toLong() ?: 0)
+            // Asking for gzip ourselves stops OkHttp unzipping transparently, so the compressed size can be counted.
+            val askGzip = headers.keys.none {
+                it.equals(HttpHeaders.AcceptEncoding, ignoreCase = true) || it.equals(HttpHeaders.Range, ignoreCase = true)
+            }
+            // On iOS the system unzips anyway and Ktor drops Content-Encoding, so this measures it there.
+            val wireBytes = WireBytes()
+            suspend fun execute(): Outcome {
                 // Served on the phone, so no network check; interceptors check their own permissions.
                 if (httpInterceptorManager.shouldIntercept(url)) {
                     val response = httpInterceptorManager.onIntercepted(url, method.value, data?.decodeToString(), appUuid)
-                    scope.launch {
-                        val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
-                        val status = Json.encodeToString(response.status)
-                        val statusText = Json.encodeToString(if (response.status == 200) "OK" else "Error")
-                        val body = Json.encodeToString(response.result)
-                        eval("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
-                        changeReadyState(DONE)
-                        dispatchEvent(XHREvent.Load)
-                        dispatchEvent(XHREvent.LoadEnd)
-                    }
-                    return
+                    return Outcome.Response(
+                        headersJson = Json.encodeToString<Map<String, String>>(emptyMap()),
+                        status = response.status,
+                        statusText = if (response.status == 200) "OK" else "Error",
+                        bodyJson = Json.encodeToString(response.result),
+                    )
                 }
                 val verdict = checkAccess(url, headers)
                 if (verdict is PluginNetworkVerdict.Denied) {
                     logger.w { "$appUuid blocked: ${verdict.reason}" }
-                    dispatchError(notAllowed = true)
-                    return
+                    return Outcome.Error(notAllowed = true)
                 }
                 val response = try {
                     noRedirectClient.requestCheckingRedirects(url, method, headers, ::checkAccess) {
@@ -230,43 +252,51 @@ class XMLHTTPRequestManager(
                         headers.entries.forEach {
                             header(it.key, it.value)
                         }
+                        if (askGzip) header(HttpHeaders.AcceptEncoding, "gzip")
+                        wireBytes.tag(this)
                     }
                 } catch (e: RedirectDeniedException) {
                     logger.w { "$appUuid blocked redirect: ${e.message}" }
-                    scope.launch { dispatchError(notAllowed = true) }
-                    return
+                    return Outcome.Error(notAllowed = true)
                 } catch (e: TimeoutCancellationException) {
                     logger.e { "Request timed out: ${e.message}" }
-                    scope.launch {
-                        changeReadyState(DONE)
-                        dispatchEvent(XHREvent.Timeout)
-                    }
-                    return
+                    dataUsage.record(appUuid, url, sentBytes, 0, requests = 1)
+                    return Outcome.Timeout
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logger.e(e) { "Request (size ${data?.size}) failed: ${e.message}" }
-                    scope.launch { dispatchError() }
-                    return
+                    dataUsage.record(appUuid, url, sentBytes, 0, requests = 1)
+                    return Outcome.Error(notAllowed = false)
                 }
+                val gzipped = askGzip && response.headers[HttpHeaders.ContentEncoding].equals("gzip", ignoreCase = true)
                 val responseHeaders = try {
                     Json.encodeToString(response.headers
                         .flattenEntries()
+                        .filter {
+                            !gzipped || !(it.first.equals(HttpHeaders.ContentEncoding, ignoreCase = true) ||
+                                it.first.equals(HttpHeaders.ContentLength, ignoreCase = true))
+                        }
                         .toMap()
                         .mapKeys { it.key.lowercase() })
                 } catch (e: Throwable) {
                     logger.e(e) { "Failed to serialize response headers: ${e.message}" }
-                    scope.launch { dispatchError() }
-                    return
+                    return Outcome.Error(notAllowed = false)
                 }
+                var receivedBytes = 0L
                 val body = try {
+                    val raw = response.bodyAsBytes()
+                    receivedBytes = wireBytes.take() ?: raw.size.toLong()
+                    val bytes = if (gzipped && raw.isNotEmpty()) gunzip(raw) else raw
                     when (responseType) {
-                        "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().encodeBase64())
+                        "arraybuffer" -> Json.encodeToString(bytes.encodeBase64())
                         "text", "", "json", null -> {
                             val text = try {
-                                response.bodyAsText()
+                                (response.charset() ?: Charsets.UTF_8).newDecoder()
+                                    .decode(KotlinxBuffer().apply { write(bytes) })
                             } catch (e: MalformedInputException) {
                                 logger.e(e) { "Response has charset errors: ${e.message}. Decoding as UTF-8 with replacements" }
-                                // Replace invalid sequences
-                                response.bodyAsBytes().decodeToString(throwOnInvalidSequence = false)
+                                bytes.decodeToString(throwOnInvalidSequence = false)
                             }
                             Json.encodeToString(text)
                         }
@@ -277,31 +307,50 @@ class XMLHTTPRequestManager(
                     }
                 } catch (e: Throwable) {
                     logger.e(e) { "Failed to read response body (type $responseType): ${e.message}" }
-                    scope.launch { dispatchError() }
-                    return
+                    return Outcome.Error(notAllowed = false)
+                } finally {
+                    dataUsage.record(appUuid, url, sentBytes, receivedBytes, requests = 1)
                 }
-                val status = Json.encodeToString(response.status.value)
-                val statusText = Json.encodeToString(response.status.description)
-                logger.v { "XHR Response: $status $statusText" }
-                scope.launch {
-                    eval("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
+                logger.v { "XHR Response: ${response.status.value} ${response.status.description}" }
+                return Outcome.Response(responseHeaders, response.status.value, response.status.description, body)
+            }
+            // Drops a measured size that a failed request never read.
+            suspend fun executeAndForgetSize(): Outcome = try { execute() } finally { wireBytes.take() }
+            if (!async) {
+                val outcome = runBlocking(Dispatchers.IO) { executeAndForgetSize() }
+                if (!settled.compareAndSet(expect = false, update = true)) return null
+                forget()
+                return outcome.toSyncResult()
+            }
+            requestJob = scope.launch(Dispatchers.IO) {
+                dispatchEvent(XHREvent.LoadStart)
+                val outcome = executeAndForgetSize()
+                scope.launch { deliver(outcome) }
+            }
+            return null
+        }
+
+        private fun deliver(outcome: Outcome) {
+            if (!settled.compareAndSet(expect = false, update = true)) return
+            forget()
+            when (outcome) {
+                is Outcome.Response -> {
+                    eval("$jsInstance._onResponseComplete(${outcome.headersJson}, ${outcome.status}, ${Json.encodeToString(outcome.statusText)}, ${outcome.bodyJson})")
                     changeReadyState(DONE)
                     dispatchEvent(XHREvent.Load)
                     dispatchEvent(XHREvent.LoadEnd)
                 }
-            }
-            if (async) {
-                requestJob = scope.launch(Dispatchers.IO) {
-                    execute()
-                }
-            } else {
-                runBlocking(Dispatchers.IO) {
-                    execute()
+                is Outcome.Error -> dispatchError(outcome.notAllowed)
+                Outcome.Timeout -> {
+                    changeReadyState(DONE)
+                    dispatchEvent(XHREvent.Timeout)
                 }
             }
         }
 
         fun abort() {
+            if (!settled.compareAndSet(expect = false, update = true)) return
+            forget()
             requestJob?.cancel("Aborted by JS")
             requestJob = null
             changeReadyState(DONE)
@@ -309,12 +358,18 @@ class XMLHTTPRequestManager(
         }
     }
 
+    private fun XHRInstance.forget() = synchronized(lock) {
+        if (instances[id] === this) instances.remove(id)
+    }
+
     override fun close() {
-        instances.values.forEach { it.requestJob?.cancel("Closing") }
-        instances.clear()
+        val open = synchronized(lock) { instances.values.toList().also { instances.clear() } }
+        open.forEach { it.requestJob?.cancel("Closing") }
         if (noRedirectClientLazy.isInitialized()) noRedirectClient.close()
     }
 }
+
+private fun gunzip(bytes: ByteArray): ByteArray = GzipSource(Buffer().write(bytes)).buffer().readByteArray()
 
 private val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
 private const val MAX_REDIRECTS = 20
@@ -368,7 +423,21 @@ internal fun hostHeaderUrl(url: String, headers: Map<String, Any>): String? {
     return "${url.substringBefore("://")}://$host/"
 }
 
-enum class XHREvent {
+private sealed interface Outcome {
+    /** [headersJson] and [bodyJson] are already JS literals. */
+    data class Response(val headersJson: String, val status: Int, val statusText: String, val bodyJson: String) : Outcome
+    data class Error(val notAllowed: Boolean) : Outcome
+    data object Timeout : Outcome
+}
+
+/** What the shim's `_completeSync` applies. */
+private fun Outcome.toSyncResult(): String = when (this) {
+    is Outcome.Response -> """{"type":"load","headers":$headersJson,"status":$status,"statusText":${Json.encodeToString(statusText)},"body":$bodyJson}"""
+    is Outcome.Error -> """{"type":"error","notAllowed":$notAllowed}"""
+    Outcome.Timeout -> """{"type":"timeout"}"""
+}
+
+internal enum class XHREvent {
     Abort,
     Error,
     Load,
@@ -389,7 +458,7 @@ enum class XHREvent {
 }
 
 @Serializable
-data class CompleteXHRResponse(
+internal data class CompleteXHRResponse(
     val responseHeaders: Map<String, String>,
     val responseData: String,
     val status: Int,

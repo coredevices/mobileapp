@@ -1,6 +1,7 @@
 package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
+import coredevices.indexai.agent.ToolCallValidator
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
@@ -12,6 +13,7 @@ class IndexAgentNenya(
     nenyaClient: NenyaClient,
     conversation: List<ConversationMessageDocument>,
     captureType: DefaultCaptureType = DefaultCaptureType.Note,
+    override val toolCallValidator: ToolCallValidator? = null,
 ): AgentNenya(nenyaClient, agentContext(captureType), NenyaModel.Default, conversation) {
     override val label = "Nenya"
 
@@ -30,6 +32,7 @@ help with a multitude of tasks in addition to this too.
  - A request that pairs a future date or time with a task is a reminder request even without the word 'remind', for example 'Thursday at 2pm to try the agent SDK', 'tomorrow: call the bank', or 'in 20 minutes take the bread out' should create reminders. A bare duration with no task (e.g. just '20 minutes') stays a note unless a timer was requested.
  - 'Remember to <do something>' means the same as 'remind me to <do something>': create a reminder, without a time if none was given. For example 'Remember to put the birthday on the calendar' should create a reminder with the message 'Put the birthday on the calendar'. Only 'remember' followed by a fact rather than an action to take, for example 'remember that the gate code is 4321', stays a note.
  - Prioritise the first action a user requests, for example 'remind me tomorrow to message John' should create a reminder and not attempt a message.
+ - Only add to a list when the user names a list or asks to add or buy something. A bare item name on its own, for example 'tortilla chips', is a $capture, not a list item.
  - When the user provides a list of items intended to be added to the same list, you may perform multiple calls to achieve adding separate items if required.
  - When fulfilling a user request, do not also passively take a $capture if you have already taken another requested action.
 

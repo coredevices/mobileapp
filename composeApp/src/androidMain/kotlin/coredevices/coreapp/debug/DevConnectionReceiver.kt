@@ -35,7 +35,7 @@ class DevConnectionReceiver : BroadcastReceiver(), KoinComponent {
         val pendingResult = goAsync()
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                val watch = libPebble.watches.value
+                val watch = libPebble.watches.first()
                     .filterIsInstance<ConnectedPebble.DevConnection>()
                     .firstOrNull()
                 if (watch == null) {

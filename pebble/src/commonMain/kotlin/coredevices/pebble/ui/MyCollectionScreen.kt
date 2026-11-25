@@ -45,6 +45,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlin.uuid.Uuid
+import org.jetbrains.compose.resources.getString
 
 private val logger = Logger.withTag("MyCollectionScreen")
 
@@ -66,7 +67,7 @@ fun MyCollectionScreen(
     val searchState = rememberSearchState()
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(searchState)
-        topBarParams.title(appType.myCollectionName())
+        topBarParams.title(getString(appType.myCollectionName()))
         topBarParams.actions {}
     }
     val lockerEntries = loadLockerEntries(

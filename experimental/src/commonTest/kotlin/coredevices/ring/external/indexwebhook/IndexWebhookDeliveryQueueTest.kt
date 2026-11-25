@@ -11,10 +11,13 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.storage.StagedRecordingUpload
+import coredevices.util.Platform
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.queue.TaskStatus
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -86,7 +89,7 @@ class IndexWebhookDeliveryQueueTest {
         assertNull(runRepository.runs(RingGesture.Hold).first().single().retryDeliveryId)
 
         val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
-        assertFailsWith<RecoverableTaskException> { queue(retryable).processTask(lastAttempt) }
+        assertFailsWith<IllegalStateException> { queue(retryable).processTask(lastAttempt) }
         assertEquals("text-7", runRepository.runs(RingGesture.Hold).first().first().retryDeliveryId)
 
         val permanent = FakeWebhookApi(result(ok = false, retryable = false))
@@ -99,6 +102,43 @@ class IndexWebhookDeliveryQueueTest {
         val api = FakeWebhookApi(result = null)
         queue(api).processTask(delivery())
         assertEquals(1, api.calls.size)
+    }
+
+    @Test
+    fun reportsEachAttemptsOutcome() = runTest {
+        val failure = result(ok = false, retryable = true)
+        val queue = queue(FakeWebhookApi(failure))
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<RecoverableTaskException> { queue.processTask(delivery()) }
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", failure, willRetry = true), outcome.await())
+
+        val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
+        val finalOutcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<IllegalStateException> { queue.processTask(lastAttempt) }
+        assertEquals(false, finalOutcome.await().willRetry)
+
+        val off = queue(FakeWebhookApi(result = null))
+        val offOutcome = async(start = CoroutineStart.UNDISPATCHED) { off.outcomes.first() }
+        off.processTask(delivery())
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", result = null, willRetry = false), offOutcome.await())
+    }
+
+    @Test
+    fun clickEventSendsAsAButtonEventWithItsPressTime() = runTest {
+        val api = FakeWebhookApi(result(ok = true))
+        val click = delivery().copy(deliveryId = "click-1", gesture = RingGesture.TripleClick, transcription = null)
+        queue(api).processTask(click)
+
+        assertEquals(listOf(FakeWebhookApi.ButtonCall(RingGesture.TripleClick, created, "click-1")), api.buttonCalls)
+        assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun failedClickEventIsRetried() = runTest {
+        val api = FakeWebhookApi(result(ok = false, retryable = true))
+        val click = delivery().copy(deliveryId = "click-1", gesture = RingGesture.Click, transcription = null)
+        assertFailsWith<RecoverableTaskException> { queue(api).processTask(click) }
+        assertFalse(runRepository.runs(RingGesture.Click).first().single().ok)
     }
 
     @Test
@@ -134,6 +174,7 @@ internal fun testDeliveryQueue(
     localRecordingDao = FakeLocalRecordingDao,
     scope = RecordingBackgroundScope(scope),
     settings = MapSettings(),
+    platform = FakePlatform,
 )
 
 private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : IndexWebhookApi {
@@ -159,7 +200,18 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
         return result
     }
 
-    override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+    data class ButtonCall(val gesture: RingGesture, val pressedAt: Instant, val deliveryId: String)
+
+    val buttonCalls = mutableListOf<ButtonCall>()
+
+    override suspend fun sendButtonEvent(
+        gesture: RingGesture,
+        pressedAt: Instant,
+        deliveryId: String,
+    ): IndexWebhookRunResult? {
+        buttonCalls += ButtonCall(gesture, pressedAt, deliveryId)
+        return result
+    }
 
     override suspend fun sendTestEvent(
         gesture: RingGesture,
@@ -168,6 +220,7 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
         signRequests: Boolean,
         signingSecret: String?,
         clickPayload: String,
+        sendJson: Boolean,
     ) = throw NotImplementedError("unused")
 }
 
@@ -223,6 +276,7 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String) = TODO()
     override suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String) = TODO()
     override suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean) = TODO()
+    override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = TODO()
     override suspend fun persistRecording(id: String) = TODO()
     override suspend fun uploadRecordingPcm(id: String, sampleRate: Int, pcmBytes: ByteArray, encryptionKey: String?) = TODO()
     override fun deleteRecording(id: String) = TODO()
@@ -233,4 +287,11 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
     override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
     override fun deleteStagedRecording(id: String) = TODO()
+}
+
+private object FakePlatform : Platform {
+    override val name = "Test"
+    override val deviceModelName = "Test"
+    override suspend fun openUrl(url: String) {}
+    override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) = task()
 }

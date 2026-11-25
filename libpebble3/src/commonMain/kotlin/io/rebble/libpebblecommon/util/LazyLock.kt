@@ -7,8 +7,8 @@ import kotlinx.coroutines.runBlocking
  * Lock specific functions until related async function is complete
  * Use sparingly, intended for asynchronously retrying but blocking completely new attempts while we do so
  */
-class LazyLock {
-    var isLocked = false
+internal class LazyLock {
+    var isLocked: Boolean = false
 
     /**
      * Causes syncLock to block the thread / coroutine it is called on until unlock() used

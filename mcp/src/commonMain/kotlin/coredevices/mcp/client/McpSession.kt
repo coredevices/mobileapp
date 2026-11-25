@@ -8,7 +8,9 @@ import coredevices.mcp.data.ToolCallResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlin.coroutines.cancellation.CancellationException
 
 open class McpSession(
     private val integrations: List<McpIntegration>,
@@ -16,6 +18,7 @@ open class McpSession(
 ) {
     companion object {
         private val logger = Logger.withTag("McpSession")
+        private const val SUMMARY_SAMPLES_PER_GROUP = 6
     }
     private val integrationLookup: Map<String, McpIntegration> = integrations.associateBy { it.name }
 
@@ -36,7 +39,15 @@ open class McpSession(
         }
     }
 
-    open suspend fun listTools(): List<McpSessionTool> {
+    open suspend fun listTools(): List<McpSessionTool> = listAllTools()
+
+    /**
+     * One object per integration with its tool count and a sample of its tools; empty when there are none.
+     * Covers every tool, including those a lazy session has not loaded.
+     */
+    suspend fun summarizeTools(): JsonArray = ToolCatalog(listAllTools(), SUMMARY_SAMPLES_PER_GROUP).toJson()
+
+    private suspend fun listAllTools(): List<McpSessionTool> {
         return integrations.map {
             scope.async {
                 try {
@@ -74,9 +85,14 @@ open class McpSession(
             .takeIf { it.isNotEmpty() }
     }
 
+    /** What [integrationName] alone adds to [getExtraContext]; null when it is not in the session. */
+    suspend fun getIntegrationExtraContext(integrationName: String, context: SessionContext?): String? =
+        integrationLookup[integrationName]?.getExtraContext(context)
+
     /**
      * Calls a tool by its integration and tool name.
      * @throws IllegalArgumentException if requireExists is true and the integration is not found.
+     * @throws McpToolCallException if the integration fails to make the call.
      * @param integrationName The name of the integration.
      * @param toolName The name of the tool to call.
      * @param jsonInput The JSON input parameters for the tool.
@@ -100,9 +116,17 @@ open class McpSession(
                     SemanticResult.GenericFailure("Invalid tool call")
                 )
             }
-        return integration.callTool(toolName, jsonInput, context)
+        return try {
+            integration.callTool(toolName, jsonInput, context)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw McpToolCallException("Failed to call tool: ${e.message}", e)
+        }
     }
 }
+
+class McpToolCallException(message: String, cause: Throwable) : Exception(message, cause)
 
 data class McpSessionTool(
     val integrationName: String,

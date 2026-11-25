@@ -16,10 +16,10 @@ import okio.Path.Companion.toPath
 import okio.SYSTEM
 import okio.openZip
 
-object DiskUtil {
+public object DiskUtil {
     private const val MANIFEST_FILENAME = "manifest.json"
     private const val APPINFO_FILENAME = "appinfo.json"
-    val pbwJson = Json {
+    public val pbwJson: Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
@@ -40,7 +40,7 @@ object DiskUtil {
         }
     }
 
-    fun getPbwManifest(pbwPath: Path, watchType: WatchType): PbwManifest? {
+    internal fun getPbwManifest(pbwPath: Path, watchType: WatchType): PbwManifest? {
         val source = try {
             openZip(pbwPath).platformSource(watchType, MANIFEST_FILENAME)
         } catch (e: IOException) {
@@ -49,14 +49,14 @@ object DiskUtil {
         return source.use { pbwJson.decodeFromString(source.readString()) }
     }
 
-    fun pkjsFileExists(pbwPath: Path): Boolean {
+    internal fun pkjsFileExists(pbwPath: Path): Boolean {
         return openZip(pbwPath).exists("pebble-js-app.js".toPath())
     }
 
     /**
      * @throws IllegalStateException if pbw does not contain manifest with that watch type
      */
-    fun requirePbwAppInfo(pbwPath: Path): PbwAppInfo {
+    internal fun requirePbwAppInfo(pbwPath: Path): PbwAppInfo {
         val source = try {
             openZip(pbwPath).source(APPINFO_FILENAME.toPath()).asKotlinxIoRawSource()
         } catch (e: IOException) {
@@ -68,7 +68,7 @@ object DiskUtil {
     /**
      * @throws IllegalStateException if pbw does not contain binary blob with that name for that watch type
      */
-    fun requirePbwBinaryBlob(pbwPath: Path, watchType: WatchType, blobName: String): Source {
+    internal fun requirePbwBinaryBlob(pbwPath: Path, watchType: WatchType, blobName: String): Source {
         return try {
             openZip(pbwPath).platformSource(watchType, blobName).buffered()
         } catch (e: IOException) {
@@ -76,7 +76,7 @@ object DiskUtil {
         }
     }
 
-    fun getPbwTextFile(pbwPath: Path, fileName: String): String? {
+    public fun getPbwTextFile(pbwPath: Path, fileName: String): String? {
         return try {
             openZip(pbwPath).source(fileName.toPath()).asKotlinxIoRawSource().buffered()
                 .use { it.readString() }
@@ -85,7 +85,7 @@ object DiskUtil {
         }
     }
 
-    fun requirePbwPKJSFile(pbwPath: Path): Source {
+    internal fun requirePbwPKJSFile(pbwPath: Path): Source {
         val source = try {
             openZip(pbwPath).source("pebble-js-app.js".toPath()).asKotlinxIoRawSource()
         } catch (e: IOException) {

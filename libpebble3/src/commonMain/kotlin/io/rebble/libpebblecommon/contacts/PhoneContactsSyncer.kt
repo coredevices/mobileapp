@@ -15,19 +15,19 @@ import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
-data class SystemContact(
+internal data class SystemContact(
     val name: String,
     val key: String,
 )
 
-interface SystemContacts {
+internal interface SystemContacts {
     fun registerForContactsChanges(): Flow<Unit>
     suspend fun getContacts(): List<SystemContact>
     fun hasPermission(): Boolean
     suspend fun getContactImage(lookupKey: String): ImageBitmap?
 }
 
-class PhoneContactsSyncer(
+internal class PhoneContactsSyncer(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val systemContacts: SystemContacts,
     private val contactDao: ContactDao,
@@ -95,7 +95,7 @@ class PhoneContactsSyncer(
     }
 }
 
-fun SystemContact.asEntity(): ContactEntity = ContactEntity(
+internal fun SystemContact.asEntity(): ContactEntity = ContactEntity(
     lookupKey = key,
     name = name,
     muteState = MuteState.Never,

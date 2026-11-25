@@ -34,6 +34,9 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.cancel
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun PebbleElevatedButton(
@@ -191,7 +194,7 @@ fun ConfirmDialog(
         dismissButton = {
             TextButton(onClick = {
                 show.value = false
-            }) { Text("Cancel") }
+            }) { Text(stringResource(Res.string.cancel)) }
         }
     )
 }

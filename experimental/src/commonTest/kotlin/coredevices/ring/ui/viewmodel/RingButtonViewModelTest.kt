@@ -185,7 +185,7 @@ class RingButtonViewModelTest {
                     category = when (support) {
                         IntegrationSupport.Agent -> PblPluginActionAgentIntegration.CATEGORY
                         IntegrationSupport.Note -> PblPluginActionNoteIntegration.CATEGORY
-                        IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.CATEGORY
+                        IntegrationSupport.Reminder, IntegrationSupport.List -> PblPluginActionReminderIntegration.CATEGORY
                     },
                     items = listOf(PblPluginActionIntegration.CONFIGURED_ITEM),
                 ),
@@ -195,7 +195,7 @@ class RingButtonViewModelTest {
                     name = when (support) {
                         IntegrationSupport.Agent -> PblPluginActionAgentIntegration.ACTION_NAME
                         IntegrationSupport.Note -> PblPluginActionNoteIntegration.ACTION_NAME
-                        IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.ACTION_NAME
+                        IntegrationSupport.Reminder, IntegrationSupport.List -> PblPluginActionReminderIntegration.ACTION_NAME
                     },
                 ),
             ),
@@ -228,7 +228,6 @@ class RingButtonViewModelTest {
                     builtIn = listOf(FakeProvider("index", "Built-in", storesItemsLocally = true, supports = setOf(IntegrationSupport.Note))) + providers,
                 ),
                 pluginStore = store,
-                pluginsEnabled = MutableStateFlow(true),
                 lockerUuids = MutableStateFlow(emptyList()),
             ),
         )

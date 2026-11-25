@@ -21,7 +21,7 @@ import org.junit.Test
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
-class PPoGTest {
+internal class PPoGTest {
     private val ppStreams = PebbleProtocolStreams()
     private val ppogStreams = PPoGStream()
     private val outboundPPoGPackets = Channel<ByteArray>(capacity = 100)
@@ -34,7 +34,12 @@ class PPoGTest {
         override fun wasRestoredWithSubscribedCentral(): Boolean {
             return false
         }
+
+        override suspend fun onInitTimeout() {
+            initTimeouts++
+        }
     }
+    private var initTimeouts = 0
     val bleConfig = BleConfig(
         legacyReversedPPoG = false,
     )
@@ -126,6 +131,7 @@ class PPoGTest {
                 testScheduler.advanceTimeBy(30.seconds)
             }
         }
+        assertEquals(1, initTimeouts)
     }
 
     @Test

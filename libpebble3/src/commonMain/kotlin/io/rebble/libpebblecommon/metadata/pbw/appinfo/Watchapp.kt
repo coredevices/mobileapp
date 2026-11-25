@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.metadata.pbw.appinfo
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Watchapp(
+public data class Watchapp internal constructor(
     val watchface: Boolean = false,
     val hiddenApp: Boolean = false,
     val onlyShownOnCommunication: Boolean = false

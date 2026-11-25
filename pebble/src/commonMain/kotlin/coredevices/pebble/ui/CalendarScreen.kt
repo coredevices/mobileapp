@@ -40,13 +40,21 @@ import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.calendar_title
+import coreapp.pebble.generated.resources.calendar_permission_missing
+import coreapp.pebble.generated.resources.calendar_approve
+import coreapp.pebble.generated.resources.calendar_no_calendars
+import coreapp.pebble.generated.resources.calendar_not_synced
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 @Composable
 fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Calendar Settings")
+        topBarParams.title(getString(Res.string.calendar_title))
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()
@@ -78,7 +86,7 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "Calendar permission missing",
+                                    text = stringResource(Res.string.calendar_permission_missing),
                                     modifier = Modifier.padding(15.dp)
                                         .align(Alignment.CenterHorizontally),
                                     textAlign = TextAlign.Center,
@@ -92,7 +100,7 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     modifier = Modifier.align(Alignment.CenterHorizontally),
                                 ) {
                                     Text(
-                                        text = "Approve",
+                                        text = stringResource(Res.string.calendar_approve),
                                         modifier = Modifier.padding(15.dp),
                                         textAlign = TextAlign.Center,
                                         color = MaterialTheme.colorScheme.onPrimary,
@@ -116,7 +124,7 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             )
                         ) {
                             Text(
-                                text = "Calendar permission is approved, but no calendars were found.\n\n Is sharing enabled in the Google Calendar app? See: Settings -> General -> Share Google Calendar data with other apps",
+                                text = stringResource(Res.string.calendar_no_calendars),
                                 modifier = Modifier.padding(15.dp)
                                     .align(Alignment.CenterHorizontally),
                                 textAlign = TextAlign.Center,
@@ -153,7 +161,7 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         if (entry.enabled && (!entry.syncEvents || !entry.visible)) {
                             Row {
                                 Text(
-                                    text = "Not synced by Android - toggle checkbox to ask Android to sync",
+                                    text = stringResource(Res.string.calendar_not_synced),
                                     color = coreOrange,
                                 )
                             }

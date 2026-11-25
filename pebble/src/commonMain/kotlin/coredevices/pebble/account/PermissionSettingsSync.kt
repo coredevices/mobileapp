@@ -46,14 +46,6 @@ class PermissionSettingsSync(
                         // Left unsynced, so the next change to either side tries again.
                         logger.w(e) { "Couldn't save permission settings" }
                     }
-                    SyncStep.Clear -> try {
-                        usersDao.clearPermissionSettings()
-                        synced = null
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        logger.w(e) { "Couldn't clear permission settings" }
-                    }
                     null -> {}
                 }
             }
@@ -64,13 +56,10 @@ class PermissionSettingsSync(
 internal sealed interface SyncStep {
     data class Adopt(val settings: PermissionSettings) : SyncStep
     data class Upload(val settings: PermissionSettings) : SyncStep
-    /** Plugins are off here, so the web mustn't ask on this phone's behalf. */
-    data object Clear : SyncStep
 }
 
 /** A remote value that moved since the last sync wins (another device, or a new sign-in); otherwise a local change goes up. */
-internal fun syncStep(remote: PermissionSettings?, local: PermissionSettings?, synced: PermissionSettings?): SyncStep? = when {
-    local == null -> if (remote != null) SyncStep.Clear else null
+internal fun syncStep(remote: PermissionSettings?, local: PermissionSettings, synced: PermissionSettings?): SyncStep? = when {
     remote != null && remote != synced -> SyncStep.Adopt(remote)
     local != synced -> SyncStep.Upload(local)
     else -> null
@@ -80,9 +69,7 @@ internal data class PermissionSettings(val policy: PermissionPolicy, val askLega
     fun applyTo(config: WatchConfig) = config.copy(permissionPolicy = policy, askLegacyAppsForPermissions = askLegacyApps)
 
     companion object {
-        /** Null while plugins are off: the settings don't apply. */
-        fun of(config: WatchConfig) =
-            if (config.enablePlugins) PermissionSettings(config.permissionPolicy, config.askLegacyAppsForPermissions) else null
+        fun of(config: WatchConfig) = PermissionSettings(config.permissionPolicy, config.askLegacyAppsForPermissions)
 
         fun of(user: User): PermissionSettings? {
             val policy = PermissionPolicy.entries.firstOrNull { it.name == user.permissionPolicy } ?: return null

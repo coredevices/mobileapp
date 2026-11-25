@@ -6,6 +6,8 @@ import coredevices.ring.agent.builtin_servlets.clock.IOS_26_REQUIRED_REASON
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ListServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -64,6 +66,16 @@ class IndexActionsTest {
         assertEquals(LOCAL_MODEL_REASON, local.getValue(NotificationReplyServlet.NAME).disabledReason)
         assertNull(local.getValue(NoteServlet.NAME).disabledReason)
         assertNull(local.getValue(ClockServlet.name).disabledReason)
+    }
+
+    @Test
+    fun remindersAndListsAreSeparateActionsTheOnDeviceModelCanRun() {
+        val local = actions(isAndroid = true, localAgentOnly = true)
+
+        assertEquals("Reminders", local.getValue(ReminderServlet.NAME).title)
+        assertEquals("Lists", local.getValue(ListServlet.NAME).title)
+        assertNull(local.getValue(ReminderServlet.NAME).disabledReason)
+        assertNull(local.getValue(ListServlet.NAME).disabledReason)
     }
 
     @Test

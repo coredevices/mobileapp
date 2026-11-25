@@ -6,7 +6,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
 @Entity
-data class VibePatternEntity(
+public data class VibePatternEntity internal constructor(
     @PrimaryKey val name: String,
     val pattern: List<UInt>,
     val bundled: Boolean,

@@ -5,11 +5,11 @@ import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifest
 import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifestWrapper
 import kotlinx.io.files.Path
 
-class PbzFirmware(private val path: Path) {
-    val manifests by lazy { requirePbzManifests(path) }
+internal class PbzFirmware(private val path: Path) {
+    val manifests: List<PbzManifestWrapper> by lazy { requirePbzManifests(path) }
 }
 
-fun PbzFirmware.findManifestFor(slot: Int?): PbzManifestWrapper {
+internal fun PbzFirmware.findManifestFor(slot: Int?): PbzManifestWrapper {
     if (slot == null) {
         if (manifests.size != 1) {
             throw IllegalStateException("No slot, but there were ${manifests.size} manifests")

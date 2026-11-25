@@ -7,16 +7,17 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.WeatherPrefsValue
 import io.rebble.libpebblecommon.database.entity.setWeatherSettings
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
-class WeatherManager(
+internal class WeatherManager(
     private val weatherAppEntryDao: WeatherAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appPrefsEntryDao: AppPrefsEntryDao,
 ): Weather {
-    override val currentWeather = weatherAppEntryDao.getAllFlow()
+    override val currentWeather: Flow<List<WeatherAppEntry>> = weatherAppEntryDao.getAllFlow()
 
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
         libPebbleCoroutineScope.launch {
@@ -35,7 +36,7 @@ class WeatherManager(
     }
 }
 
-fun WeatherLocationData.WeatherLocationDataPopulated.toWeatherAppEntry() = WeatherAppEntry(
+internal fun WeatherLocationData.WeatherLocationDataPopulated.toWeatherAppEntry(): WeatherAppEntry = WeatherAppEntry(
     key = key,
     currentTemp = currentTemp,
     currentWeatherType = currentWeatherType.code,
@@ -62,7 +63,7 @@ fun WeatherLocationData.WeatherLocationDataPopulated.toWeatherAppEntry() = Weath
 )
 
 @Serializable
-enum class WeatherType(val code: Byte) {
+public enum class WeatherType(public val code: Byte) {
     PartlyCloudy(0),
     CloudyDay(1),
     LightSnow(2),
@@ -81,7 +82,7 @@ enum class WeatherType(val code: Byte) {
  * regardless of the user's unit — the watch prints "mph" literally.
  */
 @Serializable
-data class WeatherDailyForecast(
+public data class WeatherDailyForecast(
     val highTemp: Short,
     val lowTemp: Short,
     val weatherType: WeatherType,
@@ -107,18 +108,20 @@ data class WeatherDailyForecast(
  * [WeatherDailyForecast]'s `uvIndexX10` is the day's peak.
  */
 @Serializable
-data class WeatherHourlyForecast(
+public data class WeatherHourlyForecast(
     val weatherType: WeatherType,
     val temp: Byte,
     val uvIndexX10: Short? = null,
+    val precipProbability: Int? = null,
+    val precipMm: Double? = null,
 )
 
-sealed class WeatherLocationData {
-    abstract val key: Uuid
-    data class WeatherLocationDataFailed(
+public sealed class WeatherLocationData {
+    public abstract val key: Uuid
+    public data class WeatherLocationDataFailed(
         override val key: Uuid,
     ) : WeatherLocationData()
-    data class WeatherLocationDataPopulated(
+    public data class WeatherLocationDataPopulated(
         override val key: Uuid,
         val currentTemp: Short,
         val currentWeatherType: WeatherType,

@@ -10,13 +10,13 @@ import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import kotlinx.coroutines.flow.Flow
 
-data class ContactWithCount(
+public data class ContactWithCount internal constructor(
     @Embedded val contact: ContactEntity,
     val count: Int,
 )
 
 @Dao
-interface ContactDao {
+internal interface ContactDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(watch: ContactEntity)
 

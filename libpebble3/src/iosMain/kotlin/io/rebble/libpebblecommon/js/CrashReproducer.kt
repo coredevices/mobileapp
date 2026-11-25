@@ -20,7 +20,7 @@ import kotlin.native.runtime.NativeRuntimeApi
  * 3. Create conditions for JSC to need to hash objects
  */
 @OptIn(NativeRuntimeApi::class)
-fun reproduceProductionCrash(scope: CoroutineScope, jsRunner: JavascriptCoreJsRunner) {
+internal fun reproduceProductionCrash(scope: CoroutineScope, jsRunner: JavascriptCoreJsRunner) {
     println("🔴 Attempting to reproduce production crash...")
 
     // Thread 1: Continuously send app messages (this is where crash occurred)

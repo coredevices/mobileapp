@@ -43,12 +43,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.confirmation.argumentLines
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.viewmodel.humanizeToolName
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_action_destructive
+import coreapp.ring.generated.resources.feed_action_parameters
+import coreapp.ring.generated.resources.feed_allow
+import coreapp.ring.generated.resources.feed_confirm_action
+import coreapp.ring.generated.resources.feed_deny
+import coreapp.ring.generated.resources.feed_more_details
+import coreapp.ring.generated.resources.feed_tool_action
+import coreapp.ring.generated.resources.feed_tool_description
+import coreapp.ring.generated.resources.feed_tool_parameters
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.close
+import org.jetbrains.compose.resources.stringResource
 
-/** Allow / deny prompt for a tool call the agent paused on, with its parameters in a dialog on demand. */
+/** Allow / deny prompt for a tool call the agent paused on, listing its parameters unless the tool supplied its own title. */
 @Composable
 fun ToolConfirmationCard(
     request: SemanticResult.RequiresConfirmation,
@@ -76,7 +90,7 @@ fun ToolConfirmationCard(
             Spacer(Modifier.width(6.dp))
             Column {
                 Text(
-                    "Confirm action",
+                    request.title ?: stringResource(Res.string.feed_confirm_action),
                     color = colors.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -103,19 +117,24 @@ fun ToolConfirmationCard(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text("Action", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(Res.string.feed_tool_action), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
         Text(tool, color = colors.onSurfaceVariant, fontSize = 14.sp)
+        if (request.title == null && request.arguments.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(Res.string.feed_tool_parameters), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            request.argumentLines.forEach { Text(it, color = colors.onSurface, fontSize = 14.sp) }
+        }
         request.description?.let {
             Spacer(Modifier.height(4.dp))
-            Text("Description", color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(Res.string.feed_tool_description), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
             Text(it, color = colors.onSurfaceVariant, fontSize = 14.sp)
         }
-        if (request.arguments.isNotEmpty()) {
+        if (request.title != null && request.arguments.isNotEmpty()) {
             TextButton(
                 onClick = { showDetails = true },
                 contentPadding = PaddingValues(vertical = 0.dp),
                 modifier = Modifier.height(20.dp),
-            ) { Text("More details", fontSize = 13.sp) }
+            ) { Text(stringResource(Res.string.feed_more_details), fontSize = 13.sp) }
         }
         if (request.destructive) {
             Row(
@@ -124,12 +143,12 @@ fun ToolConfirmationCard(
             ) {
                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = colors.error, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("This action is destructive", color = colors.error, fontSize = 14.sp)
+                Text(stringResource(Res.string.feed_action_destructive), color = colors.error, fontSize = 14.sp)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onRespond(false) }, modifier = Modifier.weight(1f)) {
-                Text("Deny")
+                Text(request.denyLabel ?: stringResource(Res.string.feed_deny))
             }
             Button(
                 onClick = { onRespond(true) },
@@ -139,7 +158,7 @@ fun ToolConfirmationCard(
                 } else {
                     ButtonDefaults.buttonColors()
                 },
-            ) { Text("Allow") }
+            ) { Text(request.allowLabel ?: stringResource(Res.string.feed_allow)) }
         }
     }
     if (showDetails) {
@@ -158,7 +177,7 @@ private fun ParameterDetailsDialog(
     val colors = IndexTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Action parameters") },
+        title = { Text(stringResource(Res.string.feed_action_parameters)) },
         text = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -183,7 +202,7 @@ private fun ParameterDetailsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.close)) }
         },
     )
 }

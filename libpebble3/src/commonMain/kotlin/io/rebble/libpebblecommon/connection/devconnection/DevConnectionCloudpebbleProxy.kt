@@ -27,12 +27,12 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-enum class CloudpebbleProxyProtocolVersion {
+internal enum class CloudpebbleProxyProtocolVersion {
     V1,
     V2
 }
 
-class DevConnectionCloudpebbleProxy(
+internal class DevConnectionCloudpebbleProxy(
     libPebble: LibPebble,
     lastStates: LastFirmwareUpdateStates,
     private val url: String,

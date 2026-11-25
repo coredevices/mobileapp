@@ -90,7 +90,7 @@ class PblPluginIntegrationProviderTest {
             providerFor(thingsPlugin(listOf(createNote, next)))?.supports
         )
         assertEquals(
-            setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
+            setOf(IntegrationSupport.Note, IntegrationSupport.Reminder, IntegrationSupport.List),
             providerFor(thingsPlugin(listOf(createNote, createReminder)))?.supports
         )
         assertEquals(
@@ -105,7 +105,7 @@ class PblPluginIntegrationProviderTest {
             providerFor(thingsPlugin(listOf(createNote), sources = emptyList()))
         )
         assertEquals(
-            setOf(IntegrationSupport.Reminder),
+            setOf(IntegrationSupport.Reminder, IntegrationSupport.List),
             providerFor(
                 thingsPlugin(listOf(createNote, createReminder), sources = listOf(configuredSource("reminders")))
             )?.supports

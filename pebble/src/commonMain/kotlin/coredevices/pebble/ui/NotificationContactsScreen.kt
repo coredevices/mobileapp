@@ -52,6 +52,16 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.notif_contact_title
+import coreapp.pebble.generated.resources.notif_contact_star_tooltip
+import coreapp.pebble.generated.resources.notif_contact_star
+import coreapp.pebble.generated.resources.notif_app_notified_only
+import coreapp.pebble.generated.resources.notif_details
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.done
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 class ContactsViewModel(
 ) : ViewModel() {
@@ -107,14 +117,14 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoD
                                 !viewModel.onlyNotified.value
                         },
                         label = {
-                            Text("Notified only")
+                            Text(stringResource(Res.string.notif_app_notified_only))
                         },
                         selected = viewModel.onlyNotified.value,
                         leadingIcon = if (viewModel.onlyNotified.value) {
                             {
                                 Icon(
                                     imageVector = Icons.Filled.Done,
-                                    contentDescription = "Done icon",
+                                    contentDescription = stringResource(UtilRes.string.done),
                                     modifier = Modifier.size(FilterChipDefaults.IconSize)
                                 )
                             }
@@ -153,7 +163,7 @@ fun ContactNotificationViewerScreen(
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.title("Contact Notifications")
+        topBarParams.title(getString(Res.string.notif_contact_title))
     }
     val libPebble = rememberLibPebble()
     val flow = remember {
@@ -206,7 +216,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
                     }
                     Icon(
                         Icons.Default.MoreHoriz,
-                        "Details",
+                        stringResource(Res.string.notif_details),
                         modifier = Modifier.padding(start = 4.dp, end = 10.dp)
                     )
                 }
@@ -230,7 +240,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
                     settingsKey = "shown_starred_contact_tooltip",
                     persistent = true,
                     firstOrOnlyItem = firstOrOnlyItem,
-                    text = "Star a contact to always receive notifications from them, even if e.g. the app is muted",
+                    text = stringResource(Res.string.notif_contact_star_tooltip),
                 ) {
                     IconToggleButton(
                         checked = favorite,
@@ -247,7 +257,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
                     ) {
                         Icon(
                             if (favorite) Icons.Outlined.Star else Icons.Outlined.StarOutline,
-                            contentDescription = "Star"
+                            contentDescription = stringResource(Res.string.notif_contact_star)
                         )
                     }
                 }

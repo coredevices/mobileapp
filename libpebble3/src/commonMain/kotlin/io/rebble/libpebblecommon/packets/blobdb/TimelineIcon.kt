@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
-enum class TimelineIcon(val id: UInt, val code: String) {
+public enum class TimelineIcon(public val id: UInt, public val code: String) {
     NotificationReminder(3u, "system://images/NOTIFICATION_REMINDER"),
     HockeyGame(30u, "system://images/HOCKEY_GAME"),
     PayBill(38u, "system://images/PAY_BILL"),
@@ -122,14 +122,14 @@ enum class TimelineIcon(val id: UInt, val code: String) {
     NotificationTwitch(136u, "system://images/NOTIFICATION_TWITCH"),
     ;
 
-    companion object {
-        fun fromId(id: UInt): TimelineIcon {
+    public companion object {
+        internal fun fromId(id: UInt): TimelineIcon {
             return entries.firstOrNull { it.id == id }
                 ?: error("Unknown timeline icon id: $id")
         }
 
-        fun TimelineIcon.key() = code.replace("system://images/", "")
+        public fun TimelineIcon.key(): String = code.replace("system://images/", "")
 
-        fun fromCode(code: String?): TimelineIcon? = entries.firstOrNull { it.code == code }
+        public fun fromCode(code: String?): TimelineIcon? = entries.firstOrNull { it.code == code }
     }
 }

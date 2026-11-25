@@ -17,12 +17,12 @@ import io.rebble.libpebblecommon.notification.NotificationImage
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.util.toPebbleColor
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-data class LibPebbleNotification(
+internal data class LibPebbleNotification(
     val packageName: String,
     val uuid: Uuid,
     val groupKey: String?,
@@ -116,7 +116,7 @@ data class LibPebbleNotification(
     ) {
         itemID = uuid
 
-        layout = TimelineItem.Layout.GenericNotification
+        layout = TimelineItemLayout.GenericNotification
         if (silent) {
             flags { silent() }
         }
@@ -159,7 +159,7 @@ data class LibPebbleNotification(
     }
 }
 
-fun LibPebbleNotification.toEntity(
+internal fun LibPebbleNotification.toEntity(
     decision: NotificationDecision,
     channelId: String?,
 ): NotificationEntity = NotificationEntity(
@@ -174,7 +174,7 @@ fun LibPebbleNotification.toEntity(
     people = people.map { it.lookupKey },
 )
 
-fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
+internal fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
     is NotificationResult.Extracted -> notification
     NotificationResult.NotProcessed -> null
 }

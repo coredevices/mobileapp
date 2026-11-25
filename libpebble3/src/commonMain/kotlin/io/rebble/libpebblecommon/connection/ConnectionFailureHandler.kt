@@ -3,11 +3,11 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.metadata.WatchColor
 
-interface ConnectionFailureHandler {
+internal interface ConnectionFailureHandler {
     suspend fun handleConnectionFailure(identifier: PebbleIdentifier, color: WatchColor, failure: ConnectionFailureInfo)
 }
 
-class RealConnectionFailureHandler(
+internal class RealConnectionFailureHandler(
     private val appContext: AppContext,
     private val analytics: LibPebbleAnalytics,
 ) : ConnectionFailureHandler {
@@ -38,6 +38,6 @@ class RealConnectionFailureHandler(
     }
 }
 
-expect fun AppContext.handleMtuGattError(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)
-expect fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)
-expect fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)
+internal expect fun AppContext.handleMtuGattError(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)
+internal expect fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)
+internal expect fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics)

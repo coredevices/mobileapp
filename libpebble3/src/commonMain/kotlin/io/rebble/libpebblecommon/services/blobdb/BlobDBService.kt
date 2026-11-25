@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
@@ -23,7 +24,7 @@ import kotlinx.coroutines.launch
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
  * @see BlobResponse
  */
-class BlobDBService(
+internal class BlobDBService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
@@ -32,9 +33,9 @@ class BlobDBService(
     // Add a replay cache so that BlobDb can catch up with the post-connect WriteBack sync when it
     // is initialized (it will actually only be once message - it waits for that to be ACKed).
     private val _writes = MutableSharedFlow<DbWrite>(replay = 20)
-    val writes = _writes.asSharedFlow()
+    val writes: SharedFlow<DbWrite> = _writes.asSharedFlow()
     private val _syncCompletes = MutableSharedFlow<BlobDatabase>(replay = 20)
-    val syncCompletes = _syncCompletes.asSharedFlow()
+    val syncCompletes: SharedFlow<BlobDatabase> = _syncCompletes.asSharedFlow()
 
     fun init() {
         scope.launch {
@@ -174,7 +175,7 @@ class BlobDBService(
     }
 }
 
-data class DbWrite(
+public data class DbWrite internal constructor(
     val token: UShort,
     val database: BlobDatabase,
     val timestamp: UInt,
@@ -183,7 +184,7 @@ data class DbWrite(
     val writeType: WriteType,
 )
 
-enum class WriteType {
+public enum class WriteType {
     Write,
     WriteBack,
 }

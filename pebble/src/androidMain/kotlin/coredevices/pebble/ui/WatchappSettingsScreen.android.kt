@@ -29,7 +29,6 @@ import coredevices.pebble.config.ConfigPageBridge
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -40,7 +39,7 @@ import kotlin.uuid.Uuid
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid,
-    bridge: ConfigPageBridge?,
+    bridge: ConfigPageBridge,
     mayLoad: (String) -> Boolean,
     network: ConfigPageNetwork,
 ): NativeWebView = defaultWebViewFactory(params).apply {
@@ -50,27 +49,19 @@ internal actual fun webViewFactory(
         network.csp?.let { WebViewCompat.addDocumentStartJavaScript(this, cspJs(it), setOf("*")) }
         WebViewCompat.addDocumentStartJavaScript(this, configNetworkJs(context), setOf("*"))
     }
-    if (bridge != null) {
-        addJavascriptInterface(NativeConfigBridge(bridge), CONFIG_NATIVE_NAMESPACE)
-        bridge.attach { js -> post { evaluateJavascript(js, null) } }
-        // Runs before the page's own <script>, which is the whole point: pages call Pebble.* from
-        // the top level. Needs WebView 83+; without it the page has to wait for onPageStarted.
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(this, CONFIG_PAGE_SHIM_JS, setOf("*"))
-        } else {
-            Logger.withTag("webViewFactory").w("No DOCUMENT_START_SCRIPT; config API lands late")
-        }
+    addJavascriptInterface(NativeConfigBridge(bridge), CONFIG_NATIVE_NAMESPACE)
+    bridge.attach { js -> post { evaluateJavascript(js, null) } }
+    // Runs before the page's own <script>, which is the whole point: pages call Pebble.* from
+    // the top level. Needs WebView 83+; without it the page has to wait for onPageStarted.
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        WebViewCompat.addDocumentStartJavaScript(this, CONFIG_PAGE_SHIM_JS, setOf("*"))
+        WebViewCompat.addDocumentStartJavaScript(this, WebViewJSLocalStorageInterface.INSTALL_JS, setOf("*"))
+    } else {
+        Logger.withTag("webViewFactory").w("No DOCUMENT_START_SCRIPT; config API lands late")
     }
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false
-    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) {
-        runBlocking(Dispatchers.Main) {
-            evaluateJavascript(
-                it,
-                null
-            )
-        }
-    }
+    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context))
     addJavascriptInterface(localStorageInterface, "_localStorage")
     settings.domStorageEnabled = true
     settings.databasePath = Path(context.filesDir.path, "watchapp_settings/$uuid").toString()
@@ -130,19 +121,11 @@ private class NativeConfigBridge(private val bridge: ConfigPageBridge) {
     fun call(json: String) = bridge.onCall(json)
 }
 
-internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
+/** Only needed where [webViewFactory] couldn't install it at document start. */
+internal actual suspend fun installLocalStorage(webView: NativeWebView) {
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
     withContext(Dispatchers.Main) {
-        webView.evaluateJavascript("""
-            (function() {
-                // Storage is disabled inside data: URLs, which a plugin's config page is.
-                try { window.localStorage.clear(); } catch (e) { return; }
-                const localStorageData = JSON.parse(window._localStorage.restoreState());
-                for (const [key, value] of Object.entries(localStorageData)) {
-                    window.localStorage.setItem(key, value);
-                }
-            })();
-                """.trimIndent(), null
-        )
+        webView.evaluateJavascript(WebViewJSLocalStorageInterface.INSTALL_JS, null)
     }
 }
 
@@ -196,23 +179,4 @@ private fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>? 
         return Array(clip.itemCount) { clip.getItemAt(it).uri }
     }
     return data.data?.let { arrayOf(it) }
-}
-
-internal actual fun persistLocalStorage(webView: NativeWebView) {
-    runBlocking(Dispatchers.Main) {
-        webView.evaluateJavascript("""
-            (function() {
-                const data = {};
-                try { window.localStorage.length; } catch (e) { return; }
-                for (let i = 0; i < window.localStorage.length; i++) {
-                    const key = window.localStorage.key(i);
-                    const value = window.localStorage.getItem(key);
-                    data[key] = value;
-                }
-                window.localStorage.clear();
-                window._localStorage.saveState(JSON.stringify(data));
-            })();
-                """.trimIndent(), null
-        )
-    }
 }

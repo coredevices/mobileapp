@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="devices">Dispositivos</string>
+    <string name="faces">Esferas</string>
+    <string name="apps">Aplicaciones</string>
+    <string name="notifications">Notificaciones</string>
+    <string name="settings">Ajustes</string>
+    <string name="app_store">Tienda de aplicaciones</string>
+    <string name="index">Index</string>
+    <string name="health">Salud</string>
+    <string name="watches_more_options">Más opciones</string>
+    <string name="watches_bug_report">Informe de error</string>
+    <string name="langpack_english">Inglés</string>
+    <string name="health_today">Hoy</string>
+    <string name="notif_filter_all">Todos</string>
+    <string name="settings_tab_all">Todos</string>
+    <string name="settings_section_speech">Reconocimiento de voz</string>
+    <string name="settings_section_time">Hora</string>
+    <string name="settings_sign_in_pebble_desc">Inicia sesión para hacer una copia de seguridad de tu cuenta Pebble: aplicaciones, ajustes, etc.</string>
+</resources>

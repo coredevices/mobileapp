@@ -4,23 +4,25 @@ import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.PutBytesAbort
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.util.Crc32Calculator
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.io.Source
 
-class PutBytesSession(
+internal class PutBytesSession(
     private val putBytesService: PutBytesService
 ) {
     companion object {
-        const val APP_PUT_CHUNK_SIZE =
+        const val APP_PUT_CHUNK_SIZE: Int =
             2000 // Can't be too large to avoid locking up comms, probably
     }
 
     private val _currentSession = MutableStateFlow<CurrentSession?>(null)
-    val currentSession = _currentSession.asStateFlow()
+    val currentSession: StateFlow<PutBytesSession.CurrentSession?> = _currentSession.asStateFlow()
     private val sessionMutex = Mutex()
 
     data class CurrentSession(val cookie: UInt)
@@ -73,7 +75,7 @@ class PutBytesSession(
      *
      * Should be `flowOn(IO)`
      */
-    suspend fun beginAppSession(appId: UInt, size: UInt, type: ObjectType, source: Source) =
+    suspend fun beginAppSession(appId: UInt, size: UInt, type: ObjectType, source: Source): Flow<PutBytesSession.SessionState> =
         putBytesFlow {
             val initResponse = putBytesService.initAppSession(appId, size, type)
             val cookie = initResponse.cookie.get()
@@ -104,7 +106,7 @@ class PutBytesSession(
         sendInstall: Boolean,
         resumeOffset: UInt = 0u,
         objectCrc: UInt? = null,
-    ) = putBytesFlow {
+    ): Flow<PutBytesSession.SessionState> = putBytesFlow {
         require(resumeOffset < size) { "Resume offset $resumeOffset >= size $size" }
         require(resumeOffset == 0u || objectCrc != null) { "objectCrc required when resuming" }
         val remaining = size - resumeOffset

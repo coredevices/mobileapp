@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.notification
 
-enum class DefaultVibePattern(
+internal enum class DefaultVibePattern(
     val displayName: String,
     val pattern: List<Long>,
 ) {
@@ -21,4 +21,4 @@ enum class DefaultVibePattern(
     Two("Two", listOf(135, 269, 847, 394, 40, 159, 48, 170, 31, 144, 64, 136, 64, 162, 36, 163, 122)),
 }
 
-fun DefaultVibePattern.uIntPattern() = pattern.map { it.toUInt() }
+internal fun DefaultVibePattern.uIntPattern(): List<UInt> = pattern.map { it.toUInt() }

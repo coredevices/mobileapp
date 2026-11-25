@@ -9,15 +9,15 @@ import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.util.stripBidiIsolates
 
-data class ActionRemoteInput(
+internal data class ActionRemoteInput(
     val remoteInput: RemoteInput,
     val suggestedResponses: List<String>? = null,
 )
 
-data class LibPebbleNotificationAction(
+internal data class LibPebbleNotificationAction(
     val packageName: String,
     val title: String,
     val semanticAction: SemanticAction,
@@ -35,14 +35,14 @@ data class LibPebbleNotificationAction(
         MuteChannel,
         ;
 
-        fun toProtocolType(): TimelineItem.Action.Type {
+        fun toProtocolType(): TimelineActionType {
             return when (this) {
-                Generic -> TimelineItem.Action.Type.Generic
-                OpenOnPhone -> TimelineItem.Action.Type.Generic
-                Dismiss -> TimelineItem.Action.Type.Dismiss
-                Reply -> TimelineItem.Action.Type.Response
-                MuteApp -> TimelineItem.Action.Type.Generic
-                MuteChannel -> TimelineItem.Action.Type.Generic
+                Generic -> TimelineActionType.Generic
+                OpenOnPhone -> TimelineActionType.Generic
+                Dismiss -> TimelineActionType.Dismiss
+                Reply -> TimelineActionType.Response
+                MuteApp -> TimelineActionType.Generic
+                MuteChannel -> TimelineActionType.Generic
             }
         }
     }

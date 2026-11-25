@@ -22,7 +22,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-class IosNotificationActionHandler : PlatformNotificationActionHandler, NotificationReplies {
+internal class IosNotificationActionHandler : PlatformNotificationActionHandler, NotificationReplies {
     override suspend operator fun invoke(
         itemId: Uuid,
         action: BaseAction,
@@ -31,11 +31,11 @@ class IosNotificationActionHandler : PlatformNotificationActionHandler, Notifica
         error("Notification actions are not handled by app on iOS")
     }
 
-    override suspend fun replyToDisplayedNotification(text: String, at: Instant) =
+    override suspend fun replyToDisplayedNotification(text: String, at: Instant): DisplayedNotificationReplyResult =
         DisplayedNotificationReplyResult.Unsupported
 }
 
-class IosNotificationListenerConnection : NotificationListenerConnection {
+internal class IosNotificationListenerConnection : NotificationListenerConnection {
     override fun init(libPebble: LibPebble) {
     }
 }
@@ -43,7 +43,7 @@ class IosNotificationListenerConnection : NotificationListenerConnection {
 /**
  * The app sends its own notifications to the watch directly, so its ANCS copies are muted there.
  */
-class IosNotificationAppsSync(
+internal class IosNotificationAppsSync(
     private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : NotificationAppsSync {

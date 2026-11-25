@@ -7,7 +7,7 @@ import io.rebble.libpebblecommon.plugin.PluginPermission
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PbwAppInfo(
+public data class PbwAppInfo internal constructor(
     val uuid: String,
     val shortName: String,
     val longName: String = "",

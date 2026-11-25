@@ -1065,6 +1065,8 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         category = app.category,
         userToken = timelineToken,
         manifestVersion = app.manifestVersion,
+        usesPermissions = app.usesPermissions,
+        pebbleKit2Packages = app.pebbleKit2Packages,
         pluginManifest = app.plugin?.manifest,
         configPage = configPage,
         iconTintable = app.iconTintable,

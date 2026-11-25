@@ -61,17 +61,17 @@ import platform.posix.memcpy
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-data class RegisteredDevice(
+internal data class RegisteredDevice(
     val dataChannel: SendChannel<ByteArray>,
     val device: PebbleBleIdentifier,
     val notificationsEnabled: Boolean,
 )
 
-fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
+internal fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
 
 private fun CBUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
-fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
+internal fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
 private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).apply {
     if (length > 0u) {
@@ -88,16 +88,11 @@ private fun ByteArray.toNSData(): NSData = memScoped {
     )
 }
 
-actual class GattServer(
+internal actual class GattServer(
     private val bleConfigFlow: BleConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
     private val logger = Logger.withTag("GattServer")
-    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
-        delegate = this,
-        queue = null,
-        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
-    )
     private val registeredDevices: MutableMap<PebbleBleIdentifier, RegisteredDevice> =
         mutableMapOf()
     private val registeredServices = mutableMapOf<Uuid, CBMutableService>()
@@ -324,6 +319,12 @@ actual class GattServer(
         return wasSubscribedAtRestore
     }
 
+    actual fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean =
+        (findCharacteristic(PPOGATT_DEVICE_SERVICE_UUID_SERVER, PPOGATT_DEVICE_CHARACTERISTIC_SERVER)
+            ?.subscribedCentrals as? List<CBCentral>)
+            .orEmpty()
+            .any { it.identifier.asUuid().toString().asPebbleBleIdentifier() != identifier }
+
     private val peripheralManagerState = MutableStateFlow(CBManagerStateUnknown)
 
     override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
@@ -425,6 +426,13 @@ actual class GattServer(
 
     private val peripheralManagerReady = MutableStateFlow(true)
 
+    // Declared after all other state: CoreBluetooth can call delegate methods (e.g. willRestoreState) from this constructor.
+    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
+        delegate = this,
+        queue = null,
+        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
+    )
+
     override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
         peripheralManagerReady.value = true
@@ -434,6 +442,6 @@ actual class GattServer(
 private val SEND_TIMEOUT = 8.seconds
 
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+internal actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
     return GattServer(bleConfigFlow, libPebbleCoroutineScope)
 }

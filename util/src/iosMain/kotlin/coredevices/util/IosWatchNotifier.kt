@@ -3,8 +3,9 @@ package coredevices.util
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -44,7 +45,7 @@ class IosWatchNotifier(
         val bodyText = body
         val watchActions = actions
         val notification = buildTimelineNotification(parentId = Uuid.NIL, timestamp = Clock.System.now()) {
-            layout = TimelineItem.Layout.GenericNotification
+            layout = TimelineItemLayout.GenericNotification
             attributes {
                 appName { appDisplayName }
                 tinyIcon { TimelineIcon.NotificationGeneric }
@@ -53,7 +54,7 @@ class IosWatchNotifier(
             }
             actions {
                 watchActions.forEach { action ->
-                    action(TimelineItem.Action.Type.Generic, internalType = action.internalType) {
+                    action(TimelineActionType.Generic, internalType = action.internalType) {
                         attributes { title { action.title } }
                         internalData = action.data
                     }

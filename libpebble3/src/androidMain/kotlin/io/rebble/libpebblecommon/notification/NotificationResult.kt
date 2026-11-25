@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import io.rebble.libpebblecommon.notification.NotificationDecision
 
-sealed class NotificationResult {
+internal sealed class NotificationResult {
     /**
      * Extracted. Maybe send to watch, depending on decision.
      */

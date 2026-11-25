@@ -4,6 +4,12 @@ import io.rebble.libpebblecommon.connection.Plugins
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
 import io.rebble.libpebblecommon.plugin.PluginMetadata
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /** Reads plugin data sources; [sourcePlugins] is re-evaluated on every call. */
 class PluginsServlet(
@@ -40,4 +46,18 @@ internal fun List<PluginMetadata>.describeSources(): String? {
     }
     if (lines.isEmpty()) return null
     return (listOf(PluginsServlet.SOURCES_HEADER) + lines).joinToString("\n")
+}
+
+/** One object per declared source: its plugin, category and items. */
+internal fun List<PluginMetadata>.sourcesJson(): JsonArray = buildJsonArray {
+    forEach { plugin ->
+        plugin.sources.forEach { source ->
+            addJsonObject {
+                put("plugin", plugin.name)
+                plugin.description.trim().takeIf(String::isNotEmpty)?.let { put("plugin_description", it) }
+                put("category", source.category)
+                putJsonArray("items") { source.items.forEach { add(it) } }
+            }
+        }
+    }
 }

@@ -7,7 +7,7 @@ import androidx.room.Query
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 
 @Dao
-interface KnownWatchDao {
+internal interface KnownWatchDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(watch: KnownWatchItem)
 

@@ -5,14 +5,14 @@ import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.peripheralFromIdentifier
 
-sealed class PlatformIdentifier {
+internal sealed class PlatformIdentifier {
     data class BlePlatformIdentifier(val peripheral: Peripheral, val autoConnect: Boolean) : PlatformIdentifier()
     data class SocketPlatformIdentifier(val addr: String) : PlatformIdentifier()
     data class BtClassicPlatformIdentifier(val identifier: PebbleBtClassicIdentifier) : PlatformIdentifier()
 }
 
 
-interface CreatePlatformIdentifier {
+internal interface CreatePlatformIdentifier {
     fun identifier(
         identifier: PebbleIdentifier,
         name: String,
@@ -20,7 +20,7 @@ interface CreatePlatformIdentifier {
     ): PlatformIdentifier?
 }
 
-class RealCreatePlatformIdentifier(
+internal class RealCreatePlatformIdentifier(
     private val bleConfig: BleConfigFlow,
     private val blePlatformConfig: BlePlatformConfig,
 ) : CreatePlatformIdentifier {

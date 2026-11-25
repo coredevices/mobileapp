@@ -57,7 +57,7 @@ import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
 
-actual val platformModule: Module = module {
+internal actual val platformModule: Module = module {
     single {
         PhoneCapabilities(
             CommonPhoneCapabilities + setOf(

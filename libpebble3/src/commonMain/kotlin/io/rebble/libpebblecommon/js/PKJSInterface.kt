@@ -5,7 +5,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.runBlocking
 import kotlin.uuid.Uuid
 
-abstract class PKJSInterface(
+internal abstract class PKJSInterface(
     protected val jsRunner: JsRunner,
     protected val device: CompanionAppDevice,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,

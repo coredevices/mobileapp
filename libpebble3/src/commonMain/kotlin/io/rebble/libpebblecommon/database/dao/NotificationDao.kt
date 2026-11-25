@@ -7,17 +7,17 @@ import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
-data class ChannelAndCount(
+public data class ChannelAndCount internal constructor(
     val channelId: String,
     val count: Int,
 )
 
-data class PeopleList(
+internal data class PeopleList(
     val people: List<String>,
 )
 
 @Dao
-interface NotificationDao {
+internal interface NotificationDao {
     @Insert
     suspend fun insert(notificationEntity: NotificationEntity)
 

@@ -4,7 +4,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.WatchVersion
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 
-fun getMaxPebblePacketPayloadSize(
+internal fun getMaxPebblePacketPayloadSize(
     endpoint: ProtocolEndpoint,
     watchVersion: WatchVersion.WatchVersionResponse?
 ): Int {
@@ -21,9 +21,9 @@ fun getMaxPebblePacketPayloadSize(
     }
 }
 
-fun getPutBytesMaximumDataSize(watchVersion: WatchVersion.WatchVersionResponse?): Int {
+internal fun getPutBytesMaximumDataSize(watchVersion: WatchVersion.WatchVersionResponse?): Int {
     // 4 bytes get used for the cookie
     return getMaxPebblePacketPayloadSize(ProtocolEndpoint.PUT_BYTES, watchVersion) - 4
 }
 
-val STANDARD_MAX_PEBBLE_PACKET_SIZE = 2048
+internal val STANDARD_MAX_PEBBLE_PACKET_SIZE: Int = 2048

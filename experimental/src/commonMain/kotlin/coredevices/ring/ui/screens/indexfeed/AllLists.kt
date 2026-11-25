@@ -65,6 +65,17 @@ import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.AllListsViewModel
 import kotlin.time.ExperimentalTime
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_all_notes
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_no_lists_yet
+import coreapp.ring.generated.resources.feed_no_matching_lists
+import coreapp.ring.generated.resources.search
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.search_ellipsis
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Full-screen 2-col grid of every list except the system Todos list.
@@ -94,11 +105,11 @@ fun AllLists(coreNav: CoreNav) {
             )
         } else {
             TopBar(
-                title = "All notes",
+                title = stringResource(Res.string.feed_all_notes),
                 coreNav = coreNav,
                 right = {
                     IconButton(onClick = { searching = true }) {
-                        Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Search, stringResource(Res.string.search), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                     // "+" new-list — creates an empty list then jumps
                     // straight into rename mode on its detail page.
@@ -129,7 +140,7 @@ fun AllLists(coreNav: CoreNav) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (query.isNotBlank()) "No matching lists." else "No lists yet.",
+                            stringResource(if (query.isNotBlank()) Res.string.feed_no_matching_lists else Res.string.feed_no_lists_yet),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                         )
@@ -167,7 +178,7 @@ private fun TopBar(title: String, coreNav: CoreNav, right: @Composable () -> Uni
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = coreNav::goBack) {
-            Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
+            Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(UtilRes.string.back), tint = colors.onSurface)
         }
         Text(
             title,
@@ -219,18 +230,18 @@ private fun ListsSearchTopBar(value: String, onChange: (String) -> Unit, onCance
                     keyboard?.hide()
                 }),
                 decorationBox = { inner ->
-                    if (value.isEmpty()) Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
+                    if (value.isEmpty()) Text(stringResource(UtilRes.string.search_ellipsis), color = colors.onSurfaceVariant, fontSize = 15.sp)
                     inner()
                 },
             )
             if (value.isNotEmpty()) {
                 IconButton(onClick = { onChange("") }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
         Text(
-            "Cancel",
+            stringResource(UtilRes.string.cancel),
             color = colors.primary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,

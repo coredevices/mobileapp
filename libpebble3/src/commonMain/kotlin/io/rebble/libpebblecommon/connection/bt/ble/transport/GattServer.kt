@@ -16,15 +16,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.Uuid
 
-expect fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer?
+internal expect fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer?
 
-enum class SendResult {
+internal enum class SendResult {
     Success,
     Failed,
     RestartRequired,
 }
 
-expect class GattServer {
+internal expect class GattServer {
     suspend fun addServices()
     suspend fun removeServices()
     suspend fun closeServer()
@@ -38,10 +38,11 @@ expect class GattServer {
         characteristicUuid: Uuid, data: ByteArray
     ): SendResult
     fun wasRestoredWithSubscribedCentral(): Boolean
+    fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean
     fun initServer()
 }
 
-class GattServerManager(
+internal class GattServerManager(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val appContext: AppContext,
@@ -140,6 +141,22 @@ class GattServerManager(
         return gattServer?.wasRestoredWithSubscribedCentral() ?: false
     }
 
+    /** Sends a service-changed over the still-up link so the watch rediscovers before the next attempt. */
+    suspend fun republishServicesAfterInitTimeout(identifier: PebbleBleIdentifier) {
+        if (!blePlatformConfig.republishGattServicesOnPpogInitTimeout) return
+        serverMutex.withLock {
+            val gs = gattServer ?: return
+            if (!servicesAdded) return
+            if (gs.hasOtherSubscribedDevice(identifier)) {
+                logger.w("not re-publishing services after PPoG init timeout: another watch is subscribed")
+                return
+            }
+            logger.d("re-publishing services after PPoG init timeout")
+            gs.removeServices()
+            gs.addServices()
+        }
+    }
+
     private suspend fun openIfNeeded() {
         serverMutex.withLock {
             if (gattServer != null) return@withLock
@@ -170,34 +187,34 @@ class GattServerManager(
     }
 }
 
-data class ServerServiceAdded(val uuid: Uuid)
-data class ServerConnectionstateChanged(
+internal data class ServerServiceAdded(val uuid: Uuid)
+internal data class ServerConnectionstateChanged(
     val deviceId: PebbleBleIdentifier,
     val connectionState: Int
 )
 
 // Watch reading meta characteristic
-data class ServerCharacteristicReadRequest(
+internal data class ServerCharacteristicReadRequest(
     val deviceId: PebbleBleIdentifier,
     val uuid: Uuid,
     val respond: (ByteArray) -> Boolean
 )
 
-data class NotificationSent(val deviceId: PebbleBleIdentifier, val status: Int)
+internal data class NotificationSent(val deviceId: PebbleBleIdentifier, val status: Int)
 
-data class GattService(
+internal data class GattService(
     val uuid: Uuid,
     val characteristics: List<GattCharacteristic>
 )
 
-data class GattCharacteristic(
+internal data class GattCharacteristic(
     val uuid: Uuid,
     val properties: Int,
     val permissions: Int,
     val descriptors: List<GattDescriptor>,
 )
 
-data class GattDescriptor(
+internal data class GattDescriptor(
     val uuid: Uuid,
     val permissions: Int,
 )

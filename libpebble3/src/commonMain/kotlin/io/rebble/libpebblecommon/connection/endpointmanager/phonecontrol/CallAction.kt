@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol
 
-enum class CallAction {
+internal enum class CallAction {
     Answer,
     Hangup
 }

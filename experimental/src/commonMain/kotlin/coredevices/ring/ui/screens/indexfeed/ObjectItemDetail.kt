@@ -75,6 +75,7 @@ import coredevices.ring.data.entity.room.indexfeed.fieldsJson
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import coredevices.ring.ui.components.feed.Size
 import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.util.relativeTime
@@ -89,6 +90,35 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_answer_capture
+import coreapp.ring.generated.resources.feed_created
+import coreapp.ring.generated.resources.feed_delete_kind
+import coreapp.ring.generated.resources.feed_due
+import coreapp.ring.generated.resources.feed_due_at
+import coreapp.ring.generated.resources.feed_duration_hours
+import coreapp.ring.generated.resources.feed_duration_hours_minutes
+import coreapp.ring.generated.resources.feed_duration_minutes
+import coreapp.ring.generated.resources.feed_duration_seconds
+import coreapp.ring.generated.resources.feed_early_alert
+import coreapp.ring.generated.resources.feed_index_recording
+import coreapp.ring.generated.resources.feed_lead_time_before
+import coreapp.ring.generated.resources.feed_list_untitled
+import coreapp.ring.generated.resources.feed_lists_header
+import coreapp.ring.generated.resources.feed_message_to
+import coreapp.ring.generated.resources.feed_more
+import coreapp.ring.generated.resources.feed_notes_placeholder
+import coreapp.ring.generated.resources.feed_recorded_ago
+import coreapp.ring.generated.resources.feed_source_header
+import coreapp.ring.generated.resources.feed_timestamp
+import coreapp.ring.generated.resources.feed_title_placeholder
+import coreapp.ring.generated.resources.feed_type_checkbox
+import coreapp.ring.generated.resources.feed_type_header
+import coreapp.ring.generated.resources.feed_type_note
+import coreapp.ring.generated.resources.feed_type_reminder
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.remove
+import org.jetbrains.compose.resources.stringResource
 
 // Item kind detail (hero card view) — split out of ObjectDetail.kt
 // to keep that file focused on the route entry + chrome.
@@ -225,11 +255,11 @@ internal fun ItemView(
                 // side of the top bar (May 8 fix).
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, "More", tint = colors.onSurfaceVariant)
+                        Icon(Icons.Default.MoreVert, stringResource(Res.string.feed_more), tint = colors.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("Delete ${kindLabel(it.kind).lowercase()}", color = colors.error) },
+                            text = { Text(stringResource(Res.string.feed_delete_kind, kindLabel(it.kind).lowercase()), color = colors.error) },
                             onClick = {
                                 menuOpen = false
                                 deleting = true
@@ -252,6 +282,8 @@ internal fun ItemView(
                 // Auto-saved on dispose / app stop via flushDraft().
                 ItemHeroEdit(
                     kind = draftKind,
+                    done = it.done,
+                    onToggleDone = { vm.toggleDone() },
                     title = draftTitle,
                     body = draftBody,
                     createdAt = draftCreatedAt,
@@ -292,7 +324,7 @@ internal fun ItemView(
             s.sourceRecording?.let { rec ->
                 item("source-label") {
                     Text(
-                        "SOURCE",
+                        stringResource(Res.string.feed_source_header),
                         color = colors.onSurfaceVariant,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -334,7 +366,7 @@ private fun ItemHeroCard(
             // Reminder hero shows "Due Apr 28 · 3:00pm" — the explicit verb
             // disambiguates it from a generic timestamp ("Created" stamp
             // lives in the meta row below when shown).
-            "reminder" -> it.dueAt?.let { append("Due ${formatLongDateTime(it)}") }
+            "reminder" -> it.dueAt?.let { append(stringResource(Res.string.feed_due_at, formatLongDateTime(it))) }
             "scheduled" -> {
                 // For timer/alarm the title already says "Timer · 20 min"
                 // or "Alarm · 22:06"; repeating it as a subtitle is noise.
@@ -342,21 +374,20 @@ private fun ItemHeroCard(
                 // (or the SOURCE card below) carries the timestamp.
                 val fk = fields["fireKind"]?.jsonPrimitive?.contentOrNull
                 if (fk != "alarm" && fk != "timer") {
-                    it.dueAt?.let { append("Due ${formatLongDateTime(it)}") }
+                    it.dueAt?.let { append(stringResource(Res.string.feed_due_at, formatLongDateTime(it))) }
                 }
             }
             "answer" -> {
                 val q = fields["question"]?.jsonPrimitive?.contentOrNull
                 if (!q.isNullOrBlank()) {
-                    append("Q&A capture\n")
-                    append("Q: \"$q\"")
+                    append(stringResource(Res.string.feed_answer_capture, q))
                 }
             }
             "message" -> {
                 val recip = fields["recipientName"]?.jsonPrimitive?.contentOrNull
                     ?: fields["contact"]?.jsonPrimitive?.contentOrNull
                 val status = fields["status"]?.jsonPrimitive?.contentOrNull
-                if (!recip.isNullOrBlank()) append("To $recip")
+                if (!recip.isNullOrBlank()) append(stringResource(Res.string.feed_message_to, recip))
                 if (!status.isNullOrBlank()) {
                     if (isNotEmpty()) append(" · ")
                     append(status.replaceFirstChar { it.uppercase() })
@@ -441,7 +472,7 @@ private fun ItemHeroCard(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                "Created $createdRel",
+                stringResource(Res.string.feed_created, createdRel),
                 color = colors.onSurfaceVariant,
                 fontSize = 11.sp,
                 letterSpacing = 0.4.sp,
@@ -459,6 +490,8 @@ private fun ItemHeroCard(
 @Composable
 private fun ItemHeroEdit(
     kind: String,
+    done: Boolean,
+    onToggleDone: () -> Unit,
     title: String,
     body: String,
     createdAt: Instant,
@@ -492,29 +525,40 @@ private fun ItemHeroEdit(
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(18.dp))
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
-        BasicTextField(
-            value = title,
-            onValueChange = onTitle,
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(
-                color = colors.onSurface,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.4).sp,
-                lineHeight = 28.sp,
-            ).indexTextEntryStyle(),
-            cursorBrush = SolidColor(colors.primary),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-            decorationBox = { inner ->
-                if (title.isEmpty()) {
-                    Text("Title", color = colors.onSurfaceVariant, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
-                inner()
-            },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showsDue) {
+                TodoCheckCircle(
+                    done = done,
+                    onToggle = onToggleDone,
+                    size = Size.Large,
+                )
+                Spacer(Modifier.width(14.dp))
+            }
+            BasicTextField(
+                value = title,
+                onValueChange = onTitle,
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(
+                    color = colors.onSurface,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.4).sp,
+                    lineHeight = 28.sp,
+                    textDecoration = if (done && showsDue) TextDecoration.LineThrough else TextDecoration.None,
+                ).indexTextEntryStyle(),
+                cursorBrush = SolidColor(colors.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                decorationBox = { inner ->
+                    if (title.isEmpty()) {
+                        Text(stringResource(Res.string.feed_title_placeholder), color = colors.onSurfaceVariant, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    }
+                    inner()
+                },
+            )
+        }
         Spacer(Modifier.height(10.dp))
         if (showsDue) {
-            DueAtRow(label = "Due", dueAt = dueAt, onChange = onDueAt)
+            DueAtRow(label = stringResource(Res.string.feed_due), dueAt = dueAt, onChange = onDueAt)
             // Early heads-up notification, only for reminders that scheduled one and
             // that we can actually cancel (built-in reminders).
             if (kind == "reminder" && notifyBeforeMillis != null && canRemoveExtraNotification) {
@@ -530,7 +574,7 @@ private fun ItemHeroEdit(
         if (kind in setOf("note", "checklist", "reminder")) {
             Spacer(Modifier.height(14.dp))
             Text(
-                "TYPE",
+                stringResource(Res.string.feed_type_header),
                 color = colors.onSurfaceVariant,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -541,7 +585,7 @@ private fun ItemHeroEdit(
         if (!showsDue && listOptions.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Text(
-                "LISTS",
+                stringResource(Res.string.feed_lists_header),
                 color = colors.onSurfaceVariant,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -572,7 +616,7 @@ private fun ItemHeroEdit(
                             Spacer(Modifier.width(5.dp))
                         }
                         Text(
-                            l.title.ifBlank { "List" },
+                            l.title.ifBlank { stringResource(Res.string.feed_list_untitled) },
                             color = if (selected) colors.onPrimaryContainer else colors.onSurface,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium,
@@ -599,7 +643,7 @@ private fun ItemHeroEdit(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
             decorationBox = { inner ->
                 if (body.isEmpty()) {
-                    Text("Notes…", color = colors.onSurfaceVariant, fontSize = 14.sp)
+                    Text(stringResource(Res.string.feed_notes_placeholder), color = colors.onSurfaceVariant, fontSize = 14.sp)
                 }
                 inner()
             },
@@ -621,7 +665,7 @@ private fun TimestampRow(timestamp: Instant, onChange: (Instant) -> Unit) {
             .clickable { showPicker = true }
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Text("Timestamp", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
+        Text(stringResource(Res.string.feed_timestamp), color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
         Text(
             formatLongDateTime(timestamp),
             color = colors.onSurface,
@@ -665,7 +709,7 @@ private fun TypeButtons(kind: String, onKind: (String) -> Unit, labelAll: Boolea
     Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
         TypeButton(
             selected = kind == "note",
-            label = "Note",
+            label = stringResource(Res.string.feed_type_note),
             icon = if (kind == "note") Icons.AutoMirrored.Filled.StickyNote2 else Icons.AutoMirrored.Outlined.StickyNote2,
             showLabel = labelAll,
             shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
@@ -673,7 +717,7 @@ private fun TypeButtons(kind: String, onKind: (String) -> Unit, labelAll: Boolea
         )
         TypeButton(
             selected = kind == "checklist",
-            label = "Checkbox",
+            label = stringResource(Res.string.feed_type_checkbox),
             icon = if (kind == "checklist") Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
             showLabel = labelAll,
             shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
@@ -681,7 +725,7 @@ private fun TypeButtons(kind: String, onKind: (String) -> Unit, labelAll: Boolea
         )
         TypeButton(
             selected = kind == "reminder",
-            label = "Reminder",
+            label = stringResource(Res.string.feed_type_reminder),
             icon = if (kind == "reminder") Icons.Filled.Notifications else Icons.Outlined.Notifications,
             showLabel = labelAll,
             shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
@@ -730,15 +774,15 @@ private fun EarlyNotificationRow(notifyBeforeMillis: Long, onRemove: () -> Unit)
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Text("Early alert", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
+        Text(stringResource(Res.string.feed_early_alert), color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
         Text(
-            "${formatLeadTime(notifyBeforeMillis)} before",
+            stringResource(Res.string.feed_lead_time_before, formatLeadTime(notifyBeforeMillis)),
             color = colors.onSurface,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f),
         )
         Text(
-            "Remove",
+            stringResource(UtilRes.string.remove),
             color = colors.primary,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
@@ -750,16 +794,17 @@ private fun EarlyNotificationRow(notifyBeforeMillis: Long, onRemove: () -> Unit)
 }
 
 /** "2h", "2h 30m", "30m" — the human lead time for an early reminder notification. */
+@Composable
 private fun formatLeadTime(millis: Long): String {
     val d = millis.milliseconds
     return when {
         d.inWholeHours >= 1 -> {
             val hours = d.inWholeHours
             val minutes = (d - hours.hours).inWholeMinutes
-            if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
+            if (minutes > 0) stringResource(Res.string.feed_duration_hours_minutes, hours, minutes) else stringResource(Res.string.feed_duration_hours, hours)
         }
-        d.inWholeMinutes >= 1 -> "${d.inWholeMinutes}m"
-        else -> "${d.inWholeSeconds}s"
+        d.inWholeMinutes >= 1 -> stringResource(Res.string.feed_duration_minutes, d.inWholeMinutes)
+        else -> stringResource(Res.string.feed_duration_seconds, d.inWholeSeconds)
     }
 }
 
@@ -790,7 +835,7 @@ private fun SourceRecordingCard(
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "RECORDED · ${relativeTime(recording.localTimestamp).uppercase()}",
+                stringResource(Res.string.feed_recorded_ago, relativeTime(recording.localTimestamp).uppercase()),
                 color = colors.primary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -798,7 +843,7 @@ private fun SourceRecordingCard(
             )
             val text = transcription.takeIf { it.isNotBlank() }
                 ?: recording.assistantTitle?.takeIf { it.isNotBlank() }
-                ?: "Index Recording"
+                ?: stringResource(Res.string.feed_index_recording)
             Text(
                 "\"$text\"",
                 color = colors.onSurface,

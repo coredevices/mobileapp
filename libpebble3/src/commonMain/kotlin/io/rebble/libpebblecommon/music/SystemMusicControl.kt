@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.imaging.EncodedImage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-interface SystemMusicControl {
+internal interface SystemMusicControl {
     fun play()
     fun pause()
     fun playPause()
@@ -38,15 +38,15 @@ interface SystemMusicControl {
  * The watch's copy of a track name is truncated to a fixed byte length, which can cut a multi-byte
  * character in half and decode as U+FFFD, so only compare up to the first replacement character.
  */
-fun matchesTruncated(full: String?, truncated: String): Boolean =
+internal fun matchesTruncated(full: String?, truncated: String): Boolean =
     full.orEmpty().startsWith(truncated.substringBefore('\uFFFD'))
 
-data class PlayerInfo(
+internal data class PlayerInfo(
     val packageId: String,
     val name: String,
 )
 
-data class PlaybackStatus(
+internal data class PlaybackStatus(
     val playerInfo: PlayerInfo?,
     val playbackState: PlaybackState,
     val currentTrack: MusicTrack? = null,

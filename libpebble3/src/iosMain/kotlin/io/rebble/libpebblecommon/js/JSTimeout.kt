@@ -12,20 +12,20 @@ import platform.JavaScriptCore.JSManagedValue
 import platform.JavaScriptCore.JSValue
 import kotlin.time.Duration.Companion.milliseconds
 
-class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String) -> JSValue?): RegisterableJsInterface {
+internal class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String) -> JSValue?): RegisterableJsInterface {
     private val timeouts = mutableMapOf<Int, Job>()
     private var timeoutIDs = (1..Int.MAX_VALUE).iterator()
     private val jsFunTriggerTimeout: JSManagedValue get() = JSManagedValue(evalRaw("globalThis._LibPebbleTriggerTimeout")!!)
     private val jsFunTriggerInterval: JSManagedValue get() = JSManagedValue(evalRaw("globalThis._LibPebbleTriggerInterval")!!)
-    override val interf = mapOf(
+    override val interf: Map<String, *> = mapOf(
         "setTimeout" to this::setTimeout,
         "setInterval" to this::setInterval,
         "clearTimeout" to this::clearTimeout,
         "clearInterval" to this::clearInterval
     )
-    override val name = "_Timeout"
+    override val name: String = "_Timeout"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+    override fun dispatch(method: String, args: List<Any?>): Double? = when (method) {
         "setTimeout" -> setTimeout((args[0] as Number).toDouble())
         "setInterval" -> setInterval((args[0] as Number).toDouble())
         "clearTimeout" -> { clearTimeout((args[0] as Number).toInt()); null }

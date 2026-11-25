@@ -74,48 +74,15 @@ open class AgentNenya(
                 logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }
             }
             try {
+                val schema = definition.inputSchema
+                val properties = schema.properties?.inlineRefs(schema.defs) ?: JsonObject(emptyMap())
                 ToolDeclaration(
                     function = FunctionDeclaration(
                         name = compositeName,
                         description = definition.description ?: "",
                         parameters = FunctionDeclarationParameters(
-                            properties = definition.inputSchema.properties?.mapValues { (key, param) ->
-                                FunctionDeclarationParameter(
-                                    type = param.jsonObject["type"] ?: run {
-                                        if (param.jsonObject["anyOf"] != null) {
-                                            null
-                                        } else {
-                                            throw Exception("Parameter $key has no type")
-                                        }
-                                    },
-                                    description = param.jsonObject["description"]?.jsonPrimitive?.content ?: "",
-                                    enum = param.jsonObject["enum"]?.jsonArray?.map { it.toString().trim('"') },
-                                    minimum = param.jsonObject["minimum"]?.toString()?.toIntOrNull(),
-                                    maximum = param.jsonObject["maximum"]?.toString()?.toIntOrNull(),
-                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.mapNotNull { anyOfParam ->
-                                        val p = anyOfParam.jsonObject
-                                        val type = p["type"] ?: return@mapNotNull null
-                                        FunctionDeclarationParameter(
-                                            type = type,
-                                            description = p["description"]?.jsonPrimitive?.content,
-                                            enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
-                                            minimum = p["minimum"]?.toString()?.toIntOrNull(),
-                                            maximum = p["maximum"]?.toString()?.toIntOrNull(),
-                                            items = p["items"]?.jsonObject ?: if (p["type"]?.toString()?.trim('"') == "array") {
-                                                buildJsonObject {
-                                                    put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
-                                                }
-                                            } else null,
-                                        )
-                                    }?.takeIf { it.isNotEmpty() },
-                                    items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {
-                                        buildJsonObject {
-                                            put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
-                                        }
-                                    } else null
-                                )
-                            } ?: emptyMap(),
-                            required = definition.inputSchema.required ?: emptyList(),
+                            properties = properties.mapValues { (key, param) -> param.jsonObject.toParameter(key) },
+                            required = schema.required ?: emptyList(),
                             additionalProperties = false
                         )
                     )
@@ -125,6 +92,28 @@ open class AgentNenya(
                 null
             }
         }
+    }
+
+    private fun JsonObject.toParameter(key: String, nested: Boolean = false): FunctionDeclarationParameter {
+        val type = this["type"]
+        if (type == null && this["anyOf"] == null && !nested) throw Exception("Parameter $key has no type")
+        return FunctionDeclarationParameter(
+            type = type,
+            description = this["description"]?.jsonPrimitive?.content ?: if (nested) null else "",
+            enum = this["enum"]?.jsonArray?.map { it.toString().trim('"') },
+            minimum = this["minimum"]?.toString()?.toIntOrNull(),
+            maximum = this["maximum"]?.toString()?.toIntOrNull(),
+            anyOf = this["anyOf"]?.jsonArray?.mapNotNull { branch ->
+                branch.jsonObject.takeIf { it["type"] != null }?.toParameter(key, nested = true)
+            }?.takeIf { it.isNotEmpty() },
+            items = this["items"]?.jsonObject ?: if ((type as? JsonPrimitive)?.content == "array") {
+                buildJsonObject {
+                    put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
+                }
+            } else null,
+            properties = this["properties"]?.jsonObject?.mapValues { (name, param) -> param.jsonObject.toParameter(name, nested = true) },
+            required = this["required"]?.jsonArray?.map { it.jsonPrimitive.content },
+        )
     }
 
     override suspend fun runInference(
@@ -225,7 +214,11 @@ data class FunctionDeclarationParameter(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val maximum: Int? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val items: JsonObject? = null
+    val items: JsonObject? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val properties: Map<String, FunctionDeclarationParameter>? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val required: List<String>? = null,
 )
 
 @Serializable

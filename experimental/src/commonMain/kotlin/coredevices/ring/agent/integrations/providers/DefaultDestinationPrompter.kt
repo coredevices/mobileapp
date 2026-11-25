@@ -22,6 +22,7 @@ data class DefaultDestinationPrompt(
             when (it) {
                 IntegrationSupport.Note -> "notes"
                 IntegrationSupport.Reminder -> "reminders"
+                IntegrationSupport.List -> "lists"
                 IntegrationSupport.Agent -> "agent"
             }
         }
@@ -74,6 +75,7 @@ class DefaultDestinationPrompter(
     private fun selected(support: IntegrationSupport): IntegrationProvider? = when (support) {
         IntegrationSupport.Note -> providers.selectedNoteProvider.value
         IntegrationSupport.Reminder -> providers.selectedReminderProvider.value
+        IntegrationSupport.List -> providers.selectedListProvider.value
         IntegrationSupport.Agent -> null
     }
 }

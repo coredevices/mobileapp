@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +42,7 @@ class TimelineAttributeCapabilityTest {
         timestamp = Instant.fromEpochSeconds(1757376000),
     ) {
         itemID = Uuid.random()
-        layout = TimelineItem.Layout.WeatherPin
+        layout = TimelineItemLayout.WeatherPin
         attributes {
             title { "Sunrise" }
             uByte(TimelineAttribute.WeatherPinKind) { 1u }

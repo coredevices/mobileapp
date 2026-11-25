@@ -3,66 +3,66 @@ package io.rebble.libpebblecommon.util
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-actual class DataBuffer {
+public actual class DataBuffer {
     private val actualBuf: ByteBuffer
 
-    actual constructor(size: Int) {
+    public actual constructor(size: Int) {
         actualBuf = ByteBuffer.allocate(size)
     }
 
-    actual constructor(bytes: UByteArray) {
+    public actual constructor(bytes: UByteArray) {
         actualBuf = ByteBuffer.wrap(bytes.toByteArray())
     }
 
     /**
      * Total length of the buffer
      */
-    actual val length: Int
+    public actual val length: Int
         get() = actualBuf.capacity()
 
     /**
      * Current position in the buffer
      */
-    actual val readPosition: Int
+    public actual val readPosition: Int
         get() = actualBuf.position()
 
-    actual val remaining: Int
+    public actual val remaining: Int
         get() = actualBuf.remaining()
 
-    actual fun putUShort(short: UShort) {
+    public actual fun putUShort(short: UShort) {
         actualBuf.putShort(short.toShort())
     }
 
-    actual fun getUShort(): UShort = actualBuf.short.toUShort()
+    public actual fun getUShort(): UShort = actualBuf.short.toUShort()
 
-    actual fun putShort(short: Short) {
+    public actual fun putShort(short: Short) {
         actualBuf.putShort(short)
     }
 
-    actual fun getShort(): Short = actualBuf.short
+    public actual fun getShort(): Short = actualBuf.short
 
-    actual fun putUByte(byte: UByte) {
+    public actual fun putUByte(byte: UByte) {
         actualBuf.put(byte.toByte())
     }
-    actual fun getUByte(): UByte = actualBuf.get().toUByte()
+    public actual fun getUByte(): UByte = actualBuf.get().toUByte()
 
-    actual fun putByte(byte: Byte) {
+    public actual fun putByte(byte: Byte) {
         actualBuf.put(byte)
     }
-    actual fun getByte(): Byte = actualBuf.get()
+    public actual fun getByte(): Byte = actualBuf.get()
 
-    actual fun putBytes(bytes: UByteArray) {
+    public actual fun putBytes(bytes: UByteArray) {
         actualBuf.put(bytes.toByteArray())
     }
-    actual fun getBytes(count: Int): UByteArray {
+    public actual fun getBytes(count: Int): UByteArray {
         val tBuf = ByteArray(count)
         actualBuf.get(tBuf)
         return tBuf.toUByteArray()
     }
 
-    actual fun array(): UByteArray = actualBuf.array().toUByteArray()
+    public actual fun array(): UByteArray = actualBuf.array().toUByteArray()
 
-    actual fun setEndian(endian: Endian) {
+    public actual fun setEndian(endian: Endian) {
         when (endian) {
             Endian.Big -> actualBuf.order(ByteOrder.BIG_ENDIAN)
             Endian.Little -> actualBuf.order(ByteOrder.LITTLE_ENDIAN)
@@ -70,22 +70,22 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putInt(int: Int) {
+    public actual fun putInt(int: Int) {
         actualBuf.putInt(int)
     }
-    actual fun getInt(): Int = actualBuf.int
+    public actual fun getInt(): Int = actualBuf.int
 
-    actual fun putUInt(uint: UInt) {
+    public actual fun putUInt(uint: UInt) {
         actualBuf.putInt(uint.toInt())
     }
-    actual fun getUInt(): UInt = actualBuf.int.toUInt()
+    public actual fun getUInt(): UInt = actualBuf.int.toUInt()
 
-    actual fun putULong(ulong: ULong) {
+    public actual fun putULong(ulong: ULong) {
         actualBuf.putLong(ulong.toLong())
     }
-    actual fun getULong(): ULong = actualBuf.long.toULong()
+    public actual fun getULong(): ULong = actualBuf.long.toULong()
 
-    actual fun rewind() {
+    public actual fun rewind() {
         actualBuf.rewind()
     }
 }

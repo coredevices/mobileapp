@@ -8,8 +8,8 @@ import io.rebble.libpebblecommon.structmapper.SUUID
 import kotlin.uuid.Uuid
 
 
-sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
-    val command = SUByte(m, message.value)
+internal sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
+    val command: SUByte = SUByte(m, message.value)
 
     init {
         type = command.get()
@@ -25,7 +25,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
         uuid: Uuid = Uuid.NIL
     ) :
         AppRunStateMessage(Message.AppRunStateStart) {
-        val uuid = SUUID(m, uuid)
+        val uuid: SUUID = SUUID(m, uuid)
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is AppRunStateStart) return false
@@ -51,7 +51,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
         uuid: Uuid = Uuid.NIL
     ) :
         AppRunStateMessage(Message.AppRunStateStop) {
-        val uuid = SUUID(m, uuid)
+        val uuid: SUUID = SUUID(m, uuid)
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is AppRunStateStop) return false
@@ -76,7 +76,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
     class AppRunStateRequest : AppRunStateMessage(Message.AppRunStateRequest)
 
     companion object {
-        val endpoint = ProtocolEndpoint.APP_RUN_STATE
+        val endpoint: ProtocolEndpoint = ProtocolEndpoint.APP_RUN_STATE
     }
 
     override fun equals(other: Any?): Boolean {
@@ -93,7 +93,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
     }
 }
 
-fun appRunStatePacketsRegister() {
+internal fun appRunStatePacketsRegister() {
     PacketRegistry.register(
         AppRunStateMessage.endpoint,
         AppRunStateMessage.Message.AppRunStateStart.value

@@ -12,13 +12,15 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlin.time.Duration.Companion.seconds
 
-abstract class JsRunner(
+internal abstract class JsRunner(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     val jsPath: Path,
@@ -73,7 +75,7 @@ abstract class JsRunner(
     private val configReplies = atomic(mapOf<Int, CompletableDeferred<String>>())
     private val nextConfigRequestId = atomic(0)
     private val _configPushes = MutableSharedFlow<String>(extraBufferCapacity = 16)
-    val configPushes = _configPushes.asSharedFlow()
+    val configPushes: SharedFlow<String> = _configPushes.asSharedFlow()
 
     /** Send [json] to the app's JS and wait for it to answer. Null if it doesn't. */
     suspend fun sendConfigMessage(json: String): String? {
@@ -96,15 +98,15 @@ abstract class JsRunner(
         _configPushes.tryEmit(json)
     }
 
-    protected val _outgoingAppMessages = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
-    val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
-    protected val _readyState = MutableStateFlow(false)
-    val readyState = _readyState.asStateFlow()
+    protected val _outgoingAppMessages: MutableSharedFlow<AppMessageRequest> = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
+    val outgoingAppMessages: SharedFlow<AppMessageRequest> = _outgoingAppMessages.asSharedFlow()
+    protected val _readyState: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val readyState: StateFlow<Boolean> = _readyState.asStateFlow()
 }
 
 private val CONFIG_MESSAGE_TIMEOUT = 30.seconds
 
-class AppMessageRequest(
+internal class AppMessageRequest(
     val data: String
 ) {
     sealed class State {
@@ -113,5 +115,5 @@ class AppMessageRequest(
         data class TransactionId(val transactionId: UByte) : State()
         data class Sent(val result: AppMessageResult) : State()
     }
-    val state = MutableStateFlow<State>(State.Pending)
+    val state: MutableStateFlow<AppMessageRequest.State> = MutableStateFlow<State>(State.Pending)
 }

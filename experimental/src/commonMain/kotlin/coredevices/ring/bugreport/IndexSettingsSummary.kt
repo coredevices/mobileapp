@@ -38,7 +38,7 @@ class IndexSettingsSummary(
 
         val webhooks = RingGesture.entries.mapNotNull { gesture ->
             webhookPreferences.configFor(gesture).takeIf { it.isActive }?.let { config ->
-                "${gesture.gestureLabel} -> ${hostOf(config.url)} (${config.payloadMode})"
+                "${gesture.gestureLabel} -> ${hostOf(config.url)} (${config.payloadMode}${if (config.sendJson) ", JSON" else ""})"
             }
         }
         appendLine("Webhooks: ${webhooks.ifEmpty { listOf("none") }.joinToString("; ")}")
@@ -53,6 +53,7 @@ class IndexSettingsSummary(
 
         appendLine("Notes save to: ${providers.selectedNoteProvider.value.notesTitle}")
         appendLine("Reminders save to: ${providers.selectedReminderProvider.value.remindersTitle}")
+        appendLine("List items save to: ${providers.selectedListProvider.value.listsTitle}")
         appendLine("Unclear requests become: ${preferences.defaultCaptureType.value}")
         appendLine("Phone calendar connected: ${preferences.phoneCalendarEnabled.value}")
 

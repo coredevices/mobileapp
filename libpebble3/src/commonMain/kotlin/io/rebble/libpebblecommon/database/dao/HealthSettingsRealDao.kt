@@ -21,14 +21,14 @@ import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue.Companion.encodeToString
-import io.rebble.libpebblecommon.database.entity.updateHeartRateZonesFromAge
+import io.rebble.libpebblecommon.database.entity.updateAgeDerivedSettings
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.util.DataBuffer
 import kotlin.time.Instant
 
 @Dao
-interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
+internal interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
     @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         val key = write.key.toByteArray().decodeToString().trimEnd('\u0000')
@@ -128,7 +128,7 @@ interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
             )
         )
         if (key == "activityPreferences" || key == "heartRatePreferences") {
-            updateHeartRateZonesFromAge()
+            updateAgeDerivedSettings()
         }
         return BlobResponse.BlobStatus.Success
     }

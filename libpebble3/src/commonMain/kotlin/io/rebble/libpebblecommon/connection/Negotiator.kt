@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
-class Negotiator() {
+internal class Negotiator() {
     private val logger = Logger.withTag("Negotiator")
 
     suspend fun negotiate(

@@ -65,15 +65,31 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.settings_color
+import coreapp.pebble.generated.resources.settings_color_hex
+import coreapp.pebble.generated.resources.settings_color_presets
+import coreapp.pebble.generated.resources.settings_color_select_desc
+import coreapp.pebble.generated.resources.settings_color_tab_grid
+import coreapp.pebble.generated.resources.settings_color_tab_list
+import coreapp.pebble.generated.resources.settings_default
+import coreapp.pebble.generated.resources.settings_prefs_reset
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.none
+import coreapp.util.generated.resources.ok
+import coreapp.util.generated.resources.select
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.database.entity.RgbColorPreset
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
-enum class ColorTab(val icon: ImageVector) {
-    Grid(Icons.Default.GridOn),
-    List(Icons.AutoMirrored.Filled.ListAlt),
+enum class ColorTab(val icon: ImageVector, val title: StringResource) {
+    Grid(Icons.Default.GridOn, Res.string.settings_color_tab_grid),
+    List(Icons.AutoMirrored.Filled.ListAlt, Res.string.settings_color_tab_list),
 }
 
 @Composable
@@ -126,7 +142,7 @@ fun ColorPickerDialog(
                                 onClick = { selectedTab.value = tab },
                                 selected = selectedTab.value == tab,
                                 icon = { },
-                                label = { Icon(tab.icon, contentDescription = tab.name) },
+                                label = { Icon(tab.icon, contentDescription = stringResource(tab.title)) },
                             )
                         }
                     }
@@ -144,7 +160,7 @@ fun ColorPickerDialog(
                             onDismissWithoutResult()
                         },
                         content = {
-                            Text("Cancel")
+                            Text(stringResource(UtilRes.string.cancel))
                         },
                         modifier = Modifier.weight(1f),
                     )
@@ -153,7 +169,7 @@ fun ColorPickerDialog(
                             onColorSelected(null)
                         },
                         content = {
-                            Text("None")
+                            Text(stringResource(UtilRes.string.none))
                         },
                         modifier = Modifier.weight(1f),
                     )
@@ -261,7 +277,7 @@ fun SelectColorOrNone(
     }
     ListItem(
         headlineContent = {
-            Text("Color")
+            Text(stringResource(Res.string.settings_color))
         },
         supportingContent = {
             val surfaceColor = MaterialTheme.colorScheme.surface
@@ -279,7 +295,7 @@ fun SelectColorOrNone(
                         .background(bgColor, shape = RoundedCornerShape(8.dp))
                 ) {
                     Text(
-                        text = color?.displayName ?: "Default",
+                        text = color?.displayName ?: stringResource(Res.string.settings_default),
                         color = textColor,
                         modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
                     )
@@ -288,12 +304,12 @@ fun SelectColorOrNone(
         },
         trailingContent = {
             PebbleElevatedButton(
-                text = "Select",
+                text = stringResource(UtilRes.string.select),
                 onClick = {
                     showColorChooser = true
                 },
                 icon = Icons.Default.ColorLens,
-                contentDescription = "Select color",
+                contentDescription = stringResource(Res.string.settings_color_select_desc),
                 primaryColor = true,
                 modifier = Modifier.padding(8.dp),
             )
@@ -372,7 +388,7 @@ fun RgbColorPickerDialog(
                         )
                     }
                     if (presets.isNotEmpty()) {
-                        Text("Presets", modifier = Modifier.padding(bottom = 4.dp))
+                        Text(stringResource(Res.string.settings_color_presets), modifier = Modifier.padding(bottom = 4.dp))
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -416,7 +432,7 @@ fun RgbColorPickerDialog(
                             hexInput = it.uppercase().take(6)
                             applyHex(hexInput)
                         },
-                        label = { Text("Hex") },
+                        label = { Text(stringResource(Res.string.settings_color_hex)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
@@ -426,16 +442,16 @@ fun RgbColorPickerDialog(
                         TextButton(
                             onClick = onDismissWithoutResult,
                             modifier = Modifier.weight(1f),
-                        ) { Text("Cancel") }
+                        ) { Text(stringResource(UtilRes.string.cancel)) }
                         TextButton(
                             onClick = { setRgb(defaultRgb) },
                             modifier = Modifier.weight(1f),
                             enabled = rgb != (defaultRgb and 0x00FFFFFFu),
-                        ) { Text("Reset") }
+                        ) { Text(stringResource(Res.string.settings_prefs_reset)) }
                         TextButton(
                             onClick = { onColorSelected(rgb) },
                             modifier = Modifier.weight(1f),
-                        ) { Text("OK") }
+                        ) { Text(stringResource(UtilRes.string.ok)) }
                     }
                 }
             }
@@ -455,7 +471,7 @@ private fun PresetChip(
     Box(modifier = modifier) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-            tooltip = { PlainTooltip { Text(preset.displayName) } },
+            tooltip = { PlainTooltip { Text(preset.label()) } },
             state = tooltipState,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -507,7 +523,7 @@ fun SelectRgbColor(
     currentRgb: UInt,
     defaultRgb: UInt,
     presets: List<RgbColorPreset>,
-    label: String = "Color",
+    label: String = stringResource(Res.string.settings_color),
     onChangeColor: (UInt) -> Unit,
 ) {
     var showPicker by remember { mutableStateOf(false) }
@@ -535,7 +551,7 @@ fun SelectRgbColor(
                         .background(swatchColor, shape = RoundedCornerShape(8.dp))
                 ) {
                     Text(
-                        text = matchedPreset?.displayName ?: ("#" + currentRgb.toString(16).padStart(6, '0').uppercase()),
+                        text = matchedPreset?.label() ?: ("#" + currentRgb.toString(16).padStart(6, '0').uppercase()),
                         color = if (swatchColor.luminance() > 0.55f) Color.Black else Color.White,
                         modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
                     )
@@ -544,10 +560,10 @@ fun SelectRgbColor(
         },
         trailingContent = {
             PebbleElevatedButton(
-                text = "Select",
+                text = stringResource(UtilRes.string.select),
                 onClick = { showPicker = true },
                 icon = Icons.Default.ColorLens,
-                contentDescription = "Select color",
+                contentDescription = stringResource(Res.string.settings_color_select_desc),
                 primaryColor = true,
                 modifier = Modifier.padding(8.dp),
             )

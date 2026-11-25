@@ -8,6 +8,7 @@ import coredevices.pebble.services.pluginMetadata
 import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.ui.InstallReviewDialog
 import coredevices.pebble.ui.NativeLockerAddUtil
+import coredevices.pebble.watchesOrEmpty
 import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -61,8 +62,8 @@ class AppstorePluginStore(
     }
 
     // Plugins run on the phone, but the store wants a hardware to list for.
-    private fun watchType(): WatchType =
-        libPebble.watches.value.filterIsInstance<KnownPebbleDevice>().firstOrNull()?.watchType?.watchType
+    private suspend fun watchType(): WatchType =
+        libPebble.watchesOrEmpty().filterIsInstance<KnownPebbleDevice>().firstOrNull()?.watchType?.watchType
             ?: WatchType.EMERY
 
     private companion object {

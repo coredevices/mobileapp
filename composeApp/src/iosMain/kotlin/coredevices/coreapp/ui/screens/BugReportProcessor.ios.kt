@@ -10,6 +10,9 @@ import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.bug_report_title
+import org.jetbrains.compose.resources.getString
 
 private var bugReportBackgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
 
@@ -34,9 +37,10 @@ actual fun stopForegroundService() {
     }
 }
 
-actual fun notifyState(message: String) {
+actual suspend fun notifyState(message: String) {
+    val title = getString(Res.string.bug_report_title)
     val content = UNMutableNotificationContent().apply {
-        setTitle("Bug Report")
+        setTitle(title)
         setBody(message)
         setSound(UNNotificationSound.defaultSound)
     }

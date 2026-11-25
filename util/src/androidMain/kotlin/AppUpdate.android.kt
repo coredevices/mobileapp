@@ -19,9 +19,12 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.util.R
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
@@ -30,6 +33,12 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.misc_app_update_channel_description
+import coreapp.util.generated.resources.misc_app_update_channel_name
+import coreapp.util.generated.resources.misc_app_update_text
+import coreapp.util.generated.resources.misc_app_update_title
+import org.jetbrains.compose.resources.getString
 
 actual data class AppUpdatePlatformContent(
     val androidUpdate: AppUpdateInfo
@@ -42,11 +51,26 @@ class AndroidAppUpdate(
 ) : AppUpdate {
     private val logger = Logger.withTag("AndroidAppUpdate")
 
-    override val updateAvailable: StateFlow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
-        .onStart {
-            logger.d { "Checking for app update - installed via ${resolveInstaller()}" }
-            emit(AppUpdateResult.NotAvailable) // Emit a loading state initially
+    override val updateAvailable: StateFlow<AppUpdateState> = flow {
+        val installer = resolveInstaller()
+        logger.d { "Checking for app update - installed via $installer" }
+        if (installer == PLAY_STORE_PACKAGE) {
+            emitAll(playUpdateFlow())
+        } else {
+            logger.d { "Not installed via Play Store (installer: $installer) - skipping Play update check" }
+            emit(AppUpdateState.NoUpdateAvailable)
         }
+    }.stateIn(
+        scope = GlobalScope,
+        started = SharingStarted.WhileSubscribed(
+            stopTimeoutMillis = 30.minutes.inWholeMilliseconds,
+            replayExpirationMillis = 12.hours.inWholeMilliseconds,
+        ),
+        initialValue = AppUpdateState.NoUpdateAvailable,
+    )
+
+    private fun playUpdateFlow(): Flow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
+        .onStart { emit(AppUpdateResult.NotAvailable) } // Emit a loading state initially
         .catch { exception ->
             Logger.w(exception) { "Failed to check for CoreApp updates" }
             emit(AppUpdateResult.NotAvailable)
@@ -76,14 +100,6 @@ class AndroidAppUpdate(
                 }
             }
         }
-        .stateIn(
-            scope = GlobalScope,
-            started = SharingStarted.WhileSubscribed(
-                stopTimeoutMillis = 30.minutes.inWholeMilliseconds,
-                replayExpirationMillis = 12.hours.inWholeMilliseconds,
-            ),
-            initialValue = AppUpdateState.NoUpdateAvailable,
-        )
 
     override fun startUpdateFlow(uiContext: PlatformUiContext, update: AppUpdatePlatformContent) {
         if (update.androidUpdate.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
@@ -111,7 +127,7 @@ class AndroidAppUpdate(
         null
     }
 
-    private fun createNotification(context: Context) {
+    private suspend fun createNotification(context: Context) {
         val playStoreIntent = getPlayStoreMarketIntent(context, context.packageName)
         if (playStoreIntent == null) {
             logger.w { "Failed to create play store intent for notification" }
@@ -131,11 +147,11 @@ class AndroidAppUpdate(
             pendingIntentFlags
         )
 
-        context.createChannel()
+        context.createChannel(getString(Res.string.misc_app_update_channel_name), getString(Res.string.misc_app_update_channel_description))
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Pebble App Update Available")
-            .setContentText("Please update the Pebble app!")
+            .setContentTitle(getString(Res.string.misc_app_update_title))
+            .setContentText(getString(Res.string.misc_app_update_text))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -156,13 +172,13 @@ class AndroidAppUpdate(
         }
     }
 
-    private fun Context.createChannel() {
+    private fun Context.createChannel(name: String, channelDescription: String) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "App Updates",
+            name,
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Pebble App Updates"
+            description = channelDescription
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)

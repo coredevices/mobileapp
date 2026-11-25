@@ -14,10 +14,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-actual class PhoneNetworkMonitor(
+public actual class PhoneNetworkMonitor(
     private val appContext: AppContext,
 ) {
-    actual val connection: Flow<String?> = callbackFlow {
+    public actual val connection: Flow<String?> = callbackFlow {
         val connectivity = appContext.context.getSystemService(ConnectivityManager::class.java)
         if (connectivity == null) {
             trySend(null)
@@ -52,7 +52,7 @@ actual class PhoneNetworkMonitor(
         }
     }
 
-    actual val cellGeneration: Flow<String?> = callbackFlow {
+    public actual val cellGeneration: Flow<String?> = callbackFlow {
         val context = appContext.context
         val telephony = context.getSystemService(TelephonyManager::class.java)
         if (telephony == null) {

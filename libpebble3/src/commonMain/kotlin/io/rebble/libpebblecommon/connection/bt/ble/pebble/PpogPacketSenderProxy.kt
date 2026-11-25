@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
  * post-discovery by [PebbleBle] based on whether the watch advertises the
  * reversed PPoG service.
  */
-class PpogPacketSenderProxy(
+internal class PpogPacketSenderProxy(
     private val ppogClient: PpogClient,
     private val ppogServer: PpogServer,
 ) : PPoGPacketSender {
@@ -40,5 +40,9 @@ class PpogPacketSenderProxy(
     override fun wasRestoredWithSubscribedCentral(): Boolean = when (mode) {
         Mode.Forward -> ppogServer.wasRestoredWithSubscribedCentral()
         else -> false
+    }
+
+    override suspend fun onInitTimeout() {
+        if (mode == Mode.Forward) ppogServer.onInitTimeout()
     }
 }

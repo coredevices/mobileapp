@@ -10,7 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 
-class JSCPrivatePKJSInterface(
+internal class JSCPrivatePKJSInterface(
     private val jsPath: Path,
     jsRunner: JsRunner,
     device: CompanionAppDevice,
@@ -27,7 +27,7 @@ class JSCPrivatePKJSInterface(
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
-    override val interf = mapOf(
+    override val interf: Map<String, *> = mapOf(
         "sendAppMessageString" to this::sendAppMessageString,
         "privateLog" to this::privateLog,
         "onConsoleLog" to { level: Any?, message: Any?, trace: Any? ->
@@ -63,7 +63,7 @@ class JSCPrivatePKJSInterface(
 
     override val name: String = "_Pebble"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+    override fun dispatch(method: String, args: List<Any?>): Comparable<*>? = when (method) {
         "sendAppMessageString" -> sendAppMessageString(args[0].toString())
         "privateLog" -> { privateLog(args[0].toString()); null }
         "onConsoleLog" -> {

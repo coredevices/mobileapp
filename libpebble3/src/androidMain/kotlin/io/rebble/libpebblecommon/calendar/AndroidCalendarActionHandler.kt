@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 
-class AndroidCalendarActionHandler(
+internal class AndroidCalendarActionHandler(
     private val contentResolver: ContentResolver,
 ) : PlatformCalendarActionHandler {
     private val logger = Logger.withTag("AndroidCalendarActionHandler")

@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.js.FETCH_JS
 import io.rebble.libpebblecommon.js.FETCH_REGISTRY
 import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.permissions.RunningApps
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -56,7 +58,7 @@ import kotlin.uuid.Uuid
  * re-run when anything they subscribed to changes; actions are one-shot. Sessions are
  * cold-started per request and torn down immediately.
  */
-class JsPlugin(
+internal class JsPlugin(
     override val pluginUuid: Uuid,
     override val name: String,
     private val manifest: PluginManifest,
@@ -72,6 +74,7 @@ class JsPlugin(
     private val fileAccess: PluginFileAccess,
     private val fileSystem: PluginFileSystem,
     private val logs: PluginLogs,
+    private val dataUsage: DataUsageRecorder,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
     private val otherSources: PluginSources,
@@ -101,6 +104,7 @@ class JsPlugin(
         val item: String,
         val properties: List<String>?,
         val iconPixelSize: IconPixelSize?,
+        val limit: Int?,
         val prompt: Boolean,
         val send: (SourceUpdate) -> Unit,
     )
@@ -115,6 +119,7 @@ class JsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = callbackFlow {
         val declaration = sources.firstOrNull { it.serves(category, item) }
@@ -124,14 +129,14 @@ class JsPlugin(
         }
         val key = "$category/$item"
         val id = nextObserverId.getAndIncrement()
-        observers.update { it + (id to Observer(category, item, properties, iconPixelSize, prompt) { update -> trySend(update) }) }
+        observers.update { it + (id to Observer(category, item, properties, iconPixelSize, limit, prompt) { update -> trySend(update) }) }
         val job = launch {
             while (true) {
                 if (retired) {
                     close(IllegalStateException("$name was updated or removed; subscribe again"))
                     break
                 }
-                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, null), prompt, setOf(id))
+                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, limit, null), prompt, setOf(id))
                 send(answerOf(raw))
                 withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
@@ -150,14 +155,16 @@ class JsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         trigger: SourceRequest?,
     ): String {
         val size = iconPixelSize?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }.orEmpty()
         val wanted = properties?.joinToString(",") { quote(it) }?.let { ""","properties":[$it]""" }.orEmpty()
+        val max = limit?.let { ""","limit":$it""" }.orEmpty()
         val triggered = trigger
             ?.let { ""","trigger":{"category":${quote(it.category)},"item":${quote(it.item)}}""" }
             .orEmpty()
-        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$triggered}"""
+        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$max$triggered}"""
     }
 
     private fun answerOf(raw: String?): SourceUpdate =
@@ -166,11 +173,11 @@ class JsPlugin(
     /** Something [owners] subscribed to changed: one run per distinct request among them, each answer to all who asked. */
     private suspend fun rerun(owners: Set<Int>, trigger: SourceRequest) {
         val groups = observers.value.filterKeys { it in owners }.entries
-            .groupBy { (_, o) -> listOf(o.category, o.item, o.properties, o.iconPixelSize) }
+            .groupBy { (_, o) -> listOf(o.category, o.item, o.properties, o.iconPixelSize, o.limit) }
         for (group in groups.values) {
             val first = group.first().value
             val raw = request(
-                sourceRequestJson(first.category, first.item, first.properties, first.iconPixelSize, trigger),
+                sourceRequestJson(first.category, first.item, first.properties, first.iconPixelSize, first.limit, trigger),
                 first.prompt,
                 group.map { it.key }.toSet(),
             )
@@ -265,6 +272,7 @@ class JsPlugin(
             appUuid = pluginUuid,
             client = httpClient,
             networkAccess = networkAccess(prompt),
+            dataUsage = dataUsage,
             jsTarget = FETCH_REGISTRY,
         )
         val webSockets = WebSocketManager(
@@ -273,6 +281,7 @@ class JsPlugin(
             client = httpClient,
             appUuid = pluginUuid,
             networkAccess = networkAccess(prompt),
+            dataUsage = dataUsage,
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
@@ -336,7 +345,6 @@ class JsPlugin(
         suspend fun stop() {
             logger.d { "Stopping session for: $pluginUuid $name" }
             evals.close()
-            pump.cancel()
             xhr.close()
             webSockets.close()
             geolocation.close()
@@ -345,6 +353,7 @@ class JsPlugin(
             fileSystemBridge.close()
             sourcesBridge.close()
             permissionsBridge.close()
+            pump.cancelAndJoin()
             engine.stop()
         }
     }
@@ -356,17 +365,17 @@ class JsPlugin(
     private val configLock = Mutex()
     private var configSession: Session? = null
 
-    override suspend fun openConfigSession() = configLock.withLock {
+    override suspend fun openConfigSession(): Unit = configLock.withLock {
         closeConfigSessionLocked()
         openConfigSessionLocked()
         Unit
     }
 
-    override suspend fun closeConfigSession() = configLock.withLock { closeConfigSessionLocked() }
+    override suspend fun closeConfigSession(): Unit = configLock.withLock { closeConfigSessionLocked() }
 
     @Volatile private var retired = false
 
-    suspend fun retire() = configLock.withLock {
+    suspend fun retire(): Unit = configLock.withLock {
         retired = true
         upstreams.close()
         closeConfigSessionLocked()

@@ -12,7 +12,7 @@ import io.rebble.libpebblecommon.util.stripBidiIsolates
  * Passive store for CATEGORY_CALL notification actions and contact info.
  * Does not drive call state.
  */
-class NotificationCallDetector(
+internal class NotificationCallDetector(
     private val privateLogger: PrivateLogger,
 ) {
     companion object {

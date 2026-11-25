@@ -13,7 +13,9 @@ import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.service.toButtonSequenceString
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
@@ -76,10 +78,10 @@ class FullFeedViewModel(
 
     fun setQuery(q: String) { query.value = q }
 
-    fun submitText(text: String) {
+    fun submitText(text: String, gesture: RingGesture) {
         val msg = text.trim().ifBlank { return }
         viewModelScope.launch {
-            recordingQueue.queueTextProcessing(msg)
+            recordingQueue.queueTextProcessing(msg, gesture.sequence.toButtonSequenceString())
         }
     }
 
@@ -122,7 +124,7 @@ class FullFeedViewModel(
     sealed class Entry {
         abstract val uniqueKey: String
 
-        data class DayDivider(val label: String, val ts: Long) : Entry() {
+        data class DayDivider(val day: LocalDate, val daysAgo: Int, val ts: Long) : Entry() {
             override val uniqueKey: String get() = "day-$ts"
         }
 
@@ -173,7 +175,8 @@ class FullFeedViewModel(
                 val day = ts.toLocalDateTime(tz).date
                 if (day != lastDay) {
                     out += Entry.DayDivider(
-                        label = dayLabel(today, day),
+                        day = day,
+                        daysAgo = (today.toEpochDays() - day.toEpochDays()).toInt(),
                         ts = ts.toEpochMilliseconds(),
                     )
                     lastDay = day
@@ -226,16 +229,5 @@ class FullFeedViewModel(
 
         private fun RecordingEntryEntity.isRetryableTranscriptionFailure(): Boolean =
             status == RecordingEntryStatus.transcription_error
-
-        /** Calendar-day-aware label for a day divider. */
-        private fun dayLabel(today: LocalDate, recDay: LocalDate): String {
-            val daysAgo = (today.toEpochDays() - recDay.toEpochDays()).toInt()
-            return when {
-                daysAgo == 0 -> "Today"
-                daysAgo == 1 -> "Yesterday"
-                daysAgo in 2..6 -> recDay.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
-                else -> "${recDay.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${recDay.dayOfMonth}"
-            }
-        }
     }
 }

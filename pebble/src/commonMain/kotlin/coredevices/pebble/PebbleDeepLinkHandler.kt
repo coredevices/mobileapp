@@ -35,6 +35,15 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.deeplink_langpack_load_failed
+import coreapp.pebble.generated.resources.deeplink_langpack_no_watch
+import coreapp.pebble.generated.resources.deeplink_langpack_installing
+import coreapp.pebble.generated.resources.deeplink_firmware_read_failed
+import coreapp.pebble.generated.resources.deeplink_firmware_no_watch
+import coreapp.pebble.generated.resources.deeplink_firmware_sideloading
+import coreapp.pebble.generated.resources.deeplink_app_not_found
+import org.jetbrains.compose.resources.getString
 
 expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
 
@@ -53,6 +62,10 @@ interface PebbleDeepLinkHandler {
     val requestIndexCompanion: StateFlow<Boolean>
 
     val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?>
+
+    val pendingBootConfig: StateFlow<PendingBootConfig?>
+    fun confirmPendingBootConfig()
+    fun dismissPendingBootConfig()
 
     val pendingAppSideload: StateFlow<Path?>
     fun consumePendingAppSideload()
@@ -78,6 +91,8 @@ interface PebbleDeepLinkHandler {
 
 data class PendingFirmwareSideload(val file: Path, val fileName: String)
 
+data class PendingBootConfig(val bootUrl: String, val token: String, val host: String)
+
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
     private val libPebble: LibPebble,
@@ -99,6 +114,8 @@ class RealPebbleDeepLinkHandler(
     override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
         _pendingFirmwareSideload.asStateFlow()
     private var reservedSideloadCount = 0
+    private val _pendingBootConfig = MutableStateFlow<PendingBootConfig?>(null)
+    override val pendingBootConfig: StateFlow<PendingBootConfig?> = _pendingBootConfig.asStateFlow()
     private val _pendingAppSideload = MutableStateFlow<Path?>(null)
     override val pendingAppSideload: StateFlow<Path?> = _pendingAppSideload.asStateFlow()
 
@@ -165,15 +182,15 @@ class RealPebbleDeepLinkHandler(
 
             uri.scheme == "pebblejs" && uri.host?.startsWith("close") == true -> {
                 val data = uri.encodedFragment ?: return false
-                libPebble.watches.value
-                    .filterIsInstance<ConnectedPebbleDevice>()
-                    .firstOrNull { it.currentPKJSSession.value != null }
-                    ?.currentPKJSSession
-                    ?.value
-                    ?.triggerOnWebviewClosed(data) ?: run {
-                        logger.w { "No PKJS session found, cannot handle webview close" }
-                        return false
-                    }
+                GlobalScope.launch {
+                    libPebble.watches.first()
+                        .filterIsInstance<ConnectedPebbleDevice>()
+                        .firstOrNull { it.currentPKJSSession.value != null }
+                        ?.currentPKJSSession
+                        ?.value
+                        ?.triggerOnWebviewClosed(data)
+                        ?: logger.w { "No PKJS session found, cannot handle webview close" }
+                }
                 true
             }
 
@@ -206,18 +223,20 @@ class RealPebbleDeepLinkHandler(
         val file = writeFile(context, uri)
         if (file == null) {
             logger.w { "handleLanguagePack: couldn't write file" }
-            _snackBarMessages.tryEmit("Failed to load language pack file")
+            GlobalScope.launch { _snackBarMessages.tryEmit(getString(Res.string.deeplink_langpack_load_failed)) }
             return false
         }
-        val connectedWatch =
-            libPebble.watches.value.filterIsInstance<ConnectedPebble.Language>().firstOrNull()
-        if (connectedWatch == null) {
-            logger.w { "handleLanguagePack: no connected watch" }
-            _snackBarMessages.tryEmit("Failed to load language pack: no connected watch")
-            return false
+        GlobalScope.launch {
+            val connectedWatch =
+                libPebble.watches.first().filterIsInstance<ConnectedPebble.Language>().firstOrNull()
+            if (connectedWatch == null) {
+                logger.w { "handleLanguagePack: no connected watch" }
+                _snackBarMessages.tryEmit(getString(Res.string.deeplink_langpack_no_watch))
+                return@launch
+            }
+            _snackBarMessages.tryEmit(getString(Res.string.deeplink_langpack_installing))
+            connectedWatch.installLanguagePack(file, name)
         }
-        _snackBarMessages.tryEmit("Installing language pack...")
-        connectedWatch.installLanguagePack(file, name)
         return true
     }
 
@@ -226,7 +245,7 @@ class RealPebbleDeepLinkHandler(
         val file = writeFile(context, uri)
         if (file == null) {
             logger.w { "handleFirmware: couldn't write file" }
-            _snackBarMessages.tryEmit("Failed to read firmware file")
+            GlobalScope.launch { _snackBarMessages.tryEmit(getString(Res.string.deeplink_firmware_read_failed)) }
             return false
         }
         val previous = _pendingFirmwareSideload.value
@@ -289,12 +308,12 @@ class RealPebbleDeepLinkHandler(
             }
             if (watches == null) {
                 logger.w { "sideloadFirmware: no connected watch after $CONNECTED_WATCH_TIMEOUT" }
-                _snackBarMessages.tryEmit("Failed to sideload firmware: no connected watch")
+                _snackBarMessages.tryEmit(getString(Res.string.deeplink_firmware_no_watch))
                 return@launch
             }
             logger.i { "sideloadFirmware: sideloading to ${watches.size} watch(es)" }
             navigateToTab(PebbleNavBarRoutes.WatchesRoute)
-            _snackBarMessages.tryEmit("Sideloading firmware...")
+            _snackBarMessages.tryEmit(getString(Res.string.deeplink_firmware_sideloading))
             watches.forEach {
                 it.sideloadFirmware(file, FirmwareUpdateTrigger.Sideload)
             }
@@ -323,20 +342,31 @@ class RealPebbleDeepLinkHandler(
 
     private fun handleBootConfig(path: String?): Boolean {
         logger.d { "handleBootConfig()" }
-        val token = parseTokenFrom(path)
-        if (path == null || token == null) {
-            logger.w("couldn't find token")
+        val pending = parseBootConfigFrom(path)
+        if (pending == null) {
+            logger.w("invalid boot config link")
             return false
         }
+        _pendingBootConfig.value = pending
+        navigateToTab(PebbleNavBarRoutes.WatchesRoute)
+        return true
+    }
+
+    override fun dismissPendingBootConfig() {
+        _pendingBootConfig.value = null
+    }
+
+    override fun confirmPendingBootConfig() {
+        val pending = _pendingBootConfig.value ?: return
+        _pendingBootConfig.value = null
         GlobalScope.launch {
-            pebbleAccount.setToken(token = token, bootUrl = path)
+            pebbleAccount.setToken(token = pending.token, bootUrl = pending.bootUrl)
             _initialLockerSync.value = true
             libPebble.requestLockerSync().await()
             libPebble.checkForFirmwareUpdates(false)
             _initialLockerSync.value = false
             analytics.logEvent("rebble.logged-in")
         }
-        return true
     }
 
     override fun openStoreAppLink(url: String): Boolean {
@@ -355,7 +385,7 @@ class RealPebbleDeepLinkHandler(
                 it.url == storeUrl
             }
             if (store == null) {
-                _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
+                _snackBarMessages.tryEmit(getString(Res.string.deeplink_app_not_found))
                 return@launch
             }
             val route = PebbleNavBarRoutes.LockerAppRoute(
@@ -379,7 +409,9 @@ class RealPebbleDeepLinkHandler(
 
     private fun handleShowWatches(path: String?): Boolean {
         if (path != null) {
-            firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
+            GlobalScope.launch {
+                firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
+            }
         }
         val route = PebbleNavBarRoutes.WatchesRoute
         _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
@@ -490,6 +522,16 @@ class RealPebbleDeepLinkHandler(
             val bootConfigUrl: String = path.replaceFirst("/", "")
             val token = TOKEN_REGEX.find(bootConfigUrl)?.groups?.get(1)?.value
             return token
+        }
+
+        /** Only https boot config URLs are accepted. */
+        internal fun parseBootConfigFrom(path: String?): PendingBootConfig? {
+            if (path == null) return null
+            val token = parseTokenFrom(path) ?: return null
+            val url = Uri.parseOrNull(path.removePrefix("/")) ?: return null
+            if (url.scheme != "https") return null
+            val host = url.host?.takeIf { it.isNotBlank() } ?: return null
+            return PendingBootConfig(bootUrl = path, token = token, host = host)
         }
     }
 }

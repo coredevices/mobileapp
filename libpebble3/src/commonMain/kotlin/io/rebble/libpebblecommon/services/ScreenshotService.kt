@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
-class ScreenshotService(
+internal class ScreenshotService(
     private val protocolHandler: PebbleProtocolHandler,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
 ) : ProtocolService, ConnectedPebble.Screenshot {
@@ -157,21 +157,21 @@ class ScreenshotService(
         }
 }
 
-fun ScreenshotHeader.parse(): ParsedScreenshotHeader = ParsedScreenshotHeader(
+internal fun ScreenshotHeader.parse(): ParsedScreenshotHeader = ParsedScreenshotHeader(
     responseCode = ScreenshotResponseCode.fromRawCode(responseCode.get()),
     version = ScreenshotVersion.fromRawCode(version.get()),
     height = height.get().toInt(),
     width = width.get().toInt(),
 )
 
-data class ParsedScreenshotHeader(
+internal data class ParsedScreenshotHeader(
     val responseCode: ScreenshotResponseCode,
     val version: ScreenshotVersion,
     val height: Int,
     val width: Int,
 )
 
-enum class ScreenshotState {
+internal enum class ScreenshotState {
     Idle,
     Busy,
 }

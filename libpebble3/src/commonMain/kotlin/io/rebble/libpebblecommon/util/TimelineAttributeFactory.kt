@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 
-object TimelineAttributeFactory {
+internal object TimelineAttributeFactory {
     private fun createAttribute(attributeId: UByte, content: UByteArray, contentEndianness: Endian = Endian.Unspecified): TimelineItem.Attribute {
         return TimelineItem.Attribute(attributeId, content, contentEndianness)
     }

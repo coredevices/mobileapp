@@ -5,89 +5,89 @@ import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
-class PbwBinHeader() : StructMappable() {
+internal class PbwBinHeader internal constructor() : StructMappable() {
     /**
      * Major header version.
      */
-    val headerVersionMajor: SUByte = SUByte(m)
+    internal val headerVersionMajor: SUByte = SUByte(m)
 
     /**
      * Minor header version.
      */
-    val headerVersionMinor: SUByte = SUByte(m)
+    internal val headerVersionMinor: SUByte = SUByte(m)
 
     /**
      * Major sdk version.
      */
-    val sdkVersionMajor: SUByte = SUByte(m)
+    internal val sdkVersionMajor: SUByte = SUByte(m)
 
     /**
      * Minor sdk version.
      */
-    val sdkVersionMinor: SUByte = SUByte(m)
+    internal val sdkVersionMinor: SUByte = SUByte(m)
 
     /**
      * Major app version.
      */
-    val appVersionMajor: SUByte = SUByte(m)
+    internal val appVersionMajor: SUByte = SUByte(m)
 
     /**
      * Minor app version.
      */
-    val appVersionMinor: SUByte = SUByte(m)
+    internal val appVersionMinor: SUByte = SUByte(m)
 
     /**
      * Size of the app payload in bytes
      */
-    val appSize: SUShort = SUShort(m)
+    internal val appSize: SUShort = SUShort(m)
 
     /**
      * ??? (Presumably offset where app payload starts?)
      */
-    val appOffset: SUInt = SUInt(m)
+    internal val appOffset: SUInt = SUInt(m)
 
     /**
      * CRC checksum of the app payload
      */
-    val crc: SUInt = SUInt(m)
+    internal val crc: SUInt = SUInt(m)
 
     /**
      * Name of the app
      */
-    val appName: SFixedString = SFixedString(m, 32)
+    internal val appName: SFixedString = SFixedString(m, 32)
 
     /**
      * Name of the company that made the app
      */
-    val companyName: SFixedString = SFixedString(m, 32)
+    internal val companyName: SFixedString = SFixedString(m, 32)
 
     /**
      * Resource ID of the primary icon.
      */
-    val icon: SUInt = SUInt(m, endianness = Endian.Little)
+    internal val icon: SUInt = SUInt(m, endianness = Endian.Little)
 
     /**
      * ???
      */
-    val symbolTableAddress: SUInt = SUInt(m)
+    internal val symbolTableAddress: SUInt = SUInt(m)
 
     /**
      * List of app install flags. Should be forwarded to the watch when inserting into BlobDB.
      */
-    val flags: SUInt = SUInt(m, endianness = Endian.Little)
+    internal val flags: SUInt = SUInt(m, endianness = Endian.Little)
 
     /**
      * ???
      */
-    val numRelocationListEntries: SUInt = SUInt(m)
+    internal val numRelocationListEntries: SUInt = SUInt(m)
 
     /**
      * UUID of the app
      */
-    val uuid: SUUID = SUUID(m)
+    internal val uuid: SUUID = SUUID(m)
 
     companion object {
-        const val SIZE: Int = 8 + 2 + 2 + 2 + 2 + 4 + 4 + 32 + 32 + 4 + 4 + 4 + 4 + 16
+        internal const val SIZE: Int = 8 + 2 + 2 + 2 + 2 + 4 + 4 + 32 + 32 + 4 + 4 + 4 + 4 + 16
 
         /**
          * Parse existing Pbw binary payload header. You should read [SIZE] bytes from the binary
@@ -95,7 +95,7 @@ class PbwBinHeader() : StructMappable() {
          *
          * @throws IllegalArgumentException if header is not valid pebble app header
          */
-        fun parseFileHeader(data: UByteArray): PbwBinHeader {
+        internal fun parseFileHeader(data: UByteArray): PbwBinHeader {
             if (data.size != SIZE) {
                 throw IllegalArgumentException(
                     "Read data from the file should be exactly $SIZE bytes"

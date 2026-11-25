@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PbzManifestFirmware(
+internal data class PbzManifestFirmware(
     val name: String,
     val type: String,
     val timestamp: Long,

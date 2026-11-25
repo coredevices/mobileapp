@@ -16,6 +16,11 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.RecordingIntentClassifier
+import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.IntentAgentRouter
+import coredevices.ring.agent.ChatMode
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
@@ -75,6 +80,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -106,11 +112,14 @@ class FakePreferences : Preferences {
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
+    override val beeperMessageAnyone: StateFlow<Boolean> = MutableStateFlow(false)
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
+    override val listProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
+    override val actionValidationEnabled: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val phoneCalendarEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
@@ -130,11 +139,14 @@ class FakePreferences : Preferences {
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
+    override fun setBeeperMessageAnyone(enabled: Boolean) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProviderId(id: String) {}
+    override fun setListProviderId(id: String) {}
     override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
+    override fun setActionValidationEnabled(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}
@@ -171,6 +183,7 @@ class RecordingProcessingQueueTest {
     private lateinit var fakeNenya: FakeNenyaClient
     private lateinit var fakeTranscription: FakeTranscriptionService
     private lateinit var bgScopeJob: CompletableJob
+    private var previousRunCrashed = false
 
     @Before
     fun setUp() {
@@ -251,6 +264,7 @@ class RecordingProcessingQueueTest {
                     get() = "${Build.MANUFACTURER} ${Build.MODEL}"
                 override suspend fun openUrl(url: String) {}
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
+                override val previousRunCrashed get() = this@RecordingProcessingQueueTest.previousRunCrashed
             }
         }
         // Real BuiltinServletRepository needed by McpSessionFactory (never actually resolves tools
@@ -274,6 +288,11 @@ class RecordingProcessingQueueTest {
         factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
         factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
+        single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+        singleOf(::RecordingIntentClassifier)
+        single {
+            IntentAgentRouter(get(), { emptyList() }) { get<AgentFactory>().createForChatMode(ChatMode.Search) }
+        }
         singleOf(::McpSessionFactory)
 
         single {
@@ -286,7 +305,7 @@ class RecordingProcessingQueueTest {
                     recordedAt: Instant,
                     gesture: coredevices.ring.service.button.RingGesture,
                 ): IndexWebhookRunResult? = null
-                override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+                override suspend fun sendButtonEvent(gesture: RingGesture, pressedAt: Instant, deliveryId: String): IndexWebhookRunResult? = null
 
                 override suspend fun sendTestEvent(
                     gesture: coredevices.ring.service.button.RingGesture,
@@ -295,6 +314,7 @@ class RecordingProcessingQueueTest {
                     signRequests: Boolean,
                     signingSecret: String?,
                     clickPayload: String,
+                    sendJson: Boolean,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
@@ -307,21 +327,21 @@ class RecordingProcessingQueueTest {
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRepository)
         singleOf(::IndexWebhookRunRepository)
-        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
         singleOf(::RecordingPreprocessor)
 
         // Background scope with short reschedule delay
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
-    private fun createFakeAudioFile(fileId: String) {
+    private fun createFakeAudioFile(fileId: String, sizeBytes: Int = 1024) {
         val cacheDir = File(context.cacheDir, "recordings")
         cacheDir.mkdirs()
         val file = File(cacheDir, fileId)
-        file.writeBytes(ByteArray(1024)) // Dummy PCM data
+        file.writeBytes(ByteArray(sizeBytes)) // Dummy PCM data
         runBlocking {
             db.cachedRecordingMetadataDao().insert(
                 CachedRecordingMetadata(id = fileId, sampleRate = 16000, mimeType = "audio/pcm")
@@ -359,6 +379,7 @@ class RecordingProcessingQueueTest {
             recordingPreprocessor = koin.get(),
             trace = koin.get(),
             settings = koin.get(),
+            platform = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }
@@ -437,6 +458,17 @@ class RecordingProcessingQueueTest {
         // Verify conversation messages
         val messages = messageDao.getMessagesForRecording(1).first()
         assertTrue("Expected conversation messages", messages.isNotEmpty())
+    }
+
+    @Test
+    fun localAudioProcessing_emptyRecording_isIgnored() = runBlocking {
+        val fileId = "test-audio-empty"
+        createFakeAudioFile(fileId, sizeBytes = 0)
+
+        queue.queueLocalAudioProcessing(fileId)
+
+        assertNull(taskDao.getTaskById(1))
+        assertNull(db.localRecordingDao().getRecording(1))
     }
 
     @Test
@@ -553,31 +585,26 @@ class RecordingProcessingQueueTest {
     }
 
     @Test
-    fun localAudioProcessing_agentFatalError_completesSuccessfully() = runBlocking {
-        // Tests that a fatal agent error (HTTP 500 in tool loop) is swallowed by
-        // RecordingProcessor.processText, resulting in a "completed" entry and successful task.
-        // This documents the current production behavior.
+    fun localAudioProcessing_agentFatalError_marksEntryFailed() = runBlocking {
         val fileId = "test-audio-agent-fatal"
         createFakeAudioFile(fileId)
 
         fakeTranscription.enqueue(FakeTranscriptionService.Behavior.Success("Fatal error test"))
         fakeNenya.enqueue(
             FakeNenyaClient.NenyaResponse.SuccessWithToolCalls, // 1st call → tool_calls
-            FakeNenyaClient.NenyaResponse.ServerError500        // 2nd call → 500, agent throws Exception, processText swallows
+            FakeNenyaClient.NenyaResponse.ServerError500        // 2nd call → 500, agent throws Exception
         )
 
         queue.queueLocalAudioProcessing(fileId)
         awaitTaskDone(taskId = 1)
 
         val task = taskDao.getTaskById(1)!!
-        // Error is swallowed by processText's catch(Throwable) — task succeeds
-        assertEquals(TaskStatus.Success, task.status)
+        assertEquals(TaskStatus.Failed, task.status)
         assertEquals(1, task.attempts)
 
         val entries = entryDao.getEntriesForRecording(1).first()
         assertEquals(1, entries.size)
-        // Entry is marked completed because processText returned normally
-        assertEquals(RecordingEntryStatus.completed, entries[0].status)
+        assertEquals(RecordingEntryStatus.agent_error, entries[0].status)
     }
 
     // ---- Restart / Resume Test Cases ----
@@ -710,8 +737,9 @@ class RecordingProcessingQueueTest {
                 transcription = "Crashed last time",
             )
         )
-        // As left behind by a previous run that died mid-attempt
+        // As left behind by a previous run that crashed mid-attempt
         GlobalContext.get().get<Settings>().putString("queue_RecordingProcessing_in_progress", "1")
+        previousRunCrashed = true
 
         queue.resumePendingTasks()
         awaitTaskDone(taskId = 1)

@@ -88,11 +88,12 @@ fun IndexAgentActionsSection(
     val captureType by viewModel.captureType.collectAsState()
     val noteProvider by viewModel.noteProvider.collectAsState()
     val reminderProvider by viewModel.reminderProvider.collectAsState()
+    val listProvider by viewModel.listProvider.collectAsState()
     val approvedContactCount by viewModel.approvedContactCount.collectAsState()
     val noteDestinations by viewModel.noteDestinations.collectAsState()
     val reminderDestinations by viewModel.reminderDestinations.collectAsState()
+    val listDestinations by viewModel.listDestinations.collectAsState()
     val lockerPlugins by viewModel.lockerPlugins.collectAsState()
-    val pluginsEnabled by viewModel.pluginsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
@@ -109,11 +110,12 @@ fun IndexAgentActionsSection(
         captureType = captureType,
         noteProvider = noteProvider,
         reminderProvider = reminderProvider,
+        listProvider = listProvider,
         approvedContactCount = approvedContactCount,
         noteDestinations = noteDestinations,
         reminderDestinations = reminderDestinations,
+        listDestinations = listDestinations,
         lockerPlugins = lockerPlugins,
-        pluginsEnabled = pluginsEnabled,
         onSetActionEnabled = viewModel::setActionEnabled,
         onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,
         onSetHttpServerEnabled = viewModel::setHttpServerEnabled,
@@ -122,8 +124,10 @@ fun IndexAgentActionsSection(
         onSetCaptureType = viewModel::setCaptureType,
         onSelectNoteProvider = viewModel::selectNoteProvider,
         onSelectReminderProvider = viewModel::selectReminderProvider,
+        onSelectListProvider = viewModel::selectListProvider,
         onNoteConnectStarted = viewModel::noteConnectStarted,
         onReminderConnectStarted = viewModel::reminderConnectStarted,
+        onListConnectStarted = viewModel::listConnectStarted,
         onReviewInstall = viewModel::reviewInstall,
         onInstallStorePlugin = viewModel::installStorePlugin,
         onAddIntegration = { coreNav.navigateTo(RingRoutes.AddIntegration) },
@@ -132,6 +136,9 @@ fun IndexAgentActionsSection(
         },
         onOpenPluginPage = { uuid -> coreNav.navigateTo(CommonRoutes.LockerAppRoute(uuid = uuid.toString())) },
         onOpenBeeperContacts = viewModel::showContactsDialog,
+        onEditGeofenceLocation = { uuid ->
+            coreNav.navigateTo(RingRoutes.GeofenceLocationEdit(locationId = uuid?.toString()))
+        },
         onGetMoreActions = {},
         onGetMorePlugins = { coreNav.navigateTo(CommonRoutes.LockerTabRoute(AppType.Plugin)) }
             .takeIf { canBrowsePlugins },

@@ -9,7 +9,7 @@ import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface HealthDao {
+internal interface HealthDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHealthData(data: List<HealthDataEntity>)
 
@@ -140,7 +140,7 @@ interface HealthDao {
     suspend fun deleteExpiredOverlayData(expirationTimestamp: Long): Int
 }
 
-data class HealthAggregates(
+public data class HealthAggregates internal constructor(
     val steps: Long?,
     val activeGramCalories: Long?,
     val restingGramCalories: Long?,
@@ -148,7 +148,7 @@ data class HealthAggregates(
     val distanceCm: Long?,
 )
 
-data class DailyMovementAggregate(
+public data class DailyMovementAggregate internal constructor(
     val day: String, // YYYY-MM-DD
     val steps: Long?,
     val activeGramCalories: Long?,
@@ -157,7 +157,7 @@ data class DailyMovementAggregate(
     val distanceCm: Long?
 )
 
-data class HRZoneCount(
+internal data class HRZoneCount(
     val heartRateZone: Int,
     val minutes: Long,
 )

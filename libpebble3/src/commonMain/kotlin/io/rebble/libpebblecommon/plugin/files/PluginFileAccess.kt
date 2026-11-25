@@ -14,20 +14,20 @@ import kotlinx.coroutines.flow.first
 import kotlin.uuid.Uuid
 
 /** The host side of plugin file access: what a settings page asks for, grants, lists and revokes. */
-interface PluginFileAccessApi {
+public interface PluginFileAccessApi {
     /** Entries the user has handed [appUuid] and not taken back. */
-    suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo>
+    public suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo>
 
     /** Whether the bare `ReadFiles` / `WriteFiles` a pick needs is already granted; never asks. */
-    suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode): PermissionDecision
+    public suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode): PermissionDecision
 
     /**
      * Records a pick as granted `ReadFiles/<scope>`, or `WriteFiles/<scope>` for read-write. Null
      * when the entry turns out to be unreachable, in which case nothing is kept.
      */
-    suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String): FileHandleInfo?
+    public suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String): FileHandleInfo?
 
-    suspend fun revokePluginFile(appUuid: Uuid, scope: String)
+    public suspend fun revokePluginFile(appUuid: Uuid, scope: String)
 }
 
 /**
@@ -35,7 +35,7 @@ interface PluginFileAccessApi {
  * `ReadFiles/<scope>` or `WriteFiles/<scope>` row for the app (write covers read), every operation
  * is checked against it, and the user can take it back from the app's permission list.
  */
-class PluginFileAccess(
+internal class PluginFileAccess(
     private val permissions: AppPermissions,
     private val dao: LockerAppPermissionDao,
     private val fileSystem: PluginFileSystem,

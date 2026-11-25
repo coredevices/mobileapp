@@ -17,6 +17,8 @@ import coredevices.util.R
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -113,7 +115,14 @@ class UpdateActionReceiver : BroadcastReceiver(), KoinComponent {
         }
         val libPebble = get<LibPebble>()
         val firmwareUpdateUiTracker: FirmwareUpdateUiTracker = get()
-        firmwareUpdateUiTracker.updateWatchNow(libPebble, identifier)
+        val pending = goAsync()
+        GlobalScope.launch {
+            try {
+                firmwareUpdateUiTracker.updateWatchNow(libPebble, identifier)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 }
 

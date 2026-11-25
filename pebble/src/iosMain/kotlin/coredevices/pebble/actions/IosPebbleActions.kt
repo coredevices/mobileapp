@@ -111,9 +111,9 @@ class IosPebbleTimelineActions(
 class IosPebbleWatchInfoActions(
     private val libPebble: LibPebble,
 ) : PebbleWatchInfoActions {
-    override fun getWatchBatteryLevel(): Int? = getWatchBatteryLevel(libPebble)
-    override fun isWatchConnected(): Boolean = isWatchConnected(libPebble)
-    override fun getConnectedWatchName(): String? = getConnectedWatchName(libPebble)
+    override suspend fun getWatchBatteryLevel(): Int? = getWatchBatteryLevel(libPebble)
+    override suspend fun isWatchConnected(): Boolean = isWatchConnected(libPebble)
+    override suspend fun getConnectedWatchName(): String? = getConnectedWatchName(libPebble)
 
     override suspend fun getWatchScreenshotBase64(): String =
         getWatchScreenshotBase64(libPebble)

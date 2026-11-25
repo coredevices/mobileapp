@@ -24,7 +24,7 @@ class BackupExporter(private val recordingStorage: RecordingStorage) {
         userId: String,
         email: String,
         recordings: Flow<BackupRecording>,
-        onProgress: (recordingsDone: Int) -> Unit = {},
+        onProgress: suspend (recordingsDone: Int) -> Unit = {},
     ): Result {
         if (SystemFileSystem.exists(zipPath)) {
             SystemFileSystem.delete(zipPath)

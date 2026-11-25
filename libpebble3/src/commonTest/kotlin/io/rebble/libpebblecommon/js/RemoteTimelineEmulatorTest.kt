@@ -3,9 +3,10 @@ package io.rebble.libpebblecommon.js
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.argsWithReply
 import io.rebble.libpebblecommon.database.entity.BaseAttribute
 import io.rebble.libpebblecommon.database.entity.PluginActionRef
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import io.rebble.libpebblecommon.util.toProtocolNumber
@@ -58,10 +59,10 @@ class RemoteTimelineEmulatorTest {
         )!!
         val (done, remove) = pin.content.actions
         assertEquals(2, pin.content.actions.size)
-        assertEquals(TimelineItem.Action.Type.Generic, done.type)
+        assertEquals(TimelineActionType.Generic, done.type)
         assertEquals("Done", done.attributes.text(TimelineAttribute.Title))
         assertEquals(PluginActionRef("complete", buildJsonObject { put("id", "42") }), done.pluginAction)
-        assertEquals(TimelineItem.Action.Type.Remove, remove.type)
+        assertEquals(TimelineActionType.Remove, remove.type)
         assertNull(remove.pluginAction)
     }
 
@@ -98,7 +99,7 @@ class RemoteTimelineEmulatorTest {
             """.trimIndent()
         )!!
         val reply = notification.content.actions.single()
-        assertEquals(TimelineItem.Action.Type.Response, reply.type)
+        assertEquals(TimelineActionType.Response, reply.type)
         assertEquals(
             listOf("Yes", "No"),
             reply.attributes.filterIsInstance<BaseAttribute.TextListAttribute>().single().text,
@@ -123,7 +124,7 @@ class RemoteTimelineEmulatorTest {
             """.trimIndent()
         )!!
         assertEquals(APP_UUID, notification.content.parentId)
-        assertEquals(TimelineItem.Layout.GenericNotification, notification.content.layout)
+        assertEquals(TimelineItemLayout.GenericNotification, notification.content.layout)
         assertEquals("Buy milk", notification.content.attributes.text(TimelineAttribute.Body))
         assertEquals("complete", notification.content.actions.single().pluginAction?.action)
         assertNull(notificationFrom("""{ "layout": { "type": "genericPin", "title": "x" } }"""))
@@ -158,7 +159,7 @@ class RemoteTimelineEmulatorTest {
             }
             """.trimIndent()
         )!!
-        assertEquals(TimelineItem.Layout.SportsPin, pin.content.layout)
+        assertEquals(TimelineItemLayout.SportsPin, pin.content.layout)
         val attributes = pin.content.attributes
         assertEquals("Boston Red Sox at Texas Rangers", attributes.text(TimelineAttribute.Title))
         assertEquals("Top 9th", attributes.text(TimelineAttribute.Subtitle))
@@ -282,7 +283,7 @@ class RemoteTimelineEmulatorTest {
             }
             """.trimIndent()
         )!!
-        assertEquals(TimelineItem.Layout.WeatherPin, pin.content.layout)
+        assertEquals(TimelineItemLayout.WeatherPin, pin.content.layout)
         val attributes = pin.content.attributes
         assertEquals("London", attributes.text(TimelineAttribute.LocationName))
         assertEquals("Sun", attributes.text(TimelineAttribute.ShortTitle))
@@ -307,7 +308,7 @@ class RemoteTimelineEmulatorTest {
             }
             """.trimIndent()
         )!!
-        assertEquals(TimelineItem.Layout.CalendarPin, pin.content.layout)
+        assertEquals(TimelineItemLayout.CalendarPin, pin.content.layout)
         val attributes = pin.content.attributes
         assertEquals("Room 3", attributes.text(TimelineAttribute.LocationName))
         assertEquals("Ada", attributes.text(TimelineAttribute.Sender))
@@ -325,7 +326,7 @@ class RemoteTimelineEmulatorTest {
             ),
             PIN_UUID,
         )!!
-        assertEquals(TimelineItem.Layout.GenericReminder, reminder.content.layout)
+        assertEquals(TimelineItemLayout.GenericReminder, reminder.content.layout)
         assertEquals("Soon", reminder.content.attributes.text(TimelineAttribute.Title))
         assertEquals("Room 3", reminder.content.attributes.text(TimelineAttribute.LocationName))
     }

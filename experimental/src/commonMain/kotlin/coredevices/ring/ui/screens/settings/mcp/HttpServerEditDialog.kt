@@ -35,6 +35,27 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_integration_unknown_error
+import coreapp.ring.generated.resources.settings_mcp_add_title
+import coreapp.ring.generated.resources.settings_mcp_auth_header
+import coreapp.ring.generated.resources.settings_mcp_auth_optional
+import coreapp.ring.generated.resources.settings_mcp_description
+import coreapp.ring.generated.resources.settings_mcp_description_help
+import coreapp.ring.generated.resources.settings_mcp_description_placeholder
+import coreapp.ring.generated.resources.settings_mcp_edit_title
+import coreapp.ring.generated.resources.settings_mcp_fetching
+import coreapp.ring.generated.resources.settings_mcp_name_invalid
+import coreapp.ring.generated.resources.settings_mcp_prompts
+import coreapp.ring.generated.resources.settings_mcp_server_title
+import coreapp.ring.generated.resources.settings_mcp_streamable
+import coreapp.ring.generated.resources.settings_mcp_unknown_error
+import coreapp.ring.generated.resources.settings_mcp_unreachable
+import coreapp.ring.generated.resources.settings_mcp_url
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.delete
+import coreapp.util.generated.resources.name
+import coreapp.util.generated.resources.save
 import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
@@ -44,7 +65,10 @@ import coredevices.ring.ui.PreviewWrapper
 import coredevices.ui.M3Dialog
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import coreapp.util.generated.resources.Res as UtilRes
 
 @Composable
 internal fun HttpServerEditDialog(
@@ -112,7 +136,7 @@ internal fun HttpServerEditDialog(
             }
             availablePrompts = emptyList()
             serverContactable = false
-            fetchError = e.message ?: e::class.simpleName ?: "Unknown error"
+            fetchError = e.message ?: e::class.simpleName ?: getString(Res.string.settings_integration_unknown_error)
         } finally {
             isFetchingTitle = false
         }
@@ -129,17 +153,17 @@ internal fun HttpServerEditDialog(
         onDismissRequest = onDismiss,
         scrollableContent = true,
         title = {
-            Text(if (isEditing) "Edit HTTP MCP Server" else "Add HTTP MCP Server")
+            Text(stringResource(if (isEditing) Res.string.settings_mcp_edit_title else Res.string.settings_mcp_add_title))
         },
         buttons = {
             if (onDelete != null) {
                 TextButton(onClick = onDelete) {
-                    Text("Delete")
+                    Text(stringResource(UtilRes.string.delete))
                 }
             }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
             Spacer(Modifier.width(8.dp))
             TextButton(
@@ -160,7 +184,7 @@ internal fun HttpServerEditDialog(
                 },
                 enabled = canSave
             ) {
-                Text("Save")
+                Text(stringResource(UtilRes.string.save))
             }
         }
     ) {
@@ -171,11 +195,11 @@ internal fun HttpServerEditDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(UtilRes.string.name)) },
                 isError = !nameIsValid,
                 supportingText = when {
                     !nameIsValid -> {
-                        { Text("Name can only contain letters, digits, - and _ characters, up to 32") }
+                        { Text(stringResource(Res.string.settings_mcp_name_invalid)) }
                     }
                     else -> {
                         { Text("") }
@@ -190,17 +214,17 @@ internal fun HttpServerEditDialog(
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text("URL") },
+                label = { Text(stringResource(Res.string.settings_mcp_url)) },
                 isError = serverContactable == false,
                 supportingText = when {
                     isFetchingTitle -> {
-                        { Text("Fetching server info...") }
+                        { Text(stringResource(Res.string.settings_mcp_fetching)) }
                     }
                     serverContactable == false -> {
-                        { Text("Couldn't reach server: ${fetchError ?: "unknown error"}") }
+                        { Text(stringResource(Res.string.settings_mcp_unreachable, fetchError ?: stringResource(Res.string.settings_mcp_unknown_error))) }
                     }
                     cachedTitle.isNotBlank() -> {
-                        { Text("Server: $cachedTitle") }
+                        { Text(stringResource(Res.string.settings_mcp_server_title, cachedTitle)) }
                     }
                     else -> {
                         { Text("") }
@@ -215,9 +239,9 @@ internal fun HttpServerEditDialog(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Description") },
-                placeholder = { Text("e.g. Controls the lights, thermostat and kids' internet at home") },
-                supportingText = { Text("Tells the assistant what this server is for") },
+                label = { Text(stringResource(Res.string.settings_mcp_description)) },
+                placeholder = { Text(stringResource(Res.string.settings_mcp_description_placeholder)) },
+                supportingText = { Text(stringResource(Res.string.settings_mcp_description_help)) },
                 minLines = 2,
                 maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
@@ -238,7 +262,7 @@ internal fun HttpServerEditDialog(
                     onClick = { streamable = true },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
-                    Text("Streamable")
+                    Text(stringResource(Res.string.settings_mcp_streamable))
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -256,7 +280,7 @@ internal fun HttpServerEditDialog(
                     },
                     contentDescription = null
                 )
-                Text("Authorization (optional)")
+                Text(stringResource(Res.string.settings_mcp_auth_optional))
             }
             AnimatedVisibility(visible = showAuthSection) {
                 Column {
@@ -264,7 +288,7 @@ internal fun HttpServerEditDialog(
                     OutlinedTextField(
                         value = authHeader,
                         onValueChange = { authHeader = it },
-                        label = { Text("Authorization Header") },
+                        label = { Text(stringResource(Res.string.settings_mcp_auth_header)) },
                         placeholder = { Text("Bearer token123...") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -289,7 +313,7 @@ internal fun HttpServerEditDialog(
                         },
                         contentDescription = null
                     )
-                    Text("Prompts (${selectedPrompts.size}/${availablePrompts.size} selected)")
+                    Text(stringResource(Res.string.settings_mcp_prompts, selectedPrompts.size, availablePrompts.size))
                 }
                 AnimatedVisibility(visible = showPromptsSection) {
                     Column {

@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
@@ -23,7 +24,7 @@ interface FirmwareUpdateUiTracker {
     fun didFirmwareUpdateCheckFromUi()
     fun shouldUiUpdateCheck(): Boolean
     fun onConnectedWatch(watch: CommonConnectedDevice)
-    fun updateWatchNow(libPebble: LibPebble, identifier: String)
+    suspend fun updateWatchNow(libPebble: LibPebble, identifier: String)
 }
 
 class RealFirmwareUpdateUiTracker(
@@ -74,7 +75,8 @@ class RealFirmwareUpdateUiTracker(
             return
         }
         val update = watch.firmwareUpdateAvailable.result as? FirmwareUpdateCheckResult.FoundUpdate ?: return
-        val key = update.hashCode() + watch.identifier.asString.hashCode()
+        // update.url is presigned per check, so it can't be part of the key.
+        val key = update.version.stringVersion.hashCode() + watch.identifier.asString.hashCode()
         val config = coreConfigFlow.value
         val now = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
         // Recovery mode, and an update that has to go through it, are left to the user.
@@ -130,10 +132,10 @@ class RealFirmwareUpdateUiTracker(
 
     private fun watchKey(key: Int) = "firmware-update/$key"
 
-    override fun updateWatchNow(libPebble: LibPebble, identifier: String) {
+    override suspend fun updateWatchNow(libPebble: LibPebble, identifier: String) {
         removeNotification(identifier)
         val watch =
-            libPebble.watches.value.firstOrNull { it.identifier.asString == identifier }
+            libPebble.watches.first().firstOrNull { it.identifier.asString == identifier }
         if (watch == null) {
             logger.w { "No matching connected watch found for $identifier" }
             return

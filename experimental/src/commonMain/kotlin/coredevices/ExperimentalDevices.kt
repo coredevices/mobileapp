@@ -2,12 +2,17 @@ package coredevices
 
 import DocumentAttachment
 import com.eygraber.uri.Uri
+import org.jetbrains.compose.resources.getString
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.ring_repair_required_body
+import coreapp.ring.generated.resources.ring_repair_required_title
 import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.database.dao.AgentIterationDao
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.agent.pebble_plugin.IndexServletPlugins
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.bugreport.IndexRebootLogEntry
 import coredevices.ring.bugreport.IndexRebootLogStore
@@ -19,6 +24,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.service.IndexNotificationManager
 import coredevices.ring.service.RingSync
+import coredevices.ring.service.indexfeed.GeofenceLocationSyncService
 import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -63,6 +69,7 @@ class ExperimentalDevices(
      *  runs for the rest of the process lifetime (mirrors how
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val geofenceLocationSyncService: GeofenceLocationSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val reminderReconciler: coredevices.ring.reminders.ReminderReconciler,
     private val indexSettingsSummary: IndexSettingsSummary,
@@ -73,10 +80,12 @@ class ExperimentalDevices(
     private val indexNotificationManager: IndexNotificationManager,
     private val libPebble: LibPebble,
     private val indexWebhookDeliveryQueue: IndexWebhookDeliveryQueue,
+    private val indexServletPlugins: IndexServletPlugins,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
         ringDelegate.appInit()
+        indexServletPlugins.start(scope)
         indexWebhookDeliveryQueue.resumePendingTasks()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
@@ -86,6 +95,7 @@ class ExperimentalDevices(
             }
         )
         indexFeedSyncService.hashCode()
+        geofenceLocationSyncService.start()
         // Arm alarms for any reminder synced in while this device was away, then keep them in
         // step as items sync (a new phone, the web app, a second device).
         reminderReconciler.start()
@@ -127,8 +137,8 @@ class ExperimentalDevices(
         }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
-            val title = "Re-pairing required"
-            val body = "Please re-pair your Index 01 device to continue using it."
+            val title = getString(Res.string.ring_repair_required_title)
+            val body = getString(Res.string.ring_repair_required_body)
             NotifierManager.getLocalNotifier().notify {
                 this.title = title
                 this.body = body

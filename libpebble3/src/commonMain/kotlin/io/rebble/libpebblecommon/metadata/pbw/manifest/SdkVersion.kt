@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.metadata.pbw.manifest
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SdkVersion(
+internal data class SdkVersion internal constructor(
         val major: Int?,
         val minor: Int?
 )

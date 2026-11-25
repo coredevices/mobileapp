@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 
 @Serializable
-data class PbwBlob(
+internal data class PbwBlob internal constructor(
         val crc: Long?,
         val name: String,
         @SerialName("sdk_version")

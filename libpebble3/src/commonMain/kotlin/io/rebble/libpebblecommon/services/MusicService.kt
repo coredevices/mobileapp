@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.mapNotNull
 
-class MusicService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService, ConnectedPebble.Music {
+internal class MusicService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService, ConnectedPebble.Music {
     private val logger = Logger.withTag("MusicService")
-    override val musicActions = protocolHandler.inboundMessages
+    override val musicActions: Flow<MusicAction> = protocolHandler.inboundMessages
         .filterIsInstance<MusicControl>()
         .mapNotNull {
             when (it.message) {

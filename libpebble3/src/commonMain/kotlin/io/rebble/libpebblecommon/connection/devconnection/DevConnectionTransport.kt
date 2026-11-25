@@ -22,11 +22,11 @@ import kotlinx.coroutines.IO
 
 internal expect fun getTempPath(extension: String): Path
 
-abstract class DevConnectionTransport(
+public abstract class DevConnectionTransport internal constructor(
     private val libPebble: LibPebble,
     private val lastStates: LastFirmwareUpdateStates,
 ) {
-    companion object {
+    public companion object {
         private val logger = Logger.withTag("DevConnectionTransport")
     }
     /** @param identifier Identifier of the device to connect to
@@ -34,13 +34,13 @@ abstract class DevConnectionTransport(
      * @param inboundDeviceMessages Flow of messages received from the device, or null if the device disconnected
      * @param outboundDeviceMessages Collector for messages to send to the device
      */
-    abstract suspend fun start(
+    internal abstract suspend fun start(
         identifier: PebbleIdentifier,
         inboundPKJSLogs: Flow<String>,
         inboundDeviceMessages: Flow<ByteArray>,
         outboundDeviceMessages: suspend (ByteArray) -> Unit
     )
-    abstract suspend fun stop()
+    internal abstract suspend fun stop()
 
     private suspend fun writeTempFile(payload: ByteArray, extension: String): Path {
         val path = getTempPath(extension)
@@ -74,7 +74,7 @@ abstract class DevConnectionTransport(
             log("Firmware install failed: $reason")
             sendStatus(false)
         }
-        val watch = libPebble.watches.value.firstOrNull { it.identifier == identifier } as? ConnectedPebble.Firmware
+        val watch = libPebble.watches.first().firstOrNull { it.identifier == identifier } as? ConnectedPebble.Firmware
         if (watch == null) return fail("the watch is not connected")
         if (watch.firmwareUpdateState !is FirmwareUpdateStatus.NotInProgress) {
             return fail("a firmware update is already in progress")

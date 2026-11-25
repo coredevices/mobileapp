@@ -30,12 +30,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_target_calendar_description
+import coreapp.ring.generated.resources.settings_target_calendar_no_write_access
+import coreapp.ring.generated.resources.settings_target_calendar_none
+import coreapp.ring.generated.resources.settings_target_calendar_title
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.ok
 import coredevices.ring.database.Preferences
 import coredevices.ui.M3Dialog
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res as UtilRes
 
 /** Writable calendars first, alphabetically; read-only ones trail so they can be greyed out. */
 internal fun orderCalendarsForPicker(calendars: List<CalendarEntity>): List<CalendarEntity> =
@@ -55,35 +64,37 @@ fun TargetCalendarDialog(onDismiss: () -> Unit) {
     LaunchedEffect(calendars) {
         if (calendars.isEmpty()) return@LaunchedEffect
         val writable = calendars.filter { it.writable }
-        if (writable.none { it.id == selectedId }) {
-            selectedId = writable.firstOrNull()?.id
-        }
+        if (writable.any { it.id == selectedId }) return@LaunchedEffect
+        val default = libPebble.defaultCalendar()?.takeIf { d -> writable.any { it.id == d.id } }
+        // The user may have tapped a row while defaultCalendar() was suspended.
+        if (writable.any { it.id == selectedId }) return@LaunchedEffect
+        selectedId = default?.id ?: writable.firstOrNull()?.id
     }
 
     M3Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Target Calendar") },
+        title = { Text(stringResource(Res.string.settings_target_calendar_title)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             TextButton(
                 enabled = selectedId != null,
                 onClick = {
                     preferences.setTargetCalendar(selectedId)
                     onDismiss()
                 }
-            ) { Text("OK") }
+            ) { Text(stringResource(UtilRes.string.ok)) }
         }
     ) {
         Column(
             modifier = Modifier.heightIn(max = 400.dp)
         ) {
             Text(
-                "Choose the calendar Index adds events to.",
+                stringResource(Res.string.settings_target_calendar_description),
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(12.dp))
             if (calendars.isEmpty()) {
-                Text("No calendars found.")
+                Text(stringResource(Res.string.settings_target_calendar_none))
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(calendars.size) { i ->
@@ -121,7 +132,7 @@ private fun CalendarRow(calendar: CalendarEntity, selected: Boolean, onSelect: (
             Text(calendar.name)
             if (!calendar.writable) {
                 Text(
-                    "No write access",
+                    stringResource(Res.string.settings_target_calendar_no_write_access),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

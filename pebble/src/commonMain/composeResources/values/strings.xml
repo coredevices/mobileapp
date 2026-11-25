@@ -8,4 +8,1415 @@
     <string name="app_store">App Store</string>
     <string name="index">Index</string>
     <string name="health">Health</string>
+
+    <string name="watches_enable_bluetooth_snackbar">Enable Bluetooth to connect a Pebble</string>
+    <string name="watches_bluetooth_disabled">Bluetooth is disabled</string>
+    <string name="watches_stop_scanning">Stop Scanning</string>
+    <string name="watches_add_pebble">Add a Pebble</string>
+    <string name="watches_watch">Watch</string>
+    <string name="watches_add_watch">Add Watch</string>
+    <string name="watches_scan">Scan</string>
+    <string name="watches_add_index">Add Index 01</string>
+    <string name="watches_classic_watch">Classic Watch</string>
+    <string name="watches_add_classic_watch">Add Classic Watch</string>
+    <string name="watches_enable_bluetooth_banner">Enable bluetooth to connect to your watch.</string>
+    <string name="watches_other_apps_installed">One or more other PebbleOS companions apps are installed. Please uninstall them (%1$s) to avoid connectivity problems.</string>
+    <string name="watches_cdm_crash_hint">If the app crashes every time you press Connect, try checking "Disable Companion Device Manager" in Settings</string>
+    <string name="watches_scanning_for_devices">Scanning for devices...</string>
+    <string name="watches_press_index_button">Press the button on your Index 01 to wake it.</string>
+    <string name="watches_cant_find_index">Can't find your Index 01? Press the button on the ring to wake it up.</string>
+    <string name="watches_uninstall_other_apps">If you have any other Pebble apps installed on your phone, please uninstall them - connection to the watch will not work while they are installed.</string>
+    <string name="watches_index_already_paired_title">Index 01 already paired</string>
+    <string name="watches_index_already_paired_body">An Index 01 is already paired to this phone. To pair a different Index 01, first unpair the existing one.</string>
+    <string name="watches_index_unpair_ios">To unpair, first remove it from this app using the 3-dot menu, then go to Settings &gt; Bluetooth, find the Index 01 in the list of devices, tap the info icon and choose "Forget This Device".</string>
+    <string name="watches_index_unpair_android">To unpair, find the Index 01 in your Bluetooth settings and choose to forget/unpair it.</string>
+    <string name="watches_index_reset_after_unpair">After unpairing, reset the ring by pressing the button in an 'SOS' sequence as shown below.</string>
+    <!-- Ring button press pattern for a reset -->
+    <string name="watches_sos_pattern">Short (3 times) LONG (1 second, 3 times) short (3 times)</string>
+    <string name="watches_sos_success">You'll see the light flash red green blue repeatedly when successful.</string>
+    <string name="watches_need_more_help">Need more help? View detailed instructions</string>
+    <string name="watches_unpair_other_phones">Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)</string>
+    <string name="watches_no_watches_found">No watches found</string>
+    <string name="watches_scan_again">Scan again</string>
+    <string name="watches_fab_watch_info">Use this for any modern Pebble that connects over Bluetooth Low Energy:\n\nPebble Time 2, Core 2 Duo, Pebble Round 2 &amp; Pebble 2.</string>
+    <string name="watches_fab_classic_watch_info">Use this for legacy Pebbles that connect over Bluetooth Classic:\n\nOriginal Pebble, Pebble Steel, Pebble Time, Pebble Time Steel, and Pebble Time Round.</string>
+    <!-- Content description for an info button; %1$s is the menu item label -->
+    <string name="watches_about_item">About %1$s</string>
+    <string name="watches_ring_failsafe_mode">Failsafe mode</string>
+    <string name="watches_ring_production_test_mode">Production test mode</string>
+    <string name="watches_ring_available_to_pair">Available to pair</string>
+    <string name="watches_ring_updating">Updating...</string>
+    <string name="watches_ring_bluetooth_sync_disabled">Bluetooth Sync Disabled</string>
+    <!-- Ring connection state -->
+    <string name="watches_ring_ready">Ready</string>
+    <string name="watches_ring_pairing_failure">Pairing failure</string>
+    <string name="watches_ring_pairing">Pairing...</string>
+    <!-- Button: pair the ring -->
+    <string name="watches_ring_pair">Pair</string>
+    <string name="watches_ring_restore_firmware">Restore firmware</string>
+    <string name="watches_ring_restoring">Restoring - please wait...</string>
+    <string name="watches_limited_background_access">Limited background access</string>
+    <string name="watches_enable_background_access">Enable background access</string>
+    <string name="watches_ring_sync_disabled_body">Bluetooth sync is disabled for this profile, so an Index 01 can't be paired here.\n\nSwitch to your primary profile to pair, or if you're not using multiple profiles on this phone, turn off "Disable Bluetooth Sync" in Index settings.</string>
+    <string name="watches_ring_pairing_issue_detected">Pairing issue detected</string>
+    <string name="watches_ring_device_already_paired">Device already paired</string>
+    <string name="watches_ring_ios_trouble_pairing">This device is having trouble pairing. Please follow the instructions below to recover it:</string>
+    <string name="watches_ring_ios_step1">1. Go to Settings &gt; Bluetooth</string>
+    <string name="watches_ring_ios_step2">2. Find e.g. 'Pebble Index ABC' in the list of devices</string>
+    <string name="watches_ring_ios_step3">3. If it's there, tap the info icon and choose "Forget This Device". If it's not there, continue.</string>
+    <string name="watches_ring_ios_step4">4. Reset the ring by pressing the button in an 'SOS' sequence as shown below.</string>
+    <string name="watches_ring_paired_to_other_phone">This device is already paired to another phone.</string>
+    <string name="watches_ring_reset_and_retry">Please reset the ring by pressing the button in an 'SOS' sequence as shown below, then try pairing again.</string>
+    <string name="watches_more_options">More options</string>
+    <string name="watches_remove_device_title">Remove %1$s?</string>
+    <string name="watches_are_you_sure">Are you sure?</string>
+    <string name="watches_rename">Rename</string>
+    <string name="watches_remove_nickname">Remove Nickname</string>
+    <string name="watches_fw_error_download">Failed to download firmware</string>
+    <string name="watches_fw_error_parse">Failed to parse manifest</string>
+    <!-- %1$s is the connection state, %2$s the current activity, e.g. "Connected - Updating to PebbleOS 4.9 (40%)" -->
+    <string name="watches_state_detail">%1$s - %2$s</string>
+    <!-- %1$s is a version, %2$d a percentage -->
+    <string name="watches_state_updating_progress">Updating to PebbleOS %1$s (%2$d%)</string>
+    <string name="watches_state_updating">Updating to PebbleOS %1$s</string>
+    <string name="watches_state_error_starting">Error starting update: %1$s</string>
+    <string name="watches_state_installing_language">installing language pack: %1$s</string>
+    <string name="watches_state_downloading_language">downloading language pack: %1$s</string>
+    <string name="watches_state_rebooting_recovery_install">Rebooting watch into recovery to install %1$s</string>
+    <string name="watches_state_rebooting_finish">Rebooting watch to finish update to %1$s</string>
+    <string name="watches_state_connected">Connected</string>
+    <string name="watches_state_connected_factory">Connected (Factory)</string>
+    <string name="watches_state_rebooting_recovery_update">Rebooting into recovery to update</string>
+    <string name="watches_state_rebooting_after_update">Rebooting after update</string>
+    <string name="watches_state_negotiating">Negotiating</string>
+    <string name="watches_state_waiting">Waiting</string>
+    <string name="watches_state_connecting">Connecting</string>
+    <string name="watches_state_disconnected">Disconnected</string>
+    <string name="watches_state_disconnecting">Disconnecting</string>
+    <string name="watches_checking_updates">Checking for updates...</string>
+    <string name="watches_check_updates">Check for Updates</string>
+    <string name="watches_language">Language</string>
+    <string name="watches_language_installed">Language: %1$s</string>
+    <string name="watches_screenshot">Screenshot</string>
+    <string name="watches_battery_life">Battery Life</string>
+    <string name="watches_dev_connection">Dev Connection</string>
+    <string name="watches_dev_connection_failed">Dev connection failed: %1$s</string>
+    <string name="watches_connected_cloudpebble">Connected to CloudPebble</string>
+    <string name="watches_serial">Serial: %1$s</string>
+    <string name="watches_bug_report">Bug Report</string>
+    <string name="watches_share">Share</string>
+    <string name="watches_dev_connection_active">Developer connection active</string>
+    <string name="watches_battery">Battery</string>
+    <string name="watches_install_pebbleos">Install PebbleOS %1$s</string>
+    <string name="watches_update_pebbleos">Update PebbleOS</string>
+    <string name="watches_error_pairing">Error Pairing</string>
+    <string name="watches_error_pairing_body">Please go to system bluetooth settings, and unpair this device.</string>
+    <string name="watches_connection_failing">Connection failing</string>
+    <string name="watches_cant_connect_title">Can't connect to watch</string>
+    <string name="watches_cant_connect_body">Make sure your watch is powered on and nearby. If it still won't connect, open Bluetooth settings, remove ("Forget") this watch, and also unpair the phone in watch settings (Settings &gt; Bluetooth), then accept the new pairing request.</string>
+    <string name="watches_cant_find_watch">Can't find watch</string>
+    <string name="watches_cant_find_watch_body">Your phone can't find this watch. Forget it in this app, remove ("Forget") it in your phone's Bluetooth settings, then pair it again.</string>
+    <string name="watches_error_restart_button">Error Connecting - Restart Your Watch</string>
+    <string name="watches_restart_title">Restart your watch</string>
+    <string name="watches_restart_body">Your watch needs to be restarted before it can connect. Press and hold the back button (top-left) for about 15 seconds until the watch restarts, then try connecting again.</string>
+    <string name="watches_open_bt_settings">Open Bluetooth settings</string>
+
+    <string name="watch_home_sideload_firmware_title">Sideload firmware?</string>
+    <string name="watch_home_sideload_firmware_message">Install %1$s on every connected watch? Only install firmware from sources you trust.</string>
+    <string name="watch_home_change_services_title">Change Pebble services?</string>
+    <string name="watch_home_change_services_message">A link wants to sign you in to Pebble web services at %1$s. This server will receive your app store, locker and watchapp account data. Only continue if you trust it.</string>
+    <string name="watch_home_index_permissions_title">Index Permissions</string>
+    <string name="watch_home_index_permissions_message">Index requires additional permissions to function.\nPlease grant the following permissions:</string>
+    <string name="watch_home_clear_search">Clear search</string>
+    <!-- Bottom navigation item that opens a menu of extra tabs -->
+    <string name="watch_home_more">More</string>
+    <string name="locker_not_compatible">Not compatible with this watch</string>
+    <string name="locker_not_natively_compatible">Not natively compatible with this watch, but can be scaled</string>
+    <!-- Inserted into "%1$s is installed from %2$s" when the installed app was sideloaded -->
+    <string name="locker_sideloaded_file">a sideloaded file</string>
+    <!-- Inserted into "%1$s is installed from %2$s" when the store it came from is unknown -->
+    <string name="locker_unknown_app_store">an app store</string>
+    <string name="locker_removing_app">Removing %1$s</string>
+    <string name="locker_remove_app_failed">Couldn't remove %1$s</string>
+    <string name="locker_my_watchfaces">My Watchfaces</string>
+    <string name="locker_my_apps">My Apps</string>
+    <string name="locker_my_plugins">My Plugins</string>
+    <string name="locker_plugins">Plugins</string>
+    <!-- Filter chip; %1$s is a short watch model code such as PT2 -->
+    <string name="locker_made_for">Made for %1$s</string>
+    <!-- Filter chip for choosing the sort order -->
+    <string name="locker_order">Order</string>
+    <string name="locker_order_recently_used">Order by recently used</string>
+    <string name="locker_order_manually">Order manually</string>
+    <string name="locker_selected">Selected</string>
+    <string name="locker_show_incompatible">Show Incompatible</string>
+    <string name="locker_loading">Loading Locker</string>
+    <!-- Section header for the watchface currently shown on the watch -->
+    <string name="locker_active">Active</string>
+    <string name="locker_plugin_settings">Plugin settings</string>
+    <string name="locker_configure_feeds">Configure Feeds</string>
+    <string name="locker_from_my_watchfaces">From my watchfaces</string>
+    <string name="locker_from_my_apps">From my apps</string>
+    <string name="locker_from_store">From the store</string>
+    <string name="locker_clear_filters">Clear filters for more results</string>
+    <string name="locker_see_all">See all</string>
+    <string name="locker_in_my_collection">In My Collection</string>
+    <string name="locker_remove_app_title">Remove %1$s?</string>
+    <string name="locker_remove_app_message">Are you sure you want to remove this app from your Pebble?</string>
+    <string name="locker_removed_app">Removed %1$s</string>
+    <!-- Image description for an app's store header image -->
+    <string name="locker_banner">Banner</string>
+    <string name="locker_heart_failed">Failed to heart app</string>
+    <string name="locker_remove_heart_failed">Failed to remove heart</string>
+    <!-- Likes ("hearts") given to an app in the store -->
+    <string name="locker_hearts">Hearts</string>
+    <!-- %1$s is the watch name -->
+    <string name="locker_running_on_watch">Running On Watch %1$s</string>
+    <!-- %1$s is the watch name -->
+    <string name="locker_on_watch">On Watch %1$s</string>
+    <!-- %1$s is the watch name -->
+    <string name="locker_not_compatible_with">Not Compatible with %1$s</string>
+    <!-- %1$s is the watch name -->
+    <string name="locker_not_on_watch">Not On Watch %1$s</string>
+    <string name="locker_start_app">Start App</string>
+    <string name="locker_start_watchface">Start Watchface</string>
+    <string name="locker_add_app_failed">Failed to add app</string>
+    <string name="locker_add_to_watch">Add To Watch</string>
+    <string name="locker_move_to_top">Move To Top</string>
+    <string name="locker_settings_page_broken">This app's settings page may not work any more</string>
+    <string name="locker_screenshot">Screenshot</string>
+    <string name="locker_property_companion">COMPANION</string>
+    <string name="locker_property_description">DESCRIPTION</string>
+    <string name="locker_property_developer">DEVELOPER</string>
+    <string name="locker_property_version">VERSION</string>
+    <string name="locker_property_battery_impact">BATTERY IMPACT</string>
+    <string name="locker_property_source_code">SOURCE CODE</string>
+    <string name="locker_property_plugin_code">PLUGIN CODE</string>
+    <string name="locker_property_website_link">WEBSITE LINK</string>
+    <string name="locker_property_get_help">GET HELP</string>
+    <string name="locker_property_contact_developer">CONTACT DEVELOPER</string>
+    <string name="locker_property_changelog">CHANGELOG</string>
+    <!-- Which app store the app came from -->
+    <string name="locker_property_store">STORE</string>
+    <!-- Screen title; %1$s is the developer's name -->
+    <string name="locker_developer_title">Developer: %1$s</string>
+    <!-- %1$s is the app version -->
+    <string name="locker_version_sideloaded">%1$s (sideloaded)</string>
+    <string name="locker_external_link">External Link</string>
+    <string name="locker_view_source">View Source</string>
+    <string name="locker_report_bug">Report a Bug</string>
+    <string name="locker_send_message">Send Message</string>
+    <!-- Opens the changelog -->
+    <string name="locker_view">View</string>
+    <string name="locker_changelog">Changelog</string>
+    <string name="locker_unknown_version">Unknown version</string>
+    <string name="locker_dismiss">Dismiss</string>
+    <string name="locker_capability_location">Location</string>
+    <!-- Permission that lets an app create Pebble timeline pins -->
+    <string name="locker_capability_timeline">Timeline</string>
+    <string name="locker_capability_web_sign_in">Web sign-in</string>
+    <string name="locker_capability_health_description">Can access health data</string>
+    <string name="locker_capability_location_description">Can access location</string>
+    <string name="locker_capability_timeline_description">Can create timeline pins</string>
+    <string name="locker_capability_web_sign_in_description">Can ask you to sign in to web accounts</string>
+    <string name="locker_type_watchface">Watchface</string>
+    <string name="locker_type_watchapp">Watchapp</string>
+    <string name="locker_type_plugin">Plugin</string>
+    <!-- %1$s is Watchface, Watchapp or Plugin -->
+    <string name="locker_waiting_to_sync">Waiting to sync %1$s to watch...</string>
+    <!-- %1$s is Watchface, Watchapp or Plugin -->
+    <string name="locker_sync_failed">%1$s failed to sync to watch</string>
+    <!-- %1$s is Watchface, Watchapp or Plugin -->
+    <string name="locker_loading_app">Loading %1$s</string>
+    <!-- %1$s is Watchface, Watchapp or Plugin -->
+    <string name="locker_load_failed">%1$s failed to load</string>
+    <!-- %1$s is the app name -->
+    <string name="locker_no_settings">%1$s has no settings</string>
+    <string name="locker_no_connected_watch">No connected watch</string>
+    <!-- %1$s is the app name -->
+    <string name="locker_settings_failed">%1$s settings failed to open</string>
+
+    <!-- InstallReview -->
+    <string name="install_review_replace_title">Replace %1$s?</string>
+    <!-- %1$s app name, %2$s where the installed copy came from, %3$s where the new copy is from -->
+    <string name="install_review_replace_message">%1$s is installed from %2$s. This copy is from %3$s, and may not be from the same developer.\n\nReplacing it erases everything the installed app has stored, including its settings, sign-ins and permissions, on this phone and on connected watches.</string>
+    <string name="install_review_replace">Replace</string>
+    <string name="install_review_title">Install %1$s?</string>
+    <string name="install_review_allow_all_required">Allow all required</string>
+    <string name="install_review_optional_subtitle">Decide now, or when %1$s first uses them.</string>
+    <!-- Heading above a list of permissions, e.g. "It wants to: Use your location" -->
+    <string name="install_review_it_wants_to">It wants to</string>
+    <string name="install_review_allow_all">Allow all</string>
+    <string name="install_review_allowed_automatically_count">Allowed automatically (%1$d)</string>
+    <string name="install_review_automatic_settings_allow">You don't need to do anything here: your settings allow these. Deny any you'd rather %1$s didn't use.</string>
+    <string name="install_review_automatic_cant_send_data">You don't need to do anything here. %1$s can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use.</string>
+    <string name="plugin_collapse">Collapse</string>
+    <string name="plugin_expand">Expand</string>
+    <string name="plugin_permission_required">Required</string>
+    <string name="plugin_permission_optional">Optional</string>
+    <string name="plugin_permission_exfiltrating">Sends data off your phone</string>
+    <string name="plugin_permission_exfiltrating_global_internet">Allow this app to connect to any site on the internet, because it was built before the permissions system was created.</string>
+    <string name="plugin_permission_exfiltrating_pebblekit">This allows the app to send data to its phone app, which can send it anywhere.</string>
+    <string name="plugin_permission_exfiltrating_limited">This allows the app to send data off your device - limited to the specified location</string>
+    <string name="plugin_permission_sensitive">Sensitive</string>
+    <string name="plugin_permission_sensitive_explanation">Sensitive permissions always need your approval, whatever your settings.</string>
+    <!-- %1$s is a watch name -->
+    <string name="plugin_permission_health_not_enforced">Not enforced on %1$s</string>
+    <string name="plugin_permission_health_not_enforced_explanation">%1$s can't restrict health data, so apps can read it whatever you choose here.</string>
+    <!-- Accessibility label for a help icon; %1$s is a permission or app name -->
+    <string name="plugin_permission_why_title">Why %1$s</string>
+    <string name="plugin_permission_why">Why</string>
+    <!-- Permission labels complete the sentence "<app> wants to …" and start with a capital letter -->
+    <string name="plugin_permission_label_internet_domain">Connect to %1$s</string>
+    <string name="plugin_permission_label_internet">Connect to any website</string>
+    <string name="plugin_permission_label_local_network">Connect to devices on your local network</string>
+    <string name="plugin_permission_label_global_internet">Connect to any website or local device</string>
+    <string name="plugin_permission_label_location">Use your location</string>
+    <string name="plugin_permission_label_watch_microphone">Use your watch microphone</string>
+    <string name="plugin_permission_label_health">Read your health data</string>
+    <string name="plugin_permission_label_notifications_from">Read your notifications from %1$s</string>
+    <string name="plugin_permission_label_notifications">Read all your notifications</string>
+    <string name="plugin_permission_label_calendar">Read your calendar</string>
+    <string name="plugin_permission_label_contacts">Read your contacts</string>
+    <string name="plugin_permission_label_timeline">Add pins to your timeline</string>
+    <string name="plugin_permission_label_show_notifications">Show notifications on your watch</string>
+    <string name="plugin_permission_label_read_watch_settings">Read your watch settings</string>
+    <string name="plugin_permission_label_write_watch_settings">Change your watch settings</string>
+    <string name="plugin_permission_label_read_music">See what music is playing</string>
+    <string name="plugin_permission_label_control_music">Control music playback</string>
+    <string name="plugin_permission_label_read_apps">See which apps and watchfaces you have</string>
+    <string name="plugin_permission_label_launch_apps">Launch apps on your watch</string>
+    <string name="plugin_permission_label_find_my_phone">Ring your phone to find it</string>
+    <string name="plugin_permission_label_index_alarms">Set alarms and timers on your phone via Index</string>
+    <string name="plugin_permission_label_beeper_messages">Send messages to your contacts through Index &amp; Beeper</string>
+    <string name="plugin_permission_label_index_notes">Save Index notes for you</string>
+    <string name="plugin_permission_label_index_reminders">Add Index reminders and list items for you</string>
+    <!-- %1$s is a folder name -->
+    <string name="plugin_permission_label_read_files_scope">Read '%1$s' in device storage</string>
+    <string name="plugin_permission_label_read_files">Read files from device storage you permit</string>
+    <string name="plugin_permission_label_write_files_scope">Read &amp; write to '%1$s' in device storage</string>
+    <string name="plugin_permission_label_write_files">Read &amp; write to files in device storage you permit</string>
+    <string name="plugin_permission_label_legacy_pebblekit">Broadcast messages to every app on your phone (legacy PebbleKit)</string>
+    <!-- %1$s is a phone app's package name -->
+    <string name="plugin_permission_label_pebblekit_2">Exchange messages with %1$s</string>
+    <!-- %1$s permission defined by a plugin, %2$s that plugin's name -->
+    <string name="plugin_permission_label_plugin_defined">%1$s (via %2$s)</string>
+    <!-- Joins a list of permissions: "%1$s" is the comma-separated start of the list, "%2$s" the last item -->
+    <string name="plugin_permission_list_and">%1$s and %2$s</string>
+    <!-- %1$s app name, %2$s list of permission labels (lowercase start) -->
+    <string name="plugin_permission_request">%1$s wants to %2$s</string>
+    <string name="plugin_permission_an_app">An app</string>
+    <string name="plugin_permission_deny">Deny</string>
+    <string name="plugin_permission_allow">Allow</string>
+    <string name="plugin_permission_review">Review</string>
+    <string name="plugin_permissions_title">Permissions</string>
+    <string name="plugin_permissions_title_legacy">Permissions (Legacy App)</string>
+    <string name="plugin_permissions_not_installed">Shown once the app has been installed on your watch.</string>
+    <string name="plugin_permissions_none">This app doesn't use any permissions.</string>
+    <string name="plugin_permissions_legacy_explanation">Apps built before permissions existed can use these by default. To be asked first, turn on "Ask before older apps use permissions" in Settings.</string>
+    <string name="plugin_permission_not_used_yet">Not used yet</string>
+    <!-- %1$s is a relative time, e.g. "5 minutes ago" -->
+    <string name="plugin_permission_used">Used %1$s</string>
+    <string name="plugin_permission_allowed_automatically">Allowed automatically</string>
+    <string name="plugin_permission_allowed_automatically_used">Allowed automatically · %1$s</string>
+    <!-- %1$s is a list such as "location, health data" -->
+    <string name="plugin_permissions_legacy_asks">Built before permissions: asks before using %1$s</string>
+    <string name="plugin_permissions_legacy_has_access">Built before permissions: has access to %1$s</string>
+    <string name="plugin_permissions_legacy_access_internet">the internet</string>
+    <string name="plugin_permissions_legacy_access_location">location</string>
+    <string name="plugin_permissions_legacy_access_timeline">timeline pins</string>
+    <string name="plugin_permissions_legacy_access_notifications">watch notifications</string>
+    <string name="plugin_permissions_legacy_access_health">health data</string>
+    <string name="plugin_permissions_legacy_access_phone_apps">phone apps</string>
+    <!-- AppstoreSettingsScreen -->
+    <string name="appstore_refresh_collections">Refresh Collections</string>
+    <string name="appstore_sources_title">Appstore Sources</string>
+    <string name="appstore_couldnt_open_login">Couldn't open login page</string>
+    <string name="appstore_add_source">Add Source</string>
+    <string name="appstore_delete_source">Delete Source</string>
+    <string name="appstore_watchapp_collections">Watchapp Collections</string>
+    <string name="appstore_watchface_collections">Watchface Collections</string>
+    <string name="appstore_plugin_collections">Plugin Collections</string>
+    <string name="appstore_add_source_title">Add Appstore Source</string>
+    <string name="appstore_source_url">Source URL</string>
+    <!-- TopCharts -->
+    <string name="top_charts_title">Top Charts</string>
+    <string name="top_charts_see_all">See all</string>
+    <string name="top_charts_empty">Nothing here yet</string>
+    <string name="top_charts_selected">Selected</string>
+    <string name="top_charts_most_used">Most used</string>
+    <string name="top_charts_most_hearted">Most hearted</string>
+    <!-- Filter for watchfaces by when they were last updated -->
+    <string name="top_charts_updated_since_oct_2025">Updated since Oct 2025</string>
+    <string name="top_charts_updated_last_30_days">Updated in the last 30 days</string>
+    <string name="top_charts_updated_last_7_days">Updated in the last 7 days</string>
+    <string name="top_charts_updated_any_time">Updated any time</string>
+    <!-- Filter for apps by when they received hearts (likes) -->
+    <string name="top_charts_hearted_since_oct_2025">Hearted since Oct 2025</string>
+    <string name="top_charts_hearted_last_30_days">Hearted in the last 30 days</string>
+    <string name="top_charts_hearted_last_7_days">Hearted in the last 7 days</string>
+    <string name="top_charts_hearted_any_time">Hearted any time</string>
+    <!-- NativePluginScreen: shown where a developer name would be -->
+    <string name="plugin_built_in">Built-in</string>
+    <string name="plugin_built_in_disabled">Built-in · Disabled</string>
+    <!-- PluginCapabilitiesSection -->
+    <!-- Data a plugin provides -->
+    <string name="plugin_capabilities_sources">Sources</string>
+    <string name="plugin_capabilities_sources_info">The information this plugin provides, like the weather or your next calendar event. Watchfaces, apps and other plugins can show it, if you allow them to.</string>
+    <string name="plugin_capabilities_actions">Actions</string>
+    <string name="plugin_capabilities_actions_info">The things this plugin can do, like turning on a light. Watchfaces, apps, other plugins and Index can ask it to do them; apps need your permission first. What apps have done is listed in Settings › Apps › App activity.</string>
+    <string name="plugin_capabilities_show_less">Show less</string>
+    <string name="plugin_capabilities_show_all">Show all %1$d</string>
+    <string name="plugin_capabilities_about">About %1$s</string>
+    <!-- Tag on an action that asks the user before running -->
+    <string name="plugin_capabilities_asks_first">Asks first</string>
+    <string name="plugin_capabilities_destructive">Destructive</string>
+    <!-- PluginSourceScreen -->
+    <string name="plugin_source_wrap_lines">Wrap lines</string>
+    <string name="plugin_source_dont_wrap_lines">Don't wrap lines</string>
+    <string name="plugin_source_couldnt_save">Couldn't save %1$s</string>
+    <string name="plugin_source_couldnt_load">Couldn't load %1$s</string>
+    <!-- PluginsHelpCard -->
+    <string name="plugin_help_title">What are plugins?</string>
+    <string name="plugin_help_intro">Plugins integrate with online services and your phone to provide shortcuts and live data to watchfaces, apps, and the Index Agent.</string>
+    <string name="plugin_help_local">All plugins run locally on your phone and connect directly to each service, they can only use the permissions you allow.</string>
+    <string name="plugin_help_dont_show_again">Don't show again</string>
+    <!-- PluginPreferencesScreens -->
+    <string name="plugin_complications_title">Complications</string>
+    <string name="plugin_complications_reset">Reset to defaults</string>
+    <string name="plugin_complications_reset_title">Reset to defaults?</string>
+    <string name="plugin_complications_reset_message">Your complication slots will be replaced with the default readings.</string>
+    <string name="plugin_complications_reset_confirm">Reset</string>
+    <string name="plugin_complications_info">Complications are small pieces of information a watchface shows alongside the time, like the weather, your phone's battery or your next event.\n\nInstead of each watchface asking you to set these up separately, you choose them once here. Every watchface can see this list, and the ones that support it fill their complication slots from it, usually in this order, so put the ones you care about most first.\n\nWatchfaces have to opt in to using this list. Some don't, and will show their own choices or have their own settings instead.</string>
+    <string name="plugin_complications_header">Choose which data you would like watchfaces to display in complication slots, in order</string>
+    <string name="plugin_complications_about">About complications</string>
+    <!-- A complication slot with nothing assigned -->
+    <string name="plugin_complications_empty_slot">Empty</string>
+    <string name="plugin_complications_reorder">Reorder</string>
+    <string name="plugin_complication_title">Complication</string>
+    <string name="plugin_complication_source">Source</string>
+    <!-- Source picker option meaning no source -->
+    <string name="plugin_complication_nothing">Nothing</string>
+    <!-- Picker label: which of several readings (e.g. which calendar event) -->
+    <string name="plugin_complication_which">Which</string>
+    <!-- %1$s ordinal such as "2nd", %2$s the reading's current name -->
+    <string name="plugin_complication_which_currently">%1$s (currently: %2$s)</string>
+    <string name="plugin_preferred_sources_title">Preferred sources</string>
+    <string name="plugin_preferred_sources_explanation">When more than one plugin offers the same thing, apps that don't ask for a particular one get the plugin chosen here.</string>
+    <!-- %1$s is the plugin chosen automatically -->
+    <string name="plugin_preferred_sources_automatic_named">Automatic (%1$s)</string>
+
+    <string name="permissions_usage_title">Permissions in use</string>
+    <string name="permissions_usage_group_internet">Connect to websites</string>
+    <string name="permissions_usage_group_notifications">Read your notifications</string>
+    <string name="permissions_usage_group_pebblekit">Exchange messages with phone apps</string>
+    <string name="permissions_usage_any_website">Any website</string>
+    <string name="permissions_usage_all_apps">All apps</string>
+    <string name="permissions_usage_empty">No app can use any permissions yet.</string>
+    <plurals name="permissions_usage_app_count">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="permissions_usage_not_used_yet">Not used yet</string>
+    <!-- %1$s is a relative time, e.g. "5 minutes ago" -->
+    <string name="permissions_usage_used">Used %1$s</string>
+    <!-- %1$s is when the permission was last used, e.g. "Used 5 minutes ago" -->
+    <string name="permissions_usage_allowed_automatically">Allowed automatically · %1$s</string>
+
+    <!-- Permission policy option: when apps ask for permission -->
+    <string name="permissions_policy_ask_if_exfiltrating">When needed</string>
+    <!-- Permission policy option: when apps ask for permission -->
+    <string name="permissions_policy_always_ask">Always</string>
+    <!-- Permission policy option: when apps ask for permission -->
+    <string name="permissions_policy_never_ask">Never</string>
+    <string name="permissions_policy_ask_if_exfiltrating_description">Apps ask before connecting to the internet or acting for you (e.g. controlling your music or ringing your phone)</string>
+    <string name="permissions_policy_always_ask_description">Apps ask before using any permission.</string>
+    <string name="permissions_policy_never_ask_description">Apps can use any permission except reading notifications, unless you explicitly turn it off on the app's page</string>
+    <string name="permissions_policy_ask_if_exfiltrating_details">Apps that can't send anything off your phone (no internet access and no phone companion app) can read your data, like your location, calendar or music, without asking, because it can't go anywhere. Apps that could send it off your phone ask first.\n\nEvery app asks before going online, and before acting for you: adding timeline pins, controlling music, launching apps, changing watch settings, ringing your phone, or using a plugin's actions. Every app also asks before reading your notifications.</string>
+    <string name="permissions_policy_always_ask_details">Apps ask the first time they use any permission, including reading data they couldn't send anywhere.</string>
+    <string name="permissions_policy_never_ask_details">Apps get any permission they ask for without asking you, including going online, except reading your notifications, which every app still asks for. Anything you've turned off on an app's page stays off. Not recommended!</string>
+    <string name="permissions_policy_details_intro">Whichever you choose, you can review and change each app's permissions on its page. Apps built before permissions existed have their own setting, "Ask before older apps use permissions".</string>
+    <!-- %1$s is a permission policy option name -->
+    <string name="permissions_policy_default">%1$s (default)</string>
+    <string name="permissions_intro_body_watch_and_index">Watchfaces, watchapps and plugins (including the ones Index uses to save your notes and reminders) now ask before using your phone's features: going online, your location, notifications, calendar, contacts, music, files, watch settings and timeline.</string>
+    <string name="permissions_intro_body_index">Plugins, including the ones Index uses to save your notes and reminders, now ask before using your phone's features: going online, your location, notifications, calendar, contacts, music, files, watch settings and timeline.</string>
+    <string name="permissions_intro_body_watch">Watchfaces, watchapps and plugins now ask before using your phone's features: going online, your location, notifications, calendar, contacts, music, files, watch settings and timeline.</string>
+    <string name="permissions_intro_change_mode">Change the permissions mode for all apps below (also in Settings/Apps), and configure each app's individual settings on its own screen</string>
+    <string name="permissions_intro_older_apps">Older apps which weren't built for the Permissions system are not affected, unless you choose to enforce permissions for them in Settings -&gt; Apps.</string>
+    <string name="permissions_intro_title">App permissions</string>
+
+    <string name="permissions_screen_title">Permissions</string>
+    <string name="permissions_screen_hide_warnings">Hide missing permission warnings</string>
+    <string name="permissions_screen_hide_warnings_description">Don't show a badge on Settings when permissions are missing</string>
+    <string name="permissions_screen_all_granted">All permissions granted!</string>
+
+    <string name="watchapp_settings_open_in_browser_title">Open in browser?</string>
+    <!-- Followed by the website's host name on the next line. %1$s is the app name -->
+    <string name="watchapp_settings_wants_to_open">%1$s wants to open a page on</string>
+    <!-- Button: open the web page -->
+    <string name="watchapp_settings_open">Open</string>
+    <!-- %1$s is the app name, %2$s what it asks for, e.g. "access your location" -->
+    <string name="watchapp_settings_permission_request">%1$s wants to %2$s</string>
+    <!-- Snackbar action: review the permission request -->
+    <string name="watchapp_settings_review">Review</string>
+    <string name="watchapp_settings_title">App Settings</string>
+    <!-- %1$s is the app name -->
+    <string name="watchapp_settings_configuring">Configuring %1$s</string>
+    <string name="watchapp_settings_permissions">Permissions</string>
+    <string name="watchapp_settings_cant_open_safely">These settings can't be opened safely on this device.</string>
+
+    <string name="contact_dev_title">Contact the developer</string>
+    <!-- %1$s is the app name -->
+    <string name="contact_dev_intro">Send a message about %1$s. The developer will receive it via email and can reply to you. Your email address is not shared with them.</string>
+    <string name="contact_dev_sent">Message sent. The developer will receive an email and may reply to you directly.</string>
+    <string name="contact_dev_sign_in_required">You need to sign in to contact the developer.</string>
+    <!-- Label of the message text field -->
+    <string name="contact_dev_message">Message</string>
+    <string name="contact_dev_characters_remaining">%1$d characters remaining</string>
+    <string name="contact_dev_attach_hint">Attach up to %1$d files, 2 MB each (optional)</string>
+    <string name="contact_dev_add_files">Add files</string>
+    <string name="contact_dev_add_photos">Add photos</string>
+    <!-- %1$s is a file name, %2$d its size in kilobytes -->
+    <string name="contact_dev_attachment_size">%1$s — %2$d KB</string>
+    <string name="contact_dev_send">Send message</string>
+    <string name="contact_dev_read_failed">Could not read "%1$s".</string>
+    <string name="contact_dev_attachment_too_large">Attachment "%1$s" exceeds 2 MB.</string>
+    <string name="contact_dev_enter_message">Please enter a message.</string>
+    <!-- %1$d is the message length, %2$d the maximum -->
+    <string name="contact_dev_message_too_long">Message is too long (%1$d/%2$d).</string>
+    <string name="contact_dev_sign_in_again">Please sign in again.</string>
+    <string name="contact_dev_email_not_verified">Your email address must be verified before contacting developers.</string>
+    <string name="contact_dev_network_error">Network error. Please try again.</string>
+
+    <!-- Filter chip: group activity by the app that took the action -->
+    <string name="app_activity_by_app">By app</string>
+    <!-- Filter chip: group activity by the plugin that ran the action -->
+    <string name="app_activity_by_plugin">By plugin</string>
+    <string name="app_activity_title">App activity</string>
+    <string name="app_activity_empty">None of your apps have taken actions using plugins in the last %1$d days.</string>
+    <string name="app_activity_intro">What actions your apps took using plugins over the last %1$d days.</string>
+    <!-- %2$s is a relative time, e.g. "5 minutes ago" -->
+    <plurals name="app_activity_action_count">
+        <item quantity="one">%1$d action · last %2$s</item>
+        <item quantity="other">%1$d actions · last %2$s</item>
+    </plurals>
+    <string name="app_activity_hide_actions">Hide actions</string>
+    <string name="app_activity_show_actions">Show actions</string>
+    <string name="app_activity_show_all">Show all %1$d</string>
+    <string name="app_activity_recent_activity">Recent activity</string>
+    <plurals name="app_activity_recent_count">
+        <item quantity="one">%1$d action in the last %2$d days</item>
+        <item quantity="other">%1$d actions in the last %2$d days</item>
+    </plurals>
+    <!-- %1$s is when the action happened (maybe preceded by the app name), %2$s the error -->
+    <string name="app_activity_failed">%1$s · Failed: %2$s</string>
+
+    <string name="app_data_usage_title">Data usage</string>
+    <string name="app_data_usage_legacy_info">This app was made before apps had to declare which websites they use, so it can reach any website and its data usage can't be split up by website.</string>
+    <string name="app_data_usage_local_network">Local network</string>
+    <string name="app_data_usage_any_website">Any website</string>
+    <string name="app_data_usage_empty">None of your apps have sent or received anything in the last %1$d days.</string>
+    <string name="app_data_usage_intro">How much your apps have sent and received over the last %1$d days.</string>
+    <string name="app_data_usage_removed_app">Removed app</string>
+    <string name="app_data_usage_hide_domains">Hide domains</string>
+    <string name="app_data_usage_show_domains">Show domains</string>
+    <!-- Total data usage across all websites -->
+    <string name="app_data_usage_total">Total</string>
+    <!-- %2$s is a data usage summary, e.g. "1.2 MB sent, 3 MB received" -->
+    <string name="app_data_usage_last_days">Last %1$d days: %2$s</string>
+    <!-- Content description of an info button. %1$s is what it explains, e.g. "Any website" -->
+    <string name="app_data_usage_about">About %1$s</string>
+
+    <!-- Language packs -->
+    <string name="langpack_error_read_installed">Could not read installed packs.</string>
+    <!-- %1$s is a full error sentence, e.g. "Could not remove the pack." -->
+    <string name="langpack_error_refresh_suffix">%1$s Refresh before trying again.</string>
+    <string name="langpack_error_change_language">Could not change the watch language.</string>
+    <string name="langpack_watch_language">Watch Language</string>
+    <string name="langpack_english">English</string>
+    <string name="langpack_built_in">Built-in</string>
+    <string name="langpack_status_installing">Installing %1$s…</string>
+    <string name="langpack_status_changing">Changing language…</string>
+    <string name="langpack_status_loading">Loading installed packs…</string>
+    <string name="langpack_status_count">%1$d of %2$d packs installed</string>
+    <string name="langpack_add_language_pack">Add language pack</string>
+    <string name="langpack_remove_to_add">Remove a pack to add another.</string>
+    <string name="langpack_remove_title">Remove %1$s?</string>
+    <string name="langpack_remove_active_message">The watch will switch to English and lose this pack's fonts.</string>
+    <string name="langpack_remove_message">The watch will lose this pack's fonts.</string>
+    <string name="langpack_error_remove">Could not remove the pack.</string>
+    <string name="langpack_removing">Removing…</string>
+    <string name="langpack_unknown">Unknown</string>
+    <string name="langpack_unreadable">Unreadable pack</string>
+    <string name="langpack_translation_and_fonts">Translation and fonts</string>
+    <string name="langpack_adds_characters">Adds characters to English</string>
+    <string name="langpack_remove_to_free_slot">Remove it to free the slot</string>
+    <string name="langpack_remove_content_description">Remove %1$s</string>
+    <string name="langpack_add_title">Add Language Pack</string>
+    <string name="langpack_title">Language Packs</string>
+    <string name="langpack_error_load">Could not load language packs. Please try again.</string>
+    <string name="langpack_loading">Loading language packs…</string>
+    <string name="langpack_use_as_watch_language">Use as watch language</string>
+    <string name="langpack_help_translate">Help translate</string>
+    <string name="langpack_error_timeout">Download timed out. Please try again.</string>
+    <string name="langpack_error_download">Could not download or verify the language pack. Please try again.</string>
+    <string name="langpack_downloading">Downloading…</string>
+    <string name="langpack_group_translations">Translations</string>
+    <string name="langpack_group_font_packs">Font packs</string>
+    <string name="langpack_group_community">Older community packs</string>
+
+    <!-- App notification settings -->
+    <string name="notif_app_title">App Notifications</string>
+    <string name="notif_app_channels">Channels</string>
+    <string name="notif_app_notified_only">Notified only</string>
+    <string name="notif_app_default_group">Default Group</string>
+    <string name="notif_app_allow_duplicates">Allow duplicate notifications</string>
+    <string name="notif_app_send_images">Send images</string>
+    <!-- Short duration, e.g. "2h 5m" -->
+    <string name="notif_app_duration_hours_minutes">%1$dh %2$dm</string>
+    <!-- Short duration in minutes, e.g. "5m" -->
+    <string name="notif_app_duration_minutes">%1$dm</string>
+    <!-- %1$s is a short duration, e.g. "2h 5m" -->
+    <string name="notif_app_muted_for_day">Status: Muted for the day (%1$s left)</string>
+    <!-- %1$s is a short duration, e.g. "25m" -->
+    <string name="notif_app_muted_for_hour">Status: Muted for 1 hour (%1$s left)</string>
+    <string name="notif_app_muted_always">Status: Muted (Always)</string>
+    <string name="notif_app_muted_weekdays">Status: Muted (Weekdays)</string>
+    <string name="notif_app_muted_weekends">Status: Muted (Weekends)</string>
+    <string name="notif_app_filter_rules">Notification filter rules</string>
+    <string name="notif_app_no_rules">No notification rules</string>
+    <string name="notif_app_rules_blocked">Matching notifications will be blocked:</string>
+    <!-- Notification rule match type: regular expression -->
+    <string name="notif_app_match_regex">Regex</string>
+    <!-- Notification rule match type: plain text -->
+    <string name="notif_app_match_text">Text</string>
+    <!-- Notification field to match: the title -->
+    <string name="notif_app_field_title">Title</string>
+    <!-- Notification field to match: the body -->
+    <string name="notif_app_field_body">Body</string>
+    <!-- Notification fields to match: title and body -->
+    <string name="notif_app_field_title_body">Title+Body</string>
+    <!-- Notification fields to match: title and body -->
+    <string name="notif_app_field_both">Both</string>
+    <string name="notif_app_case_sensitive_label">case-sensitive</string>
+    <string name="notif_app_case_insensitive_label">case-insensitive</string>
+    <!-- e.g. "Regex on Title, case-sensitive" -->
+    <string name="notif_app_rule_summary">%1$s on %2$s, %3$s</string>
+    <string name="notif_app_edit_rule">Edit rule</string>
+    <string name="notif_app_delete_rule">Delete rule</string>
+    <string name="notif_app_add_rule">Add rule</string>
+    <string name="notif_app_invalid_regex">Invalid regex</string>
+    <string name="notif_app_match_type">Match type</string>
+    <string name="notif_app_match_field">Match field</string>
+    <string name="notif_app_pattern">Pattern</string>
+    <string name="notif_app_case_sensitive">Case sensitive</string>
+    <string name="notif_app_view_notifications">View Notifications</string>
+
+    <!-- Weather -->
+    <string name="weather_refresh">Refresh Weather</string>
+    <string name="weather_title">Weather Locations</string>
+    <string name="weather_add_location">Add location</string>
+    <string name="weather_current_location">Current Location</string>
+    <string name="weather_manual_location">Manual Location</string>
+    <string name="weather_fixed_location">Fixed Location</string>
+    <string name="weather_add_weather_location">Add Weather Location</string>
+    <string name="weather_search_location">Search Location</string>
+    <string name="weather_enter_coordinates">Enter Coordinates</string>
+    <string name="weather_current_location_description">Uses your device's location</string>
+    <string name="weather_fixed_location_description">Search for a specific address</string>
+    <string name="weather_manual_coordinates">Manual Coordinates</string>
+    <string name="weather_manual_coordinates_description">Enter latitude and longitude</string>
+    <string name="weather_latitude">Latitude</string>
+    <string name="weather_latitude_example">e.g. 51.5074</string>
+    <string name="weather_longitude">Longitude</string>
+    <string name="weather_longitude_example">e.g. -0.1278</string>
+    <string name="weather_address">Address</string>
+    <string name="weather_address_placeholder">Enter city or address</string>
+    <string name="weather_search_failed">Couldn't search for locations. Check your connection and try again.</string>
+    <string name="weather_type_to_search">Type to search for locations...</string>
+    <string name="weather_remove_location">Remove Location</string>
+    <string name="weather_remove_location_message">Are you sure you want to remove "%1$s"?</string>
+
+    <!-- Health -->
+    <string name="health_settings">Health Settings</string>
+    <!-- Time range tab: one day -->
+    <string name="health_range_day">Day</string>
+    <!-- Time range tab: one week -->
+    <string name="health_range_week">Week</string>
+    <!-- Time range tab: one month -->
+    <string name="health_range_month">Month</string>
+    <string name="health_previous">Previous</string>
+    <!-- Badge showing the typical value, e.g. "TYPICAL 8k" -->
+    <string name="health_typical">TYPICAL %1$s</string>
+    <string name="health_today">Today</string>
+    <string name="health_average">Average</string>
+    <string name="health_total">Total</string>
+    <!-- e.g. "at 14:00" -->
+    <string name="health_at_time">at %1$s</string>
+    <!-- %1$s is a date/period label -->
+    <string name="health_daily_avg_at">daily avg · %1$s</string>
+    <string name="health_steps">Steps</string>
+    <string name="health_loading">Loading...</string>
+    <string name="health_no_activity">No activity data</string>
+    <string name="health_no_activity_hint">Wear your watch to start tracking steps</string>
+    <string name="health_distance">Distance</string>
+    <string name="health_calories">Calories</string>
+    <!-- Active time -->
+    <string name="health_active">Active</string>
+    <string name="health_avg_distance">Avg Distance</string>
+    <string name="health_avg_calories">Avg Calories</string>
+    <!-- Average active time -->
+    <string name="health_avg_active">Avg Active</string>
+    <string name="health_sleep">Sleep</string>
+    <string name="health_deep_sleep">Deep sleep</string>
+    <string name="health_no_sleep">No sleep data</string>
+    <string name="health_no_sleep_hint">Wear your watch to bed to track sleep</string>
+    <!-- Average deep sleep -->
+    <string name="health_avg_deep">Avg Deep</string>
+    <string name="health_avg_fall_asleep">Avg Fall Asleep</string>
+    <string name="health_avg_wake_up">Avg Wake Up</string>
+    <!-- Duration in minutes, e.g. "45m" -->
+    <string name="health_minutes_short">%1$sm</string>
+    <!-- Heart rate subtitle, %1$s is a time of day -->
+    <string name="health_bpm_at">bpm at %1$s</string>
+    <!-- %1$s is a time of day -->
+    <string name="health_no_data_at">no data at %1$s</string>
+    <string name="health_latest_bpm">latest bpm</string>
+    <string name="health_avg_bpm">avg bpm</string>
+    <!-- Resting heart rate on a day, %1$s is a day label -->
+    <string name="health_resting_at">Resting · %1$s</string>
+    <!-- Resting heart rate -->
+    <string name="health_resting">Resting</string>
+    <string name="health_heart_rate">Heart Rate</string>
+    <string name="health_no_heart_rate">No heart rate data</string>
+    <string name="health_no_heart_rate_hint">Heart rate is measured automatically by your watch</string>
+    <string name="health_no_data_hint">Wear your watch to start tracking</string>
+
+    <!-- Health charts -->
+    <string name="health_light_sleep">Light sleep</string>
+    <string name="health_awake">Awake</string>
+    <!-- Time of day and sleep state, e.g. "02:30 · Deep sleep" -->
+    <string name="health_time_and_state">%1$s · %2$s</string>
+    <!-- Light sleep duration, e.g. "Light 5h 10m" -->
+    <string name="health_legend_light">Light %1$s</string>
+    <!-- Deep sleep duration, e.g. "Deep 1h 20m" -->
+    <string name="health_legend_deep">Deep %1$s</string>
+
+    <!-- Model management -->
+    <string name="models_switched_to_cloud">Speech recognition switched to Cloud Only</string>
+    <string name="models_unknown_error">Unknown error</string>
+    <string name="models_download_required">Download Required</string>
+    <!-- %1$s is a size in megabytes -->
+    <string name="models_download_lite">Download lite model: %1$sMB</string>
+    <!-- %1$s is a size in megabytes -->
+    <string name="models_download_model">Download model (%1$sMB)</string>
+    <string name="models_download_message">To use offline speech recognition, you need to download a model first.
+Data charges may apply, Wi-Fi is recommended.</string>
+    <string name="models_lite_message">Your device may struggle with larger models, a reduced accuracy model will be used.</string>
+    <string name="models_title">Manage Models</string>
+    <string name="models_recommended">Recommended for your device</string>
+    <!-- Model size in megabytes -->
+    <string name="models_size_mb">%1$s MB</string>
+
+    <!-- Notifications -->
+    <string name="notif_tab_contacts">Contacts</string>
+    <!-- Sort notification apps by name -->
+    <string name="notif_sort_name">Name</string>
+    <!-- Sort notification apps by most recent -->
+    <string name="notif_sort_recent">Recent</string>
+    <!-- Sort notification apps by notification count -->
+    <string name="notif_sort_count">Count</string>
+    <!-- Filter: show all apps -->
+    <string name="notif_filter_all">All</string>
+    <!-- Filter: show only enabled apps -->
+    <string name="notif_filter_enabled">Enabled</string>
+    <!-- Filter: show only disabled apps -->
+    <string name="notif_filter_disabled">Disabled</string>
+    <string name="notif_details">Details</string>
+    <!-- %1$s is an app name -->
+    <string name="notif_app_icon_description">%1$s icon</string>
+
+    <!-- Notification apps -->
+    <string name="notif_collapse">Collapse</string>
+    <string name="notif_expand">Expand</string>
+    <string name="notif_sort_options">Sort Options</string>
+    <string name="notif_show_system_apps">Show system apps</string>
+    <string name="notif_all_apps">All Apps</string>
+    <string name="notif_mute_all">Mute All</string>
+    <string name="notif_enable_all">Enable All</string>
+    <string name="notif_new_app_default">New app default</string>
+
+    <!-- Contact notifications -->
+    <string name="notif_contact_title">Contact Notifications</string>
+    <string name="notif_contact_star_tooltip">Star a contact to always receive notifications from them, even if e.g. the app is muted</string>
+    <!-- Content description for the button that stars (favourites) a contact -->
+    <string name="notif_contact_star">Star</string>
+
+    <!-- Notification viewer -->
+    <!-- %1$s is an app name -->
+    <string name="notif_viewer_recent_for">Recent notifications for %1$s</string>
+    <!-- %1$s is an app name, %2$s a notification channel name -->
+    <string name="notif_viewer_recent_for_channel">Recent notifications for %1$s in channel: %2$s</string>
+    <!-- Shown when a notification has no title or body -->
+    <string name="notif_viewer_empty">&lt;Empty&gt;</string>
+    <string name="notif_viewer_displayed">Displayed</string>
+    <!-- %1$s is the reason, e.g. "App Muted" -->
+    <string name="notif_viewer_not_displayed">Not displayed - %1$s</string>
+    <string name="notif_decision_sent">Sent</string>
+    <string name="notif_decision_local_only">Local Only</string>
+    <string name="notif_decision_group_summary">Group Summary</string>
+    <string name="notif_decision_app_muted">App Muted</string>
+    <string name="notif_decision_channel_muted">Channel Muted</string>
+    <string name="notif_decision_duplicate">Duplicate</string>
+    <string name="notif_decision_contact_muted">Contact Muted</string>
+    <string name="notif_decision_screen_on">Screen On</string>
+    <string name="notif_decision_rule_filtered">Rule Filtered</string>
+    <!-- Notification not sent because it was empty -->
+    <string name="notif_decision_empty">Empty</string>
+
+    <!-- Calendar -->
+    <string name="calendar_title">Calendar Settings</string>
+    <string name="calendar_permission_missing">Calendar permission missing</string>
+    <!-- Button to grant the calendar permission -->
+    <string name="calendar_approve">Approve</string>
+    <string name="calendar_no_calendars">Calendar permission is approved, but no calendars were found.
+
+ Is sharing enabled in the Google Calendar app? See: Settings -&gt; General -&gt; Share Google Calendar data with other apps</string>
+    <string name="calendar_not_synced">Not synced by Android - toggle checkbox to ask Android to sync</string>
+
+    <!-- Quick replies -->
+    <string name="canned_replies_title">Quick replies</string>
+    <!-- "Canned messages" is the name of the menu on the watch -->
+    <string name="canned_replies_header">Custom replies appear in the "Canned messages" menu when replying to notifications on the watch.</string>
+    <string name="canned_replies_reorder">Reorder</string>
+    <!-- Label for the n-th quick reply text field -->
+    <string name="canned_replies_reply_label">Reply %1$d</string>
+    <string name="canned_replies_add">Add reply</string>
+    <string name="canned_replies_unsaved_title">Unsaved changes</string>
+    <string name="canned_replies_unsaved_message">You have unsaved changes to your quick replies.</string>
+    <string name="canned_replies_discard">Discard</string>
+
+    <!-- Battery -->
+    <!-- Screen title for battery usage -->
+    <string name="battery_title">Battery</string>
+    <string name="battery_not_configured">Battery analytics service is not configured</string>
+    <string name="battery_sign_in_prompt">Sign in to view your battery analytics</string>
+    <string name="battery_signed_out">You must be signed into your Pebble account to view your Battery usage.</string>
+    <string name="battery_load_error">Couldn't load your Battery usage. Check your connection and try again.</string>
+    <!-- 'Send watch analytics' is the name of a setting -->
+    <string name="battery_analytics_disabled">You need 'Send watch analytics' enabled to view your Battery usage.</string>
+    <string name="battery_open_settings">Open settings</string>
+
+    <!-- Battery impact -->
+    <!-- Watchface mode with default settings -->
+    <string name="battery_impact_mode_default">Default</string>
+    <!-- Watchface mode showing seconds -->
+    <string name="battery_impact_mode_seconds">With seconds</string>
+    <!-- Watchface mode with animations -->
+    <string name="battery_impact_mode_animations">With animations</string>
+    <!-- Battery impact level -->
+    <string name="battery_impact_level_negligible">Negligible</string>
+    <!-- Battery impact level -->
+    <string name="battery_impact_level_small">Small</string>
+    <!-- Battery impact level -->
+    <string name="battery_impact_level_medium">Medium</string>
+    <!-- Battery impact level -->
+    <string name="battery_impact_level_large">Large</string>
+    <string name="battery_impact_title">Battery Impact</string>
+    <string name="battery_impact_selected">Selected</string>
+    <!-- %1$s is a percentage range, e.g. "5-15%" -->
+    <string name="battery_impact_shorter_life">%1$s shorter battery life</string>
+    <string name="battery_impact_compared">Compared with the TicToc watchface, measured on real watches.</string>
+    <!-- %1$s is an app version -->
+    <string name="battery_impact_compared_version">Compared with the TicToc watchface, measured on real watches (version %1$s).</string>
+    <string name="battery_impact_dismiss">Dismiss</string>
+
+    <!-- Icon picker -->
+    <string name="icon_picker_search">Search Icons</string>
+    <!-- Setting label for choosing a timeline icon -->
+    <string name="icon_picker_icon">Icon</string>
+    <!-- No icon chosen, the default icon is used -->
+    <string name="icon_picker_default">Default</string>
+    <string name="icon_picker_select_icon">Select icon</string>
+
+    <!-- Pairing removal -->
+    <!-- Forget a paired Bluetooth device -->
+    <string name="pairing_forget">Forget</string>
+    <string name="pairing_remove_in_android_settings">Remove in Android settings</string>
+
+    <!-- Deep links -->
+    <string name="deeplink_langpack_load_failed">Failed to load language pack file</string>
+    <string name="deeplink_langpack_no_watch">Failed to load language pack: no connected watch</string>
+    <string name="deeplink_langpack_installing">Installing language pack...</string>
+    <string name="deeplink_firmware_read_failed">Failed to read firmware file</string>
+    <string name="deeplink_firmware_no_watch">Failed to sideload firmware: no connected watch</string>
+    <string name="deeplink_firmware_sideloading">Sideloading firmware...</string>
+    <string name="deeplink_app_not_found">Failed to find app in enabled feeds</string>
+
+    <!-- Web sign-in -->
+    <!-- %1$s is a website domain -->
+    <string name="web_sign_in_title">Sign in to %1$s</string>
+
+    <!-- Permission request notifications -->
+    <!-- Used as the notification title when the requesting app name is unknown -->
+    <string name="perm_request_unknown_app">An app</string>
+    <!-- %1$s is a list of requests, e.g. "read your calendar and use your location" -->
+    <string name="perm_request_wants">Wants to %1$s</string>
+    <!-- %1$s is a list of requests ending with e.g. "2 more" -->
+    <string name="perm_request_wants_review">Wants to %1$s. Review them in the Pebble app.</string>
+    <!-- Last item of a shortened list of permission requests, e.g. "2 more" -->
+    <string name="perm_request_n_more">%1$d more</string>
+    <string name="perm_request_wants_one">Wants a permission. Review it in the Pebble app.</string>
+    <!-- %1$d is always 2 or more -->
+    <string name="perm_request_wants_many">Wants %1$d permissions. Review them in the Pebble app.</string>
+
+    <!-- Contact developer errors -->
+    <string name="contact_dev_error_not_reachable">This developer is not reachable.</string>
+    <string name="contact_dev_error_rate_limited">You are sending messages too quickly. Try again later.</string>
+    <string name="contact_dev_error_rejected">Message or attachment was rejected.</string>
+    <!-- %1$d is an HTTP status code -->
+    <string name="contact_dev_error_server">Server error (%1$d)</string>
+
+    <!-- Firmware update check -->
+    <string name="firmware_check_failed">Failed to check for PebbleOS update</string>
+    <string name="firmware_check_unknown_platform">Unknown platform</string>
+
+    <!-- Settings tab: phone settings -->
+    <string name="settings_tab_phone">Phone</string>
+    <!-- Settings tab: watch settings -->
+    <string name="settings_tab_watch">Watch</string>
+    <!-- Settings tab: all settings -->
+    <string name="settings_tab_all">All</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_section_support">Get Help</string>
+    <string name="settings_section_defaults">Defaults</string>
+    <string name="settings_section_quick_launch">Quick Launch</string>
+    <string name="settings_section_general">General</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_plugins">Plugins</string>
+    <string name="settings_section_battery">Battery</string>
+    <string name="settings_section_calendar">Calendar</string>
+    <string name="settings_section_speech">Speech Recognition</string>
+    <string name="settings_section_display">Display</string>
+    <string name="settings_section_themes">Themes</string>
+    <string name="settings_section_vibrations">Vibrations</string>
+    <string name="settings_section_weather">Weather</string>
+    <string name="settings_section_time">Time</string>
+    <string name="settings_section_timeline">Timeline</string>
+    <!-- Watch do-not-disturb mode -->
+    <string name="settings_section_quiet_time">Quiet Time</string>
+    <string name="settings_section_connectivity">Connectivity</string>
+    <string name="settings_section_music">Music</string>
+    <string name="settings_section_other">Other</string>
+    <string name="settings_section_diagnostics">Diagnostics</string>
+    <string name="settings_section_debug">Debug</string>
+    <string name="settings_group_permissions">Permissions</string>
+    <string name="settings_group_app_updates">App Updates</string>
+    <string name="settings_group_menu_scrolling">Menu Scrolling</string>
+    <string name="settings_group_backlight_color">Backlight Color</string>
+    <string name="settings_group_backlight_motion">Backlight Motion</string>
+    <string name="settings_group_ambient_light">Ambient Light Sensor</string>
+    <string name="settings_group_backlight">Backlight</string>
+    <string name="settings_group_vibration">Vibration</string>
+    <string name="settings_group_touch">Touch</string>
+    <!-- Timeline feature showing upcoming events on the watchface -->
+    <string name="settings_group_quick_view">Quick View</string>
+    <string name="settings_group_heart_rate">Heart Rate</string>
+    <!-- Health insight notifications -->
+    <string name="settings_group_insights">Insights</string>
+    <string name="settings_group_your_details">Your Details</string>
+    <!-- Vibration/sound on the phone itself -->
+    <string name="settings_group_phone_effects">Phone Effects</string>
+    <string name="settings_group_custom_vibration">Custom Vibration Patterns</string>
+    <string name="settings_group_advanced">Advanced</string>
+    <string name="settings_group_automatic_updates">Automatic Updates</string>
+    <string name="settings_group_app_usage">App Usage</string>
+    <string name="settings_permissions_all_granted">All permissions granted!</string>
+    <!-- %1$s is the name of the missing permission -->
+    <string name="settings_permission_missing">%1$s permission missing!</string>
+    <string name="settings_app_version_value">App Version: %1$s</string>
+    <string name="settings_time_window_only">Only update during time window</string>
+    <string name="settings_vibe_override_default">Override the default on the watch</string>
+    <string name="settings_unit_days">Days</string>
+    <string name="settings_hr_every_5_min">Every 5 minutes</string>
+    <string name="settings_hr_every_10_min">Every 10 minutes</string>
+    <string name="settings_hr_every_30_min">Every 30 minutes</string>
+    <string name="settings_hr_every_hour">Every hour</string>
+    <!-- Heart rate background sampling disabled -->
+    <string name="settings_hr_off">Off</string>
+    <!-- Unit: inches -->
+    <string name="settings_unit_in">in</string>
+    <!-- Unit: centimetres -->
+    <string name="settings_unit_cm">cm</string>
+    <!-- Unit: pounds -->
+    <string name="settings_unit_lb">lb</string>
+    <!-- Unit: kilograms -->
+    <string name="settings_unit_kg">kg</string>
+    <string name="settings_gender_female">Female</string>
+    <string name="settings_gender_male">Male</string>
+    <!-- Gender option -->
+    <string name="settings_gender_other">Other</string>
+    <string name="settings_sync_apple_health">Sync to Apple Health</string>
+    <string name="settings_sync_health_connect">Sync to Health Connect</string>
+    <string name="settings_health_syncing">Syncing...</string>
+    <string name="settings_health_sync_now_desc">Sync Pebble health data to phone</string>
+    <!-- %1$s is the plugin name -->
+    <string name="settings_weather_provider_plugin">Plugin: %1$s</string>
+    <string name="settings_stt_rebble_requires_subscription">Rebble speech recognition requires a Rebble subscription</string>
+    <string name="settings_stt_no_system_support">This device doesn't support system speech recognition</string>
+    <string name="settings_stt_no_local_support">This device doesn't support local speech recognition</string>
+    <string name="settings_stt_cloud_requires_sign_in">You need to be signed in to use cloud speech recognition</string>
+    <string name="settings_stt_cloud_only">Cloud Only</string>
+    <string name="settings_stt_cloud_local_fallback">Cloud (with Local Fallback)</string>
+    <string name="settings_stt_local_only">Local Only</string>
+    <string name="settings_stt_local_cloud_fallback">Local (with Cloud Fallback)</string>
+    <string name="settings_stt_rebble_only">Rebble Only</string>
+    <string name="settings_stt_rebble_local_fallback">Rebble (with Local Fallback)</string>
+    <string name="settings_stt_local_rebble_fallback">Local (with Rebble Fallback)</string>
+    <string name="settings_stt_system">System (On-Device)</string>
+    <string name="settings_stt_downloading_background">Downloading in the background...</string>
+    <string name="settings_offline_models_note">Note: Offline speech recognition is lower accuracy, consider using 'Fallback only' mode to improve results when online</string>
+    <string name="settings_error_try_again">Error occurred. Please try again later.</string>
+    <string name="settings_error_starting_download">Error starting download. Please try again later.</string>
+    <string name="settings_model_download_failed">Failed to download model</string>
+    <!-- %1$s is the default value of a setting -->
+    <string name="settings_default_value">Default: %1$s</string>
+    <string name="settings_decrease">Decrease</string>
+    <string name="settings_increase">Increase</string>
+    <!-- Info button description; %1$s is a setting name -->
+    <string name="settings_about_item">About %1$s</string>
+    <string name="settings_select_language">Select language</string>
+    <string name="settings_search_languages">Search languages</string>
+    <string name="settings_spoken_language_note">Note: Selecting a language may improve accuracy for that language but not all languages on this list are guaranteed to be supported.</string>
+    <string name="settings_interval_6_hours">6 hours</string>
+    <string name="settings_interval_12_hours">12 hours</string>
+    <string name="settings_interval_24_hours">24 hours</string>
+    <string name="settings_interval_15_minutes">15 minutes</string>
+    <string name="settings_interval_30_minutes">30 minutes</string>
+    <string name="settings_interval_1_hour">1 hour</string>
+    <string name="settings_app_update_available">App Update Available</string>
+    <string name="settings_app_update_available_desc">Please update the Pebble App!</string>
+    <string name="settings_app_version">App Version</string>
+    <string name="settings_whats_new_app">What’s new in the app</string>
+    <string name="settings_show_update_badge">Show badge when app was updated</string>
+    <string name="settings_whats_new_pebbleos">What’s new in PebbleOS</string>
+    <string name="settings_getting_started">Getting Started &amp; Troubleshooting</string>
+    <string name="settings_new_bug_report">New Bug Report</string>
+    <string name="settings_new_bug_report_desc">Please report a bug if anything went wrong!</string>
+    <string name="settings_view_bug_reports">View My Bug Reports</string>
+    <string name="settings_app_theme">App Theme</string>
+    <string name="settings_bottom_bar">Bottom Bar</string>
+    <string name="settings_bottom_bar_desc">Choose and reorder the tabs in the bottom bar</string>
+    <string name="settings_imperial_units">Imperial Units</string>
+    <string name="settings_imperial_units_desc">Use miles/feet/inches/lb instead of metric units, and Fahrenheit unless Temperature is set under Weather</string>
+    <string name="settings_background_refresh">Background Refresh Interval</string>
+    <string name="settings_background_refresh_desc">How often to check for updates, update apps from store, etc</string>
+    <string name="settings_enable_index_feed">Enable Index Feed</string>
+    <string name="settings_notify_fully_charged">Notify when watch fully charged</string>
+    <string name="settings_notify_fully_charged_desc">Notify on this phone when a watch finishes charging</string>
+    <string name="settings_auto_update_pebbleos">Update PebbleOS Automatically</string>
+    <string name="settings_auto_update_pebbleos_desc">Install PebbleOS updates automatically when available</string>
+    <string name="settings_time_window">Time Window</string>
+    <string name="settings_quick_replies">Quick replies</string>
+    <string name="settings_quick_replies_desc">Preset messages for notification replies on the watch (canned messages)</string>
+    <string name="settings_always_send_notifications">Always send notifications</string>
+    <string name="settings_always_send_notifications_desc">Send notifications to the watch even when the phone screen is on</string>
+    <string name="settings_respect_dnd_legacy">Respect Phone Do Not Disturb (legacy watches)</string>
+    <string name="settings_respect_dnd_legacy_desc">Older watches: notifications won't be sent if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings). Does not apply on newer watches (see Watch / Notifications / Respect Phone Do Not Disturb)</string>
+    <string name="settings_mute_notification_effects">Mute phone notification effects</string>
+    <string name="settings_mute_notification_effects_desc">Mutes the phone's own notification vibration/sound while the watch is connected</string>
+    <string name="settings_mute_call_effects">Mute phone call effects</string>
+    <string name="settings_mute_call_effects_desc">Mutes the phone's own call vibration/sound while the watch is connected</string>
+    <string name="settings_answer_calls_on_speaker">Answer calls on speaker</string>
+    <string name="settings_answer_calls_on_speaker_desc">Use the phone's speaker when answering a call from the watch, unless a headset is connected</string>
+    <string name="settings_vibe_pattern_title">Vibration Pattern</string>
+    <string name="settings_use_os_vibe_patterns">Use vibration patterns from OS</string>
+    <string name="settings_use_os_vibe_patterns_desc">If there is a vibration pattern defined by the app which created a notification, use it on the watch (unless overridden)</string>
+    <string name="settings_send_notification_images">Send notification images</string>
+    <string name="settings_send_notification_images_desc">Show photos sent in messages on the watch. Can also be turned off per app on the Notifications tab.</string>
+    <string name="settings_store_notifications">Store notifications for</string>
+    <string name="settings_store_notifications_desc">How long notifications are stored for. This enabled better deduplicating, and powers the notification history view</string>
+    <string name="settings_send_local_only">Send local-only notifications to watch</string>
+    <string name="settings_send_local_only_desc">Android recommends not forwarding notifications marked as local-only to external devices - check to override this</string>
+    <string name="settings_shows_ui_actions">Enable showsUserInterface actions</string>
+    <string name="settings_shows_ui_actions_desc">Include notification actions which are marked as opening a user interface on the phone</string>
+    <string name="settings_store_disabled">Store disabled notifications</string>
+    <string name="settings_store_disabled_desc">Store notifications from disabled apps/channels, to allow viewing them in history</string>
+    <string name="settings_disable_cdm">Disable Companion Device Manager</string>
+    <string name="settings_disable_cdm_desc">Don't use Android's Companion Device Manager to connect. Only use this option if the app crashes every time you press 'connect' and you cannot get past this step. This will disable certain features (including Notification Channels), and certain permissions will need to be granted manually.</string>
+    <string name="settings_enable_calendar">Enable Calendar</string>
+    <string name="settings_enable_calendar_desc">Show calendar pins on timeline</string>
+    <string name="settings_calendar_reminders">Calendar Reminders</string>
+    <string name="settings_calendar_reminders_desc">Alerts before calendar events</string>
+    <string name="settings_calendars">Calendars</string>
+    <string name="settings_calendars_desc">Configure which calendars to display</string>
+    <string name="settings_reminder_vibe_pattern">Reminder Vibration Pattern</string>
+    <string name="settings_declined_events">Declined Events</string>
+    <string name="settings_declined_events_desc">Display declined calendar events</string>
+    <string name="settings_enable_health_tracking">Enable Health Tracking</string>
+    <string name="settings_heart_rate_monitor">Heart Rate Monitor</string>
+    <string name="settings_heart_rate_monitor_desc">Allow the watch to measure heart rate</string>
+    <string name="settings_hr_background_sampling">Background Sampling</string>
+    <string name="settings_hr_background_sampling_desc">How often the watch checks your heart rate when you're not in a workout. This can have an impact on battery life.</string>
+    <string name="settings_hr_during_activities">During Activities</string>
+    <string name="settings_hr_during_activities_desc">Continuously track heart rate during detected walks and runs. This can have an impact on battery life.</string>
+    <!-- Health insight notifications about activity -->
+    <string name="settings_insights_activity">Activity</string>
+    <string name="settings_insights_activity_desc">Receive notifications with insights about your activity</string>
+    <!-- Health insight notifications about sleep -->
+    <string name="settings_insights_sleep">Sleep</string>
+    <string name="settings_insights_sleep_desc">Receive notifications with insights about your sleep</string>
+    <string name="settings_height">Height</string>
+    <string name="settings_height_desc">Used for accurate calorie and distance estimates</string>
+    <string name="settings_weight">Weight</string>
+    <string name="settings_weight_desc">Used for accurate calorie estimates</string>
+    <string name="settings_year_of_birth">Year of birth</string>
+    <string name="settings_year_of_birth_desc">Used for heart-rate zone calculations</string>
+    <string name="settings_gender">Gender</string>
+    <string name="settings_gender_desc">Write steps, heart rate, sleep, and workouts to your phone's health platform</string>
+    <string name="settings_health_sync_now">Sync Now</string>
+    <string name="settings_open_google_fit">Open Google Fit</string>
+    <string name="settings_open_google_fit_desc">View your synced health data in Google Fit</string>
+    <string name="settings_enable_weather">Enable Weather</string>
+    <string name="settings_enable_weather_desc">Fetch weather for the current location, for the Weather App (requires location permission)</string>
+    <string name="settings_weather_provider">Weather provider</string>
+    <string name="settings_weather_provider_desc">Where the watch's weather app and timeline get their forecast</string>
+    <string name="settings_weather_refresh">Weather Refresh Interval</string>
+    <string name="settings_weather_pins">Weather Pins</string>
+    <string name="settings_weather_pins_desc">Add weather pins to timeline</string>
+    <string name="settings_weather_locations">Locations</string>
+    <string name="settings_weather_locations_desc">Configure weather locations</string>
+    <string name="settings_lan_dev_connection">Use LAN developer connection</string>
+    <string name="settings_lan_dev_connection_desc">Allow connecting to developer connection over LAN, this is not secure and should only be used on trusted networks</string>
+    <string name="settings_show_debug_options">Show debug options</string>
+    <string name="settings_show_debug_options_desc">Show some extra debug options around the app - not useful for most users (contains some options which might break your watch)</string>
+    <string name="settings_offline_stt">Offline Speech Recognition</string>
+    <string name="settings_manage_offline_models">Manage Offline Models</string>
+    <string name="settings_system_speech_model">System Speech Model</string>
+    <string name="settings_spoken_language">Spoken Language</string>
+    <string name="settings_cloud_recognition_provider">Cloud Recognition Provider</string>
+    <string name="settings_ignore_other_pebble_apps">Ignore other Pebble apps</string>
+    <string name="settings_ignore_other_pebble_apps_desc">Allow connection even when there are other Pebble apps installed on this phone. Warning: this will likely make the connection unreliable if you are using BLE! We don't recommend enabling this</string>
+    <string name="settings_send_app_crashes">Send app crashes</string>
+    <string name="settings_send_app_crashes_desc">This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them</string>
+    <string name="settings_send_watch_analytics">Send watch analytics</string>
+    <string name="settings_send_watch_analytics_desc">Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)</string>
+    <string name="settings_send_app_analytics">Send app analytics</string>
+    <string name="settings_send_app_analytics_desc">This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability</string>
+    <string name="settings_log_notifications">Show notifications in phone logs</string>
+    <string name="settings_log_notifications_desc">Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)</string>
+    <string name="settings_log_sensitive">Show sensitive content in phone logs</string>
+    <string name="settings_log_sensitive_desc">Include unredacted personal information (notification content, calendar events, app names, etc) in logs</string>
+    <string name="settings_republish_gatt">Re-publish GATT services after BT restore</string>
+    <string name="settings_passive_reconnection">Passive reconnection mode</string>
+    <string name="settings_passive_reconnection_desc">After a failed connection, wait for the watch to become available instead of retrying repeatedly</string>
+    <string name="settings_post_test_notification">Post test notification</string>
+    <string name="settings_post_test_notification_desc">Create a test notification, with actions</string>
+    <string name="settings_complications">Complications</string>
+    <string name="settings_complications_desc">Readings watchfaces should show in their complication slots</string>
+    <string name="settings_preferred_sources">Preferred sources</string>
+    <string name="settings_preferred_sources_desc">Which plugin to use when several offer the same thing</string>
+    <string name="settings_permission_policy">Ask before apps use permissions</string>
+    <string name="settings_legacy_pebblekit">Legacy PebbleKit</string>
+    <string name="settings_legacy_pebblekit_desc">Lets watchapps talk to phone apps over the original PebbleKit, which shares messages with every app on your phone.</string>
+    <string name="settings_ask_legacy_apps">Ask before older apps use permissions</string>
+    <string name="settings_ask_legacy_apps_desc">Otherwise apps built before permissions keep the access they've always had. They can never get more access without updating. Some older apps may break, particularly ones that use health data</string>
+    <string name="settings_permissions_in_use">Permissions in use</string>
+    <string name="settings_permissions_in_use_desc">Which apps can use each permission</string>
+    <string name="settings_sign_out_pebble">Sign Out - Pebble Account</string>
+    <string name="settings_sign_out_pebble_desc">Sign out of your Pebble account (%1$s)</string>
+    <string name="settings_sign_in_pebble">Sign In - Pebble Account</string>
+    <string name="settings_sign_in_pebble_desc">Sign in to backup your Pebble account to backup apps, settings, etc</string>
+    <string name="settings_sign_out_rebble">Sign Out - Rebble</string>
+    <string name="settings_sign_out_rebble_desc">Sign out of your Rebble account</string>
+    <string name="settings_foreground_service">Foreground Service</string>
+    <string name="settings_foreground_service_desc">Show foreground service notification to keep app alive in background</string>
+    <string name="settings_download_in_background">Download in Background</string>
+    <string name="settings_download_in_background_desc">When an app you've used gets an update, download it in the background so it is ready for next launch</string>
+    <string name="settings_wifi_only">Wi-Fi Only</string>
+    <string name="settings_wifi_only_desc">Only pre-download app updates while on Wi-Fi</string>
+    <string name="settings_data_usage">Data usage</string>
+    <string name="settings_data_usage_desc">How much your apps have sent and received</string>
+    <string name="settings_app_activity">App activity</string>
+    <string name="settings_app_activity_desc">What actions your apps took using plugins</string>
+    <string name="settings_configure_appstore_sources">Configure Appstore Sources</string>
+    <string name="settings_restore_system_app_positions">Restore System app positions</string>
+    <string name="settings_restore_system_app_positions_desc">Restore system apps to their usual position at the top of the menu</string>
+    <string name="settings_emulate_timeline">Emulate Timeline Webservice</string>
+    <string name="settings_emulate_timeline_desc">Intercept calls to Timeline webservice, instead inserting pins locally, immediately</string>
+    <string name="settings_intercept_pkjs_weather">Use Pebble Weather Service when apps are broken</string>
+    <string name="settings_intercept_pkjs_weather_desc">If old apps are using a broken weather API, attempt to use the Pebble Weather Service instead (will only work for some apps which use OpenWeather API)</string>
+    <string name="settings_music_seek">Seek instead of Skip for Podcasts</string>
+    <string name="settings_music_seek_desc">Icons will only update on updated PebbleOS version</string>
+    <string name="settings_prefs_reset_confirm_title">Reset To Defaults?</string>
+    <string name="settings_prefs_reset_confirm_text">Reset all settings to defaults</string>
+    <string name="settings_prefs_reset">Reset</string>
+    <string name="settings_prefs_reset_to_defaults">Reset To Defaults</string>
+    <string name="settings_prefs_reset_to_defaults_desc">Reset all watch settings to defaults</string>
+    <!-- Backlight preset -->
+    <string name="settings_prefs_preset">Preset</string>
+    <!-- Backlight brightness -->
+    <string name="settings_prefs_intensity">Intensity</string>
+    <!-- How long the backlight stays on -->
+    <string name="settings_prefs_timeout">Timeout</string>
+    <!-- Ambient light sensor threshold -->
+    <string name="settings_prefs_threshold">Threshold</string>
+    <!-- Motion sensitivity for backlight -->
+    <string name="settings_prefs_sensitivity">Sensitivity</string>
+    <string name="settings_prefs_change_color_at_night">Change Color at Night</string>
+    <string name="settings_prefs_night_color">Night Color</string>
+    <string name="settings_prefs_sunrise">Sunrise</string>
+    <string name="settings_prefs_sunset">Sunset</string>
+    <!-- Menu scrolling wraps from the last item to the first -->
+    <string name="settings_prefs_wrap_around">Wrap Around</string>
+    <string name="settings_prefs_navigation">Navigation</string>
+    <!-- Watch vibration intensity -->
+    <string name="settings_prefs_system_intensity">System Intensity</string>
+    <string name="settings_prefs_incoming_calls">Incoming Calls</string>
+    <string name="settings_prefs_alarms">Alarms</string>
+    <string name="settings_prefs_show_upcoming_events">Show Upcoming Events</string>
+    <string name="settings_prefs_minutes_before_event">Minutes Before Event</string>
+    <!-- Quick View behaviour on watchfaces that don't support it -->
+    <string name="settings_prefs_unsupported_faces">Unsupported Faces</string>
+    <string name="settings_prefs_start_time">Start time</string>
+    <string name="settings_prefs_end_time">End time</string>
+    <!-- Time range: From [start time] to [end time] -->
+    <string name="settings_prefs_from">From</string>
+    <!-- Time range: From [start time] to [end time] -->
+    <string name="settings_prefs_to">to</string>
+    <!-- Confirm button in a time picker -->
+    <string name="settings_prefs_set">Set</string>
+    <string name="settings_prefs_auto_sun_times">Automatic Sunrise/Sunset</string>
+    <string name="settings_prefs_auto_sun_times_desc">Use the sunrise and sunset times for your location</string>
+    <!-- Shown when no custom value is chosen -->
+    <string name="settings_default">Default</string>
+    <string name="settings_vibe_delete_title">Delete Pattern</string>
+    <string name="settings_vibe_delete_text">Are you sure you want to delete the vibration pattern "%1$s"?</string>
+    <string name="settings_vibe_choose">Choose Vibration Pattern</string>
+    <string name="settings_vibe_add_custom">Add Custom Pattern</string>
+    <!-- Button that plays a vibration pattern on the watch -->
+    <string name="settings_vibe_test">Test</string>
+    <string name="settings_vibe_tap_custom">Tap custom pattern</string>
+    <string name="settings_vibe_pattern_name">Pattern Name</string>
+    <string name="settings_vibe_select_desc">Select vibration pattern</string>
+    <string name="settings_color">Color</string>
+    <!-- Color picker view -->
+    <string name="settings_color_tab_grid">Grid</string>
+    <!-- Color picker view -->
+    <string name="settings_color_tab_list">List</string>
+    <string name="settings_color_select_desc">Select color</string>
+    <string name="settings_color_presets">Presets</string>
+    <!-- Hexadecimal color code input -->
+    <string name="settings_color_hex">Hex</string>
+    <!-- Tabs shown in the bottom bar -->
+    <string name="settings_navbar_in_bar">In bar</string>
+    <!-- Tabs shown under the More tab -->
+    <string name="settings_navbar_under_more">Under More</string>
+    <string name="settings_navbar_items_in_bar">Items in bar</string>
+    <string name="settings_navbar_start_on_first">Start on first tab</string>
+    <string name="settings_navbar_start_on_first_desc">Otherwise the app opens to the most useful tab for your devices</string>
+    <string name="settings_navbar_reorder">Reorder</string>
+    <plurals name="settings_permissions_missing">
+        <item quantity="one">%1$d permission missing!</item>
+        <item quantity="other">%1$d permissions missing!</item>
+    </plurals>
+    <plurals name="settings_prefs_seconds">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
+
+    <!-- Watch settings (synced to the watch) -->
+    <string name="watch_pref_timezone_source_is_manual">Timezone configured manually</string>
+    <string name="watch_pref_timezone_source_is_manual_desc">Manually configure a time zone on the watch (instead of automatically using the time zone of the phone)</string>
+    <string name="watch_pref_clock24h">24h clock</string>
+    <string name="watch_pref_standby_mode">Standby Mode</string>
+    <string name="watch_pref_standby_mode_desc">Watch will disable bluetooth when not in use (i.e. no movement is detected), to save power</string>
+    <string name="watch_pref_left_handed_mode">Left-handed Mode</string>
+    <string name="watch_pref_left_handed_mode_desc">Button functions are reversed</string>
+    <string name="watch_pref_backlight">Backlight</string>
+    <string name="watch_pref_ambient_light_sensor">Ambient Light Sensor</string>
+    <string name="watch_pref_ambient_light_sensor_desc">Only enable backlight when in a dark environment (using light sensor)</string>
+    <string name="watch_pref_backlight_motion">Backlight Motion</string>
+    <string name="watch_pref_backlight_motion_desc">Turn on backlight by flicking wrist</string>
+    <string name="watch_pref_backlight_color_day_night_enabled">Change Backlight Color at Night</string>
+    <string name="watch_pref_backlight_color_day_night_enabled_desc">Use a different backlight color between sunset and sunrise (color-backlight watches only)</string>
+    <string name="watch_pref_timeline_quick_view_enabled">Timeline Quick View</string>
+    <string name="watch_pref_timeline_quick_view_enabled_desc">Show upcoming events below watchface</string>
+    <string name="watch_pref_quiet_time_manually_enabled">Quiet Time - Manual</string>
+    <string name="watch_pref_quiet_time_manually_enabled_desc">Notifications are muted (and will stay on-screen without a timeout) when in quiet time</string>
+    <string name="watch_pref_calendar_aware_quiet_time">Quiet Time - Calendar Aware</string>
+    <string name="watch_pref_calendar_aware_quiet_time_desc">Automatically enable Quiet Time during calendar events</string>
+    <string name="watch_pref_quiet_time_weekday_schedule_enabled">Quiet Time - Weekday Schedule</string>
+    <string name="watch_pref_quiet_time_weekday_schedule_enabled_desc">Automatically enable Quiet Time during the scheduled hours, Monday to Friday</string>
+    <string name="watch_pref_quiet_time_weekend_schedule_enabled">Quiet Time - Weekend Schedule</string>
+    <string name="watch_pref_quiet_time_weekend_schedule_enabled_desc">Automatically enable Quiet Time during the scheduled hours, Saturday and Sunday</string>
+    <string name="watch_pref_alternative_notification_style">Alternative notification banner Style (B/W watches)</string>
+    <string name="watch_pref_notification_vibe_delay">Delay Notification Vibration</string>
+    <string name="watch_pref_notification_vibe_delay_desc">Delay notification vibration until the notification is visible (after animations)</string>
+    <string name="watch_pref_notification_backlight">Notifications - Backlight</string>
+    <string name="watch_pref_notification_backlight_desc">Turn on the backlight when a notification arrives</string>
+    <string name="watch_pref_respect_phone_silence">Respect Phone Do Not Disturb</string>
+    <string name="watch_pref_respect_phone_silence_desc">Notifications silenced by the phone's Do Not Disturb / Focus are delivered quietly (no popup, vibration or backlight)</string>
+    <string name="watch_pref_notification_dismissal_sync">Sync Notification Dismissals</string>
+    <string name="watch_pref_notification_dismissal_sync_desc">Notifications dismissed or acted on are removed from the watch's notification history completely (otherwise they are just removed if visible in the notification popup)</string>
+    <string name="watch_pref_menu_scroll_wrap_around">Menu Scrolling - Wrap Around</string>
+    <string name="watch_pref_menu_scroll_wrap_around_desc">Up button will go to the bottom of menus</string>
+    <string name="watch_pref_quiet_time_motion_backlight">Quiet Time - Motion Backlight</string>
+    <string name="watch_pref_quiet_time_motion_backlight_desc">Enable motion backlight during Quiet Time</string>
+    <string name="watch_pref_quiet_time_touch_backlight">Quiet Time - Touch Backlight</string>
+    <string name="watch_pref_quiet_time_touch_backlight_desc">Enable touch backlight during Quiet Time</string>
+    <string name="watch_pref_quiet_time_notification_backlight">Quiet Time - Notification Backlight</string>
+    <string name="watch_pref_quiet_time_notification_backlight_desc">Turn on the backlight for notifications during Quiet Time</string>
+    <string name="watch_pref_quiet_time_auto_dismiss">Quiet Time - Auto Dismiss</string>
+    <string name="watch_pref_quiet_time_auto_dismiss_desc">When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen</string>
+    <string name="watch_pref_music_show_volume_controls">Show Volume Controls</string>
+    <string name="watch_pref_music_show_progress_bar">Show Progress Bar</string>
+    <string name="watch_pref_music_show_album_art">Show Album Art</string>
+    <string name="watch_pref_ql_up">Quick Launch: Hold Up</string>
+    <string name="watch_pref_ql_down">Quick Launch: Hold Down</string>
+    <string name="watch_pref_ql_select">Quick Launch: Hold Select</string>
+    <string name="watch_pref_ql_back">Quick Launch: Hold Back</string>
+    <string name="watch_pref_ql_combo_back_up">Quick Launch: Hold Combo Back+Up</string>
+    <string name="watch_pref_ql_combo_up_down">Quick Launch: Hold Combo Up+Down</string>
+    <string name="watch_pref_ql_single_click_up">Quick Launch: Tap Up</string>
+    <string name="watch_pref_ql_single_click_down">Quick Launch: Tap Down</string>
+    <string name="watch_pref_quiet_time_weekday_schedule">Quiet Time - Weekday Hours</string>
+    <string name="watch_pref_quiet_time_weekend_schedule">Quiet Time - Weekend Hours</string>
+    <string name="watch_pref_system_text_size">Text Size</string>
+    <string name="watch_pref_notification_text_size">Notification Text Size</string>
+    <string name="watch_pref_notification_filter">Notification Filter</string>
+    <string name="watch_pref_quiet_time_interruptions">Quiet Time Interruptions</string>
+    <string name="watch_pref_quiet_time_show_notifications">Quiet Time - Show Notifications</string>
+    <string name="watch_pref_legacy_vibe_intensity">System Vibration Intensity</string>
+    <string name="watch_pref_vibe_score_notifications">Vibration - Notifications</string>
+    <string name="watch_pref_vibe_score_calls">Vibration - Incoming Calls</string>
+    <string name="watch_pref_vibe_score_alarms">Vibration - Alarms</string>
+    <string name="watch_pref_menu_scroll_vibe">Menu Scrolling - Vibration</string>
+    <string name="watch_pref_motion_sensitivity">Motion Sensitivity</string>
+    <string name="watch_pref_backlight_preset">Backlight Preset</string>
+    <string name="watch_pref_backlight_preset_desc">Bundles the ambient sensor, dynamic backlight, brightness and timeout into one mode. Choose Advanced to configure them individually.</string>
+    <string name="watch_pref_backlight_intensity">Backlight Intensity</string>
+    <string name="watch_pref_backlight_intensity_desc">Maximum backlight brightness when on</string>
+    <string name="watch_pref_dynamic_backlight_mode">Dynamic Backlight</string>
+    <string name="watch_pref_dynamic_backlight_mode_desc">Automatically adjust backlight brightness to match your environment (using light sensor). Dimmer modes stay dimmer in bright light.</string>
+    <string name="watch_pref_backlight_touch">Backlight on Tap</string>
+    <string name="watch_pref_backlight_touch_desc">Turn on backlight when tapping the screen</string>
+    <string name="watch_pref_touch_enabled">Touch</string>
+    <string name="watch_pref_touch_enabled_desc">Enable the touchscreen</string>
+    <string name="watch_pref_touch_navigation_menu">Touch Navigation</string>
+    <string name="watch_pref_touch_navigation_menu_desc">Navigate system menus by touch</string>
+    <string name="watch_pref_wind_speed">Wind Speed</string>
+    <string name="watch_pref_wind_speed_desc">Automatic follows the Imperial Units setting.</string>
+    <string name="watch_pref_temperature">Temperature</string>
+    <string name="watch_pref_temperature_desc">Automatic follows the Imperial Units setting.</string>
+    <string name="watch_pref_timeline_quick_view_unsupported_faces">Timeline Quick View - Unsupported Faces</string>
+    <string name="watch_pref_timeline_quick_view_unsupported_faces_desc">How the Quick View peek is drawn on watchfaces that don't support it (supported watch models only)</string>
+    <string name="watch_pref_backlight_timeout_ms">Backlight Timeout</string>
+    <string name="watch_pref_ambient_light_threshold">Ambient Light Threshold</string>
+    <string name="watch_pref_timeline_quick_view_mins_before">Timeline Quick View - minutes before event</string>
+    <string name="watch_pref_notification_timeout_ms">Notification Timeout</string>
+    <string name="watch_pref_notification_timeout_ms_desc">Notifications time out (disappear) after this period (unless Quiet Time is enabled)</string>
+    <string name="watch_pref_backlight_color_sunrise_minute">Sunrise Time</string>
+    <string name="watch_pref_backlight_color_sunset_minute">Sunset Time</string>
+    <string name="watch_pref_backlight_color">Backlight Color</string>
+    <string name="watch_pref_backlight_color_desc">LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)</string>
+    <string name="watch_pref_backlight_color_night">Night Backlight Color</string>
+    <string name="watch_pref_backlight_color_night_desc">LED color used at night when "Change Backlight Color at Night" is on</string>
+    <!-- Options in watch setting pickers (text sizes, vibration patterns, backlight modes...) -->
+    <string name="watch_pref_option_smaller">Smaller</string>
+    <string name="watch_pref_option_default">Default</string>
+    <string name="watch_pref_option_larger">Larger</string>
+    <string name="watch_pref_option_same_as_system">Same as System</string>
+    <string name="watch_pref_option_all_off">All Off</string>
+    <string name="watch_pref_option_phone_calls">Phone Calls</string>
+    <string name="watch_pref_option_other">Other</string>
+    <string name="watch_pref_option_all_on_legacy">All On (Legacy)</string>
+    <string name="watch_pref_option_all_on">All On</string>
+    <string name="watch_pref_option_hide">Hide</string>
+    <string name="watch_pref_option_show">Show</string>
+    <string name="watch_pref_option_low">Low</string>
+    <string name="watch_pref_option_medium">Medium</string>
+    <string name="watch_pref_option_high">High</string>
+    <string name="watch_pref_option_disabled">Disabled</string>
+    <string name="watch_pref_option_standard_low">Standard - Low</string>
+    <string name="watch_pref_option_standard_high">Standard - High</string>
+    <string name="watch_pref_option_pulse">Pulse</string>
+    <string name="watch_pref_option_nudge_nudge">Nudge Nudge</string>
+    <string name="watch_pref_option_jackhammer">Jackhammer</string>
+    <string name="watch_pref_option_reveille">Reveille</string>
+    <string name="watch_pref_option_mario">Mario</string>
+    <string name="watch_pref_option_gentle">Gentle</string>
+    <string name="watch_pref_option_double_pulse_medium">Double Pulse Medium</string>
+    <string name="watch_pref_option_pebble_morse">Pebble Morse</string>
+    <string name="watch_pref_option_heartbeat">Heartbeat</string>
+    <string name="watch_pref_option_double_tap">Double Tap</string>
+    <string name="watch_pref_option_wave">Wave</string>
+    <string name="watch_pref_option_imperial">Imperial</string>
+    <string name="watch_pref_option_no_vibe">No Vibe</string>
+    <string name="watch_pref_option_vibe_on_wrap_around">Vibe On Wrap Around</string>
+    <string name="watch_pref_option_vibe_on_locked">Vibe On Locked</string>
+    <string name="watch_pref_option_automatic">Automatic</string>
+    <string name="watch_pref_option_knots">knots</string>
+    <string name="watch_pref_option_very_low">Very Low</string>
+    <string name="watch_pref_option_medium_low">Medium-Low</string>
+    <string name="watch_pref_option_medium_high">Medium-High</string>
+    <string name="watch_pref_option_very_high">Very High</string>
+    <string name="watch_pref_option_blinding">Blinding</string>
+    <string name="watch_pref_option_tap">Tap</string>
+    <string name="watch_pref_option_off">Off</string>
+    <string name="watch_pref_option_bright">Bright</string>
+    <string name="watch_pref_option_standard">Standard</string>
+    <string name="watch_pref_option_dim">Dim</string>
+    <string name="watch_pref_option_max_brightness">Max Brightness</string>
+    <string name="watch_pref_option_battery_saver">Battery Saver</string>
+    <string name="watch_pref_option_advanced">Advanced</string>
+    <string name="watch_pref_option_overlay">Overlay</string>
+    <string name="watch_pref_option_shift_up">Shift Up</string>
+    <string name="watch_pref_option_squish_up">Squish Up</string>
+    <string name="settings_prefs_hourly_notice">Hourly Notice</string>
+    <string name="settings_prefs_on_disconnect">On Disconnect</string>
+    <string name="watch_pref_vibe_score_hourly">Vibration - Hourly Notice</string>
+    <string name="watch_pref_vibe_score_on_disconnect">Vibration - On Disconnect</string>
+    <string name="watch_pref_theme_highlight_color">Accent Color</string>
+    <string name="watch_pref_dark_mode">Dark Mode</string>
+    <string name="watch_pref_dark_mode_schedule">Dark Mode - Schedule</string>
+    <string name="watch_pref_legacy_app_display">Legacy App Display</string>
+    <string name="watch_pref_speaker_muted">Mute Speaker</string>
+    <string name="watch_pref_speaker_volume">Speaker Volume</string>
+    <string name="watch_pref_notification_grouping">Group by Sender</string>
+    <string name="watch_pref_notification_grouping_desc">Group notifications from the same sender received within this time</string>
+    <string name="watch_pref_notification_status_bar">Notification Status Bar</string>
+    <string name="watch_pref_insights_style">Insights Style</string>
+    <string name="watch_pref_insights_style_desc">Wording of sleep insights for nights outside 7 to 9 hours</string>
+    <string name="watch_pref_option_playful">Playful</string>
+    <string name="watch_pref_quiet_time_mute_speaker">Quiet Time - Mute Speaker</string>
+    <string name="watch_pref_quiet_time_mute_speaker_desc">Mute the speaker during Quiet Time</string>
+    <string name="watch_pref_option_on">On</string>
+    <string name="watch_pref_option_schedule">Schedule</string>
+    <string name="watch_pref_option_centered">Centered</string>
+    <string name="watch_pref_option_scaled_nearest">Scaled (Nearest)</string>
+    <string name="watch_pref_option_scaled_bilinear">Scaled (Bilinear)</string>
+    <string name="watch_pref_option_never">Never</string>
+    <string name="watch_pref_option_one_day">1 Day</string>
+    <string name="watch_pref_option_one_week">1 Week</string>
+    <string name="watch_pref_option_all">All</string>
+    <string name="watch_pref_option_bold">Bold</string>
+    <string name="watch_pref_option_big_bold">Big &amp; Bold</string>
+    <!-- Backlight colour presets -->
+    <string name="watch_pref_color_red">Red</string>
+    <string name="watch_pref_color_orange">Orange</string>
+    <string name="watch_pref_color_yellow">Yellow</string>
+    <string name="watch_pref_color_lime">Lime</string>
+    <string name="watch_pref_color_green">Green</string>
+    <string name="watch_pref_color_cyan">Cyan</string>
+    <string name="watch_pref_color_blue">Blue</string>
+    <string name="watch_pref_color_purple">Purple</string>
+    <string name="watch_pref_color_magenta">Magenta</string>
+    <string name="watch_pref_color_pink">Pink</string>
+    <string name="watch_pref_color_warm_white">Warm White</string>
+    <string name="watch_pref_color_cool_white">Cool White</string>
+    <plurals name="settings_prefs_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
 </resources>

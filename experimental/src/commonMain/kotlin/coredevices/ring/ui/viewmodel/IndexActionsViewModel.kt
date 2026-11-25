@@ -11,7 +11,9 @@ import coredevices.ring.agent.integrations.providers.IntegrationProviderReposito
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.agent.pebble_plugin.StorePlugin
+import coredevices.ring.data.entity.room.SavedGeofenceLocation
 import coredevices.ring.database.Preferences
+import coredevices.ring.database.room.repository.GeofenceLocationRepository
 import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.ui.screens.settings.nothingRoutesToIndexAgent
@@ -19,8 +21,10 @@ import coredevices.util.Platform
 import coredevices.util.flow.mapState
 import coredevices.util.isAndroid
 import io.rebble.libpebblecommon.permissions.InstallReview
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,18 +37,18 @@ import kotlin.uuid.Uuid
 
 /**
  * State for the Index Agent actions section: built-in actions, plugins, MCP servers and where
- * notes and reminders are saved.
+ * notes, reminders and list items are saved.
  */
 class IndexActionsViewModel(
     private val indexActionsRepository: IndexActionsRepository,
     private val mcpServerRepository: McpServerRepository,
+    private val geofenceLocationRepository: GeofenceLocationRepository,
     private val destinations: DestinationCatalog,
     private val providers: IntegrationProviderRepository,
     private val destinationPrompter: DefaultDestinationPrompter,
     private val preferences: Preferences,
     gestureRouting: GestureRoutingPreferences,
     platform: Platform,
-    val pluginsEnabled: StateFlow<Boolean>,
 ) : ViewModel() {
     val agentReachable: StateFlow<Boolean> = gestureRouting.routes.mapState { !nothingRoutesToIndexAgent(it) }
     val contactsDialogSupported: Boolean = platform.isAndroid
@@ -74,9 +78,16 @@ class IndexActionsViewModel(
         initialValue = emptyList()
     )
 
+    val geofenceLocations = geofenceLocationRepository.getAllFlow().stateIn(
+        viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
+
     val captureType = preferences.defaultCaptureType
     val noteProvider = providers.selectedNoteProvider
     val reminderProvider = providers.selectedReminderProvider
+    val listProvider = providers.selectedListProvider
     val approvedContactCount: StateFlow<Int> = preferences.approvedBeeperContacts.mapState { it.size }
 
     // Connecting from a destination sheet is a pick as well as a connect, but the connect flows
@@ -84,6 +95,7 @@ class IndexActionsViewModel(
     // Held by id: a store plugin has no provider until it is installed.
     private val pendingNoteConnect = MutableStateFlow<String?>(null)
     private val pendingReminderConnect = MutableStateFlow<String?>(null)
+    private val pendingListConnect = MutableStateFlow<String?>(null)
 
     val noteDestinations: StateFlow<List<DestinationItem>> = destinations
         .items(IntegrationSupport.Note)
@@ -92,6 +104,10 @@ class IndexActionsViewModel(
     val reminderDestinations: StateFlow<List<DestinationItem>> = destinations
         .items(IntegrationSupport.Reminder)
         .applyingPendingConnect(pendingReminderConnect, providers::selectReminderProvider)
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val listDestinations: StateFlow<List<DestinationItem>> = destinations
+        .items(IntegrationSupport.List)
+        .applyingPendingConnect(pendingListConnect, providers::selectListProvider)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val lockerPlugins: StateFlow<Set<Uuid>> = destinations.lockerPlugins
@@ -133,6 +149,11 @@ class IndexActionsViewModel(
         providers.selectReminderProvider(provider)
     }
 
+    fun selectListProvider(provider: IntegrationProvider) {
+        pendingListConnect.value = null
+        providers.selectListProvider(provider)
+    }
+
     fun noteConnectStarted(providerId: String) {
         pendingNoteConnect.value = providerId
         destinationPrompter.pickedFromSheet(providerId)
@@ -140,6 +161,11 @@ class IndexActionsViewModel(
 
     fun reminderConnectStarted(providerId: String) {
         pendingReminderConnect.value = providerId
+        destinationPrompter.pickedFromSheet(providerId)
+    }
+
+    fun listConnectStarted(providerId: String) {
+        pendingListConnect.value = providerId
         destinationPrompter.pickedFromSheet(providerId)
     }
 
@@ -162,6 +188,39 @@ class IndexActionsViewModel(
 
     fun closeContactsDialog() {
         _showContactsDialog.value = false
+    }
+
+    fun addGeofenceLocation(name: String, lat: Double, long: Double, radiusMeters: Float): Deferred<Unit> {
+        return viewModelScope.async {
+            geofenceLocationRepository.insertUpdateSaved(
+                SavedGeofenceLocation(
+                    name = name,
+                    lat = lat,
+                    long = long,
+                    radiusMeters = radiusMeters
+                )
+            )
+        }
+    }
+
+    fun updateGeofenceLocation(entity: SavedGeofenceLocation): Deferred<Unit> {
+        return viewModelScope.async {
+            geofenceLocationRepository.insertUpdateSaved(entity)
+        }
+    }
+
+    suspend fun geofenceReminderCount(entity: SavedGeofenceLocation): Int =
+        geofenceLocationRepository.reminderCount(entity.id)
+
+    /** [deleteReminders] also deletes reminders at the place; otherwise they become timeless. */
+    fun deleteGeofenceLocation(entity: SavedGeofenceLocation, deleteReminders: Boolean): Deferred<Unit> {
+        return viewModelScope.async {
+            if (deleteReminders) {
+                geofenceLocationRepository.deleteSavedWithReminders(entity.id)
+            } else {
+                geofenceLocationRepository.deleteSavedKeepingReminders(entity.id)
+            }
+        }
     }
 
     private fun Flow<List<DestinationItem>>.applyingPendingConnect(

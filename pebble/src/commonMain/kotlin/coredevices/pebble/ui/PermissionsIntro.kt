@@ -18,59 +18,75 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
-import coredevices.pebble.rememberLibPebble
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.permissions_intro_body_index
+import coreapp.pebble.generated.resources.permissions_intro_body_watch
+import coreapp.pebble.generated.resources.permissions_intro_body_watch_and_index
+import coreapp.pebble.generated.resources.permissions_intro_change_mode
+import coreapp.pebble.generated.resources.permissions_intro_older_apps
+import coreapp.pebble.generated.resources.permissions_intro_title
+import coreapp.pebble.generated.resources.permissions_policy_always_ask
+import coreapp.pebble.generated.resources.permissions_policy_always_ask_description
+import coreapp.pebble.generated.resources.permissions_policy_always_ask_details
+import coreapp.pebble.generated.resources.permissions_policy_ask_if_exfiltrating
+import coreapp.pebble.generated.resources.permissions_policy_ask_if_exfiltrating_description
+import coreapp.pebble.generated.resources.permissions_policy_ask_if_exfiltrating_details
+import coreapp.pebble.generated.resources.permissions_policy_default
+import coreapp.pebble.generated.resources.permissions_policy_details_intro
+import coreapp.pebble.generated.resources.permissions_policy_never_ask
+import coreapp.pebble.generated.resources.permissions_policy_never_ask_description
+import coreapp.pebble.generated.resources.permissions_policy_never_ask_details
+import coreapp.util.generated.resources.ok
+import coredevices.pebble.rememberWatches
 import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.permissions.PermissionPolicy
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import coreapp.util.generated.resources.Res as UtilRes
 
 private const val HAS_SEEN_PERMISSIONS_INTRO_SETTINGS_KEY = "hasSeenPermissionsIntro"
 
 fun Settings.hasSeenPermissionsIntro() = getBoolean(HAS_SEEN_PERMISSIONS_INTRO_SETTINGS_KEY, false)
 fun Settings.setHasSeenPermissionsIntro(seen: Boolean) = set(HAS_SEEN_PERMISSIONS_INTRO_SETTINGS_KEY, seen)
 
-fun PermissionPolicy.displayName(): String = when (this) {
-    PermissionPolicy.AskIfExfiltrating -> "When needed"
-    PermissionPolicy.AlwaysAsk -> "Always"
-    PermissionPolicy.NeverAsk -> "Never"
+@Composable
+fun PermissionPolicy.displayName(): String = stringResource(
+    when (this) {
+        PermissionPolicy.AskIfExfiltrating -> Res.string.permissions_policy_ask_if_exfiltrating
+        PermissionPolicy.AlwaysAsk -> Res.string.permissions_policy_always_ask
+        PermissionPolicy.NeverAsk -> Res.string.permissions_policy_never_ask
+    }
+)
+
+fun PermissionPolicy.description(): StringResource = when (this) {
+    PermissionPolicy.AskIfExfiltrating -> Res.string.permissions_policy_ask_if_exfiltrating_description
+    PermissionPolicy.AlwaysAsk -> Res.string.permissions_policy_always_ask_description
+    PermissionPolicy.NeverAsk -> Res.string.permissions_policy_never_ask_description
 }
 
-fun PermissionPolicy.description(): String = when (this) {
-    PermissionPolicy.AskIfExfiltrating ->
-        "Apps ask before connecting to the internet or acting for you (e.g. controlling your music or ringing your phone)"
-    PermissionPolicy.AlwaysAsk -> "Apps ask before using any permission."
-    PermissionPolicy.NeverAsk -> "Apps can use any permission except reading notifications, unless you explicitly turn it off on the app's page"
-}
-
-private fun PermissionPolicy.details(): String = when (this) {
-    PermissionPolicy.AskIfExfiltrating ->
-        "Apps that can't send anything off your phone (no internet access and no phone companion app) can read your data, " +
-            "like your location, calendar or music, without asking, because it can't go anywhere. " +
-            "Apps that could send it off your phone ask first.\n\n" +
-            "Every app asks before going online, and before acting for you: adding timeline pins, controlling " +
-            "music, launching apps, changing watch settings, ringing your phone, or using a plugin's actions. " +
-            "Every app also asks before reading your notifications."
-    PermissionPolicy.AlwaysAsk ->
-        "Apps ask the first time they use any permission, including reading data they couldn't send anywhere."
-    PermissionPolicy.NeverAsk ->
-        "Apps get any permission they ask for without asking you, including going online, except reading your " +
-            "notifications, which every app still asks for. Anything you've " +
-            "turned off on an app's page stays off. Not recommended!"
-}
+@Composable
+private fun PermissionPolicy.details(): String = stringResource(
+    when (this) {
+        PermissionPolicy.AskIfExfiltrating -> Res.string.permissions_policy_ask_if_exfiltrating_details
+        PermissionPolicy.AlwaysAsk -> Res.string.permissions_policy_always_ask_details
+        PermissionPolicy.NeverAsk -> Res.string.permissions_policy_never_ask_details
+    }
+)
 
 /** Every mode, for the setting's info popup. */
 @Composable
 fun PermissionPolicyDetails() {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            "Whichever you choose, you can review and change each app's permissions on its page. Apps built before " +
-                    "permissions existed have their own setting, \"Ask before older apps use permissions\".",
+            stringResource(Res.string.permissions_policy_details_intro),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         PermissionPolicy.entries.forEach { policy ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    if (policy == PermissionPolicy.AskIfExfiltrating) "${policy.displayName()} (default)" else policy.displayName(),
+                    if (policy == PermissionPolicy.AskIfExfiltrating) stringResource(Res.string.permissions_policy_default, policy.displayName()) else policy.displayName(),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -83,30 +99,25 @@ fun PermissionPolicyDetails() {
 /** What permissions are, and when apps ask; shown once, in a dialog or in onboarding. */
 @Composable
 fun PermissionsIntroContent(settings: SettingsItemsState?, modifier: Modifier = Modifier) {
-    val libPebble = rememberLibPebble()
-    val hasWatch = libPebble.watches.collectAsState().value.isNotEmpty()
+    val hasWatch = !rememberWatches().isNullOrEmpty()
     val indexEnabled = koinInject<CoreConfigHolder>().config.collectAsState().value.enableIndex
-    val askers = when {
-        hasWatch && indexEnabled ->
-            "Watchfaces, watchapps and plugins (including the ones Index uses to save your notes and reminders)"
-        indexEnabled -> "Plugins, including the ones Index uses to save your notes and reminders,"
-        else -> "Watchfaces, watchapps and plugins"
+    val body = when {
+        hasWatch && indexEnabled -> Res.string.permissions_intro_body_watch_and_index
+        indexEnabled -> Res.string.permissions_intro_body_index
+        else -> Res.string.permissions_intro_body_watch
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "$askers now ask before using your phone's features: going online, your location, " +
-                "notifications, calendar, contacts, music, files, watch settings and timeline.",
+            stringResource(body),
             style = MaterialTheme.typography.bodySmall,
         )
         Text(
-            "Change the permissions mode for all apps below (also in Settings/Apps), and configure " +
-                    "each app's individual settings on its own screen",
+            stringResource(Res.string.permissions_intro_change_mode),
             style = MaterialTheme.typography.bodySmall,
         )
         if (hasWatch) {
             Text(
-                "Older apps which weren't built for the Permissions system are not affected, " +
-                        "unless you choose to enforce permissions for them in Settings -> Apps.",
+                stringResource(Res.string.permissions_intro_older_apps),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -121,11 +132,11 @@ fun PermissionsIntroDialog(onDismissRequest: () -> Unit) {
         // The settings row needs about the width of the settings screen.
         modifier = Modifier.padding(horizontal = 16.dp),
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        title = { Text("App permissions") },
+        title = { Text(stringResource(Res.string.permissions_intro_title)) },
         text = {
             val settings = rememberSettingsItemsState(navBarNav = null, snackbarDisplay = {})
             PermissionsIntroContent(settings, Modifier.verticalScroll(rememberScrollState()))
         },
-        confirmButton = { TextButton(onClick = onDismissRequest) { Text("OK") } },
+        confirmButton = { TextButton(onClick = onDismissRequest) { Text(stringResource(UtilRes.string.ok)) } },
     )
 }

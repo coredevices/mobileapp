@@ -661,6 +661,20 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteDateTimeDayOfWeekThenMonthDayAtTime() {
+        val result = parser.parse("Wednesday, November 4, at 7 pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 11, 4, 19, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeDayOfWeekThenOrdinalMonthDayAtTime() {
+        val result = parser.parse("Wednesday, September 2nd, at 11am")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 9, 2, 11, 0), result.dateTime)
+    }
+
+    @Test
     fun testAbsoluteDateTimeTomorrowAtMidnight() {
         val result = parser.parse("tomorrow at midnight")
         assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
@@ -995,6 +1009,43 @@ class HumanDateTimeParserTest {
         val result = parser.parse("next weekend")
         assertIs<InterpretedDateTime.AbsoluteDate>(result)
         assertEquals(LocalDate(2025, 1, 25), result.date)
+    }
+
+    // ===== BARE DATE DEFAULT TIME TESTS =====
+
+    private fun utc(dateTime: LocalDateTime) = dateTime.toInstant(TimeZone.UTC)
+
+    @Test
+    fun testTodayBefore9amResolvesTo9amToday() {
+        val now = utc(LocalDateTime(2025, 1, 15, 7, 30))
+        val result = InterpretedDateTime.AbsoluteDate(LocalDate(2025, 1, 15))
+            .resolveDefaultTime(now, TimeZone.UTC)
+        assertEquals(LocalDateTime(2025, 1, 15, 9, 0), result)
+    }
+
+    @Test
+    fun testTodayAfter9amResolvesToShortlyAfterNow() {
+        val now = utc(LocalDateTime(2025, 1, 15, 10, 36))
+        val result = InterpretedDateTime.AbsoluteDate(LocalDate(2025, 1, 15))
+            .resolveDefaultTime(now, TimeZone.UTC)
+        assertEquals(LocalDateTime(2025, 1, 15, 10, 37), result)
+    }
+
+    @Test
+    fun testTodaySyncedAfter9amResolvesToShortlyAfterNow() {
+        // "today" was spoken before 9am, but the recording only reached the phone after 9am.
+        val spoken = parserAt(LocalDateTime(2025, 1, 15, 8, 50)).parse("today")
+        assertIs<InterpretedDateTime.AbsoluteDate>(spoken)
+        val now = utc(LocalDateTime(2025, 1, 15, 9, 30))
+        assertEquals(LocalDateTime(2025, 1, 15, 9, 31), spoken.resolveDefaultTime(now, TimeZone.UTC))
+    }
+
+    @Test
+    fun testTomorrowAfter9amResolvesTo9amTomorrow() {
+        val now = utc(LocalDateTime(2025, 1, 15, 10, 36))
+        val result = InterpretedDateTime.AbsoluteDate(LocalDate(2025, 1, 16))
+            .resolveDefaultTime(now, TimeZone.UTC)
+        assertEquals(LocalDateTime(2025, 1, 16, 9, 0), result)
     }
 
     @Test

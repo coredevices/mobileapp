@@ -10,7 +10,7 @@ import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBPeripheral
 import kotlin.uuid.Uuid
 
-actual fun peripheralFromIdentifier(
+internal actual fun peripheralFromIdentifier(
     identifier: PebbleBleIdentifier,
     name: String,
     autoConnect: Boolean,
@@ -55,7 +55,7 @@ private fun peripheralFromUuid(uuid: Uuid): Peripheral? = try {
     null
 }
 
-actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+internal actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     throw IllegalStateException("not supported")
 }
 
@@ -63,4 +63,4 @@ actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
 // there's no equivalent to Android's BluetoothGatt#refresh(). Returning false
 // lets the caller skip its refresh-then-rediscover step and fall through to
 // the normal discovery path.
-actual suspend fun Peripheral.refreshServicesNative(): Boolean = false
+internal actual suspend fun Peripheral.refreshServicesNative(): Boolean = false

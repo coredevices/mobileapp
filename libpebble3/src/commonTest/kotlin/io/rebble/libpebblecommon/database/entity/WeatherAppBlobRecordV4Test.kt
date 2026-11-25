@@ -67,6 +67,11 @@ internal class WeatherAppBlobRecordV4Test {
                 11, 11, 11, 11, 11, 11, 11, 12, 13, 14, 15, 16,
                 17, 18, 18, 18, 17, 17, 16, 14, 13, 12, 12, 11,
             ),
+            minorVersion = WEATHER_DB_MINOR_VERSION,
+            todayHourlyPrecipProbability = UByteArray(24),
+            tomorrowHourlyPrecipProbability = UByteArray(24),
+            todayHourlyPrecipMmX10 = UByteArray(24),
+            tomorrowHourlyPrecipMmX10 = UByteArray(24),
             locationName = "San Francisco",
             forecastShort = "Clear",
         )
@@ -137,6 +142,11 @@ internal class WeatherAppBlobRecordV4Test {
             tomorrowHourlyCount = 0u,
             tomorrowHourlyWeatherType = UByteArray(24) { WeatherType.Unknown.code.toUByte() },
             tomorrowHourlyTemp = ByteArray(24),
+            minorVersion = WEATHER_DB_MINOR_VERSION,
+            todayHourlyPrecipProbability = UByteArray(24),
+            tomorrowHourlyPrecipProbability = UByteArray(24),
+            todayHourlyPrecipMmX10 = UByteArray(24),
+            tomorrowHourlyPrecipMmX10 = UByteArray(24),
             locationName = locationName,
             forecastShort = forecastShort,
         )

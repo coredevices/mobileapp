@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonNames
 import io.rebble.libpebblecommon.metadata.StringOrBoolean
 
 @Serializable
-data class Media(
+public data class Media internal constructor(
     @SerialName("file")
     val resourceFile: String,
     val menuIcon: StringOrBoolean = StringOrBoolean(false),

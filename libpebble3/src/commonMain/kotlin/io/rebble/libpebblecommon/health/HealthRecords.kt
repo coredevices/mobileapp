@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.Endian
 
-enum class OverlayType(val value: Int) {
+public enum class OverlayType(public val value: Int) {
     Sleep(1),
     DeepSleep(2),
     Nap(3),
@@ -15,12 +15,12 @@ enum class OverlayType(val value: Int) {
     Run(6),
     OpenWorkout(7);
 
-    companion object {
-        fun fromValue(value: Int): OverlayType? = values().firstOrNull { it.value == value }
+    public companion object {
+        public fun fromValue(value: Int): OverlayType? = values().firstOrNull { it.value == value }
     }
 }
 
-data class StepsRecord(
+internal data class StepsRecord(
     val version: UShort,
     val timestamp: UInt,
     val steps: UByte,
@@ -36,7 +36,7 @@ data class StepsRecord(
     val heartRateZone: UByte = 0u
 )
 
-data class OverlayRecord(
+internal data class OverlayRecord(
     val version: UShort,
     val type: OverlayType,
     val offsetUTC: UInt,
@@ -48,31 +48,31 @@ data class OverlayRecord(
     val distanceCm: UShort
 )
 
-class RawStepsRecord : StructMappable() {
-    val steps = SUByte(m)
-    val orientation = SUByte(m)
-    val intensity = SUShort(m, endianness = Endian.Little)
-    val lightIntensity = SUByte(m)
-    val flags = SUByte(m)
-    val restingGramCalories = SUShort(m, endianness = Endian.Little)
-    val activeGramCalories = SUShort(m, endianness = Endian.Little)
-    val distanceCm = SUShort(m, endianness = Endian.Little)
-    val heartRate = SUByte(m)
-    val heartRateWeight = SUShort(m, endianness = Endian.Little)
-    val heartRateZone = SUByte(m)
+internal class RawStepsRecord : StructMappable() {
+    val steps: SUByte = SUByte(m)
+    val orientation: SUByte = SUByte(m)
+    val intensity: SUShort = SUShort(m, endianness = Endian.Little)
+    val lightIntensity: SUByte = SUByte(m)
+    val flags: SUByte = SUByte(m)
+    val restingGramCalories: SUShort = SUShort(m, endianness = Endian.Little)
+    val activeGramCalories: SUShort = SUShort(m, endianness = Endian.Little)
+    val distanceCm: SUShort = SUShort(m, endianness = Endian.Little)
+    val heartRate: SUByte = SUByte(m)
+    val heartRateWeight: SUShort = SUShort(m, endianness = Endian.Little)
+    val heartRateZone: SUByte = SUByte(m)
 }
 
-class RawOverlayRecord : StructMappable() {
-    val version = SUShort(m, endianness = Endian.Little)
-    val unused = SUShort(m, endianness = Endian.Little)
-    val type = SUShort(m, endianness = Endian.Little)
-    val offsetUTC = SUInt(m, endianness = Endian.Little)
-    val startTime = SUInt(m, endianness = Endian.Little)
-    val duration = SUInt(m, endianness = Endian.Little)
-    val steps = SUShort(m, endianness = Endian.Little)
-    val restingKiloCalories = SUShort(m, endianness = Endian.Little)
-    val activeKiloCalories = SUShort(m, endianness = Endian.Little)
-    val distanceCm = SUShort(m, endianness = Endian.Little)
+internal class RawOverlayRecord : StructMappable() {
+    val version: SUShort = SUShort(m, endianness = Endian.Little)
+    val unused: SUShort = SUShort(m, endianness = Endian.Little)
+    val type: SUShort = SUShort(m, endianness = Endian.Little)
+    val offsetUTC: SUInt = SUInt(m, endianness = Endian.Little)
+    val startTime: SUInt = SUInt(m, endianness = Endian.Little)
+    val duration: SUInt = SUInt(m, endianness = Endian.Little)
+    val steps: SUShort = SUShort(m, endianness = Endian.Little)
+    val restingKiloCalories: SUShort = SUShort(m, endianness = Endian.Little)
+    val activeKiloCalories: SUShort = SUShort(m, endianness = Endian.Little)
+    val distanceCm: SUShort = SUShort(m, endianness = Endian.Little)
 }
 
 /**
@@ -86,7 +86,7 @@ class RawOverlayRecord : StructMappable() {
  * tail of each `<weekday>_sleepData` BlobDB row; absent keys are weekdays below the same
  * minimum-history threshold.
  */
-data class HealthDebugStats(
+public data class HealthDebugStats internal constructor(
     val totalSteps30Days: Long,
     val averageStepsPerDay: Int,
     val totalSleepSeconds30Days: Long,

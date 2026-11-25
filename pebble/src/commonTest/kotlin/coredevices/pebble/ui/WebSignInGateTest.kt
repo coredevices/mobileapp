@@ -26,6 +26,7 @@ class WebSignInGateTest {
         sideloaded = sideloaded,
         configurable = true,
         sync = false,
+        hasPlugin = true,
     )
 
     @Test

@@ -22,9 +22,10 @@ import io.rebble.libpebblecommon.database.entity.TemperatureUnits
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.PluginRegistry
@@ -418,7 +419,7 @@ class WeatherFetcher(
         ) {
             itemID = uuid
             duration = Duration.ZERO
-            layout = TimelineItem.Layout.WeatherPin
+            layout = TimelineItemLayout.WeatherPin
             attributes {
                 title { title }
                 subtitle { subtitle }
@@ -434,7 +435,7 @@ class WeatherFetcher(
                 uByte(TimelineAttribute.WeatherPinKind) { kind.value }
             }
             actions {
-                action(TimelineItem.Action.Type.OpenWatchapp) {
+                action(TimelineActionType.OpenWatchapp) {
                     attributes { title { "More" } }
                 }
             }
@@ -487,6 +488,8 @@ internal fun HourlyForecast.toHourlyForecast() = WeatherHourlyForecast(
     weatherType = iconCode.toWeatherType(),
     temp = (temp ?: 0).coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt()).toByte(),
     uvIndexX10 = uvIndex?.let { (it * 10).roundToInt().toShort() },
+    precipProbability = pop,
+    precipMm = precipMm,
 )
 
 //object Iso8601InstantSerializer : KSerializer<Instant> {
@@ -737,4 +740,7 @@ data class HourlyForecast(
     // Plain index (e.g. 5.4) for this hour; the daily uv_index is the day's peak.
     @SerialName("uv_index")
     val uvIndex: Double? = null,
+    val pop: Int? = null,
+    @SerialName("precip_mm")
+    val precipMm: Double? = null,
 )

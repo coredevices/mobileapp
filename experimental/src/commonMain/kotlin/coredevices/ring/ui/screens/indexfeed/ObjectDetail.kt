@@ -92,6 +92,20 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_item_gone
+import coreapp.ring.generated.resources.feed_not_found
+import coreapp.ring.generated.resources.feed_sort_a_to_z
+import coreapp.ring.generated.resources.feed_sort_due_date
+import coreapp.ring.generated.resources.feed_sort_newest
+import coreapp.ring.generated.resources.feed_sort_oldest
+import coreapp.ring.generated.resources.feed_sort_z_to_a
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.search_ellipsis
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Detail page for a single item (note / reminder / scheduled / message /
@@ -120,9 +134,9 @@ fun ObjectDetail(coreNav: CoreNav, objectId: String, startEditing: Boolean = fal
                 }
                 is ObjectDetailViewModel.UiState.NotFound -> {
                     Column {
-                        DetailTopBar(title = "Not found", coreNav = coreNav, right = {})
+                        DetailTopBar(title = stringResource(Res.string.feed_not_found), coreNav = coreNav, right = {})
                         Text(
-                            "This item is gone.",
+                            stringResource(Res.string.feed_item_gone),
                             modifier = Modifier.padding(24.dp),
                             color = colors.onSurfaceVariant,
                         )
@@ -160,7 +174,7 @@ internal fun DetailTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
+            Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(UtilRes.string.back), tint = colors.onSurface)
         }
         Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
             if (titleSlot != null) {
@@ -224,19 +238,19 @@ internal fun ListSearchTopBar(
                 }),
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
-                        Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
+                        Text(stringResource(UtilRes.string.search_ellipsis), color = colors.onSurfaceVariant, fontSize = 15.sp)
                     }
                     inner()
                 },
             )
             if (value.isNotEmpty()) {
                 IconButton(onClick = { onChange("") }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
         Text(
-            "Cancel",
+            stringResource(UtilRes.string.cancel),
             color = colors.primary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
@@ -255,11 +269,11 @@ internal fun ListSearchTopBar(
 internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit) {
     val colors = IndexTheme.colors
     val (icon, label) = when (sort) {
-        ObjectDetailViewModel.ListSort.Newest -> Icons.Default.ArrowDownward to "Newest"
-        ObjectDetailViewModel.ListSort.Oldest -> Icons.Default.ArrowUpward to "Oldest"
-        ObjectDetailViewModel.ListSort.AtoZ -> Icons.Default.ArrowDownward to "A–Z"
-        ObjectDetailViewModel.ListSort.ZtoA -> Icons.Default.ArrowUpward to "Z–A"
-        ObjectDetailViewModel.ListSort.DueDate -> Icons.Outlined.AccessTime to "Due date"
+        ObjectDetailViewModel.ListSort.Newest -> Icons.Default.ArrowDownward to stringResource(Res.string.feed_sort_newest)
+        ObjectDetailViewModel.ListSort.Oldest -> Icons.Default.ArrowUpward to stringResource(Res.string.feed_sort_oldest)
+        ObjectDetailViewModel.ListSort.AtoZ -> Icons.Default.ArrowDownward to stringResource(Res.string.feed_sort_a_to_z)
+        ObjectDetailViewModel.ListSort.ZtoA -> Icons.Default.ArrowUpward to stringResource(Res.string.feed_sort_z_to_a)
+        ObjectDetailViewModel.ListSort.DueDate -> Icons.Outlined.AccessTime to stringResource(Res.string.feed_sort_due_date)
     }
     Row(
         modifier = Modifier
@@ -278,6 +292,7 @@ internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit)
 // `relativeTime` and `relativeTimeWithCreated` (identical body) moved to
 // `coredevices.util` so home + index-feed screens share one impl.
 
+@Composable
 internal fun relativeTimeWithCreated(at: Instant): String = relativeTime(at)
 
 internal fun formatShortDateTime(at: Instant): String {

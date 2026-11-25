@@ -10,10 +10,10 @@ import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlin.uuid.Uuid
 
 /**
- * A plugin offered as a note/reminder/agent destination because it declares a `create_note`,
+ * A plugin offered as a note/reminder/list/agent destination because it declares a `create_note`,
  * `create_reminder` and/or `send_to_agent` action together with the matching `notes/configured` /
  * `reminders/configured` / `agent/configured` source. Instances are recreated on every lookup, so
- * equality is by [id].
+ * equality is by [id]. One that takes reminders takes list items the same way.
  */
 class PblPluginIntegrationProvider private constructor(
     private val plugin: PluginMetadata,
@@ -32,7 +32,7 @@ class PblPluginIntegrationProvider private constructor(
 
     override suspend fun isAuthorized(support: IntegrationSupport): Boolean = when (support) {
         IntegrationSupport.Note -> notes().isAuthorized()
-        IntegrationSupport.Reminder -> reminders().isAuthorized()
+        IntegrationSupport.Reminder, IntegrationSupport.List -> reminders().isAuthorized()
         IntegrationSupport.Agent -> agent().isAuthorized()
     }
 
@@ -59,6 +59,7 @@ class PblPluginIntegrationProvider private constructor(
             }
             if (plugin.offersDestination(PblPluginActionReminderIntegration.ACTION_NAME, PblPluginActionReminderIntegration.CATEGORY)) {
                 add(IntegrationSupport.Reminder)
+                add(IntegrationSupport.List)
             }
             if (plugin.offersDestination(PblPluginActionAgentIntegration.ACTION_NAME, PblPluginActionAgentIntegration.CATEGORY)) {
                 add(IntegrationSupport.Agent)

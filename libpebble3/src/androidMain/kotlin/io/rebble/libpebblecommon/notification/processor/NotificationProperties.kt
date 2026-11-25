@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.notification.processor
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 
-enum class NotificationProperties(
+internal enum class NotificationProperties(
     val pkgName: String,
     val color: TimelineColor? = null,
     val icon: TimelineIcon? = null,

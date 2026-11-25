@@ -7,9 +7,9 @@ import io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProviderNotifier
 import io.rebble.libpebblecommon.pebblekit.two.PebbleKit2Datalogging
 import io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider
 
-actual fun getPlatform(): PhoneAppVersion.OSType = PhoneAppVersion.OSType.Android
+internal actual fun getPlatform(): PhoneAppVersion.OSType = PhoneAppVersion.OSType.Android
 
-actual fun performPlatformSpecificInit() {
+internal actual fun performPlatformSpecificInit() {
     val koin = object: LibPebbleKoinComponent {}.getKoin()
     koin.get<PebbleKitClassicStartListeners>().init()
     koin.get<PebbleKitProviderNotifier>().init()

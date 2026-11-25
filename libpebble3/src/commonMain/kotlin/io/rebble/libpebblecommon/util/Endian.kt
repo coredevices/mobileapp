@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.util
 
-enum class Endian {
+public enum class Endian {
     Big,
     Little,
     Unspecified

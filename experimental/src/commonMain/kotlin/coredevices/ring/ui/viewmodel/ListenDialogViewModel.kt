@@ -3,6 +3,9 @@ package coredevices.ring.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.listen_dialog_complete_failed
+import coreapp.ring.generated.resources.listen_dialog_mic_permission_denied
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -23,6 +26,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.io.buffered
+import org.jetbrains.compose.resources.getString
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -59,7 +63,7 @@ class ListenDialogViewModel(private val dismiss: () -> Unit): ViewModel(), KoinC
             val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = false)
             mcpSession.openSession()
             if (!permissionRequester.hasPermission(Permission.RecordAudio)) {
-                onRecordingError("Microphone permission denied")
+                onRecordingError(getString(Res.string.listen_dialog_mic_permission_denied))
                 return@launch
             }
             val fileName = "manual_recording-${Uuid.random()}"
@@ -101,7 +105,7 @@ class ListenDialogViewModel(private val dismiss: () -> Unit): ViewModel(), KoinC
                 logger.d { "Manual recording completion requested" }
             } catch (e: Exception) {
                 logger.e(e) { "Error during manual recording completion" }
-                onRecordingError("Failed to complete recording: ${e.message}")
+                onRecordingError(getString(Res.string.listen_dialog_complete_failed, e.message.toString()))
             }
         }
     }

@@ -2,6 +2,7 @@ package coredevices.util.queue
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.util.Platform
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
     private val repository: QueueTaskRepository<T>,
     private val scope: CoroutineScope,
     private val settings: Settings,
+    private val platform: Platform,
     label: String,
     private val rescheduleDelay: Duration = 1.minutes,
     private val maxAttempts: Int = 3,
@@ -106,8 +108,9 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
 
     /**
      * Call this on app startup to resume any pending tasks that were not completed in the previous session.
-     * A task still recorded as in-progress was mid-attempt when the process died (possibly the cause of a
-     * crash), so it is failed rather than resumed to avoid a crash loop.
+     * A task still recorded as in-progress when the previous run crashed may have caused the crash, so
+     * it is failed rather than resumed to avoid a crash loop. If the process was just killed (by the
+     * user or the OS) it is resumed.
      */
     fun resumePendingTasks() {
         if (scheduledTaskBefore) {
@@ -117,10 +120,14 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
         scheduledTaskBefore = true
         val interruptedIds = readInProgressIds()
         settings.remove(inProgressKey)
+        val crashed = interruptedIds.isNotEmpty() && platform.previousRunCrashed
         scope.launch {
-            val (interrupted, resumable) = repository.getPendingTasks().partition { it.id in interruptedIds }
+            val (interrupted, resumable) = repository.getPendingTasks().partition { crashed && it.id in interruptedIds }
+            if (!crashed && interruptedIds.isNotEmpty()) {
+                logger.i { "Previous run was killed with tasks $interruptedIds in progress, resuming them" }
+            }
             interrupted.forEach {
-                logger.e { "Task with id ${it.id} was in progress when the app last stopped, marking as failed" }
+                logger.e { "Task with id ${it.id} was in progress when the app last crashed, marking as failed" }
                 repository.updateStatus(it.id, TaskStatus.Failed)
             }
             logger.i { "Rescheduling ${resumable.size} pending task(s)" }

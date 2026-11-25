@@ -13,19 +13,19 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-enum class ReversePpogVersion {
+public enum class ReversePpogVersion {
     V1,
     V2,
 }
 
-data class PpogClientConfig(
+internal data class PpogClientConfig(
     val serviceUuid: Uuid,
     val notifyCharacteristic: Uuid,
     val writeCharacteristic: Uuid,
     val version: ReversePpogVersion,
 )
 
-class PpogClient(
+internal class PpogClient(
     private val pPoGStream: PPoGStream,
     private val scope: ConnectionCoroutineScope,
 ) : PPoGPacketSender {

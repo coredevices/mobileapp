@@ -133,17 +133,37 @@ sealed class SemanticResult {
      * @param integrationName Integration the tool belongs to, for re-dispatching the call
      * @param arguments The call's parameters, for the user to review
      * @param destructive Whether the action cannot be undone
+     * @param title Short question shown in place of the generic prompt, with [description] as the body
+     * @param allowLabel / [denyLabel] Button text in place of "Allow" / "Deny"
      */
     @Serializable
     @SerialName("RequiresConfirmation")
     data class RequiresConfirmation(
         val integrationName: String,
         val toolName: String,
+        @Serializable(with = FirestoreSafeJsonObjectSerializer::class)
         val arguments: JsonObject,
         val destructive: Boolean,
         val description: String? = null,
+        val title: String? = null,
+        val allowLabel: String? = null,
+        val denyLabel: String? = null,
     ): SemanticResult()
-    /** The user refused a [RequiresConfirmation] request, so the tool was not run. */
+    /**
+     * The tool was not run: the call doesn't look like what the user asked for, so it needs their
+     * go-ahead first. Never shown to the model.
+     * @param probabilityValid How likely the call is what the user asked for, 0 to 1
+     */
+    @Serializable
+    @SerialName("ValidationFailure")
+    data class ValidationFailure(
+        val integrationName: String,
+        val toolName: String,
+        @Serializable(with = FirestoreSafeJsonObjectSerializer::class)
+        val arguments: JsonObject,
+        val probabilityValid: Double,
+    ): SemanticResult()
+    /** The user refused a [RequiresConfirmation] or [ValidationFailure] request, so the tool was not run. */
     @Serializable
     @SerialName("UserDenied")
     data object UserDenied: SemanticResult()
@@ -179,7 +199,12 @@ fun SemanticResult.withItemId(itemId: String): SemanticResult = when (this) {
     is SemanticResult.CalendarEventCreation,
     is SemanticResult.SupportingData,
     is SemanticResult.RequiresConfirmation,
+    is SemanticResult.ValidationFailure,
     is SemanticResult.UserDenied,
     is SemanticResult.GenericSuccess,
     is SemanticResult.GenericFailure -> this
 }
+
+/** The call was not run and stays open until the user allows or denies it. */
+val SemanticResult.isConfirmationRequest: Boolean
+    get() = this is SemanticResult.RequiresConfirmation || this is SemanticResult.ValidationFailure

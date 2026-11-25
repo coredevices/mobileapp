@@ -19,7 +19,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlin.coroutines.resume
 
-actual class JsEngine actual constructor(
+internal actual class JsEngine actual constructor(
     private val appContext: AppContext,
     scope: CoroutineScope,
     name: String,

@@ -41,6 +41,12 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.nav_alpha_test_instructions
+import coreapp.composeapp.generated.resources.nav_getting_started
+import coreapp.composeapp.generated.resources.nav_whats_new_app
+import coreapp.composeapp.generated.resources.nav_whats_new_pebbleos
+import org.jetbrains.compose.resources.stringResource
 
 private val logger = Logger.withTag("AppNavHost")
 
@@ -155,7 +161,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             composable<CommonRoutes.AlphaTestInstructionsRoute> {
                 GenericWebViewScreen(
                     coreNav = coreNav,
-                    title = "Alpha Test Instructions",
+                    title = stringResource(Res.string.nav_alpha_test_instructions),
                     url = "https://ndocs.repebble.com/alpha-tester-guide",
                 )
             }
@@ -178,21 +184,21 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             composable<CommonRoutes.RoadmapChangelogRoute> {
                 GenericWebViewScreen(
                     coreNav = coreNav,
-                    title = "What's new in the app",
+                    title = stringResource(Res.string.nav_whats_new_app),
                     url = "https://ndocs.repebble.com/changelog",
                 )
             }
             composable<CommonRoutes.PebbleOsChangelogRoute> {
                 GenericWebViewScreen(
                     coreNav = coreNav,
-                    title = "What’s new in PebbleOS",
+                    title = stringResource(Res.string.nav_whats_new_pebbleos),
                     url = "https://ndocs.repebble.com/pebbleos-changelog",
                 )
             }
             composable<CommonRoutes.TroubleshootingRoute> {
                 GenericWebViewScreen(
                     coreNav = coreNav,
-                    title = "Getting Started & Troubleshooting",
+                    title = stringResource(Res.string.nav_getting_started),
                     url = "https://pbl.zip/in-app-getting-started-and-troubleshooting",
                 )
             }

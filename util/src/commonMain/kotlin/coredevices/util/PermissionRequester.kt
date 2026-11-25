@@ -1,6 +1,43 @@
 package coredevices.util
 
 import PlatformUiContext
+import androidx.compose.runtime.Composable
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.permission_description_alarm_kit
+import coreapp.util.generated.resources.permission_description_background_location
+import coreapp.util.generated.resources.permission_description_battery_optimization
+import coreapp.util.generated.resources.permission_description_beeper
+import coreapp.util.generated.resources.permission_description_bluetooth
+import coreapp.util.generated.resources.permission_description_calendar
+import coreapp.util.generated.resources.permission_description_contacts
+import coreapp.util.generated.resources.permission_description_external_storage
+import coreapp.util.generated.resources.permission_description_location
+import coreapp.util.generated.resources.permission_description_post_notifications
+import coreapp.util.generated.resources.permission_description_read_call_log
+import coreapp.util.generated.resources.permission_description_read_notifications
+import coreapp.util.generated.resources.permission_description_read_phone_state
+import coreapp.util.generated.resources.permission_description_record_audio
+import coreapp.util.generated.resources.permission_description_reminders
+import coreapp.util.generated.resources.permission_description_set_alarms
+import coreapp.util.generated.resources.permission_description_speech_recognizer
+import coreapp.util.generated.resources.permission_name_alarm_kit
+import coreapp.util.generated.resources.permission_name_background_location
+import coreapp.util.generated.resources.permission_name_battery_optimization
+import coreapp.util.generated.resources.permission_name_beeper
+import coreapp.util.generated.resources.permission_name_bluetooth
+import coreapp.util.generated.resources.permission_name_calendar
+import coreapp.util.generated.resources.permission_name_contacts
+import coreapp.util.generated.resources.permission_name_external_storage
+import coreapp.util.generated.resources.permission_name_location
+import coreapp.util.generated.resources.permission_name_post_notifications
+import coreapp.util.generated.resources.permission_name_read_call_log
+import coreapp.util.generated.resources.permission_name_read_notifications
+import coreapp.util.generated.resources.permission_name_read_phone_state
+import coreapp.util.generated.resources.permission_name_record_audio
+import coreapp.util.generated.resources.permission_name_reminders
+import coreapp.util.generated.resources.permission_name_set_alarms
+import coreapp.util.generated.resources.permission_name_speech_recognizer
+import org.jetbrains.compose.resources.stringResource
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
@@ -21,44 +58,46 @@ enum class PermissionResult {
     Unknown,
 }
 
+@Composable
 fun Permission.name(): String = when (this) {
-    Permission.Location -> "Location"
-    Permission.BackgroundLocation -> "Background Location"
-    Permission.PostNotifications -> "Show Notifications"
-    Permission.Bluetooth -> "Bluetooth"
-    Permission.ReadCallLog -> "Missed Calls"
-    Permission.Calendar -> "Calendar"
-    Permission.Contacts -> "Contacts"
-    Permission.ReadPhoneState -> "Phone Calls"
-    Permission.ReadNotifications -> "Read Notifications"
-    Permission.RecordAudio -> "Record Audio"
-    Permission.SpeechRecognizer -> "Speech Recognizer"
-    Permission.ExternalStorage -> "External Storage"
-    Permission.SetAlarms -> "Set Alarms"
-    Permission.BatteryOptimization -> "Exempt from Battery Optimizations"
-    Permission.Beeper -> "Access Beeper"
-    Permission.Reminders -> "Access Reminders"
-    Permission.AlarmKit -> "Timers & Alarms"
+    Permission.Location -> stringResource(Res.string.permission_name_location)
+    Permission.BackgroundLocation -> stringResource(Res.string.permission_name_background_location)
+    Permission.PostNotifications -> stringResource(Res.string.permission_name_post_notifications)
+    Permission.Bluetooth -> stringResource(Res.string.permission_name_bluetooth)
+    Permission.ReadCallLog -> stringResource(Res.string.permission_name_read_call_log)
+    Permission.Calendar -> stringResource(Res.string.permission_name_calendar)
+    Permission.Contacts -> stringResource(Res.string.permission_name_contacts)
+    Permission.ReadPhoneState -> stringResource(Res.string.permission_name_read_phone_state)
+    Permission.ReadNotifications -> stringResource(Res.string.permission_name_read_notifications)
+    Permission.RecordAudio -> stringResource(Res.string.permission_name_record_audio)
+    Permission.SpeechRecognizer -> stringResource(Res.string.permission_name_speech_recognizer)
+    Permission.ExternalStorage -> stringResource(Res.string.permission_name_external_storage)
+    Permission.SetAlarms -> stringResource(Res.string.permission_name_set_alarms)
+    Permission.BatteryOptimization -> stringResource(Res.string.permission_name_battery_optimization)
+    Permission.Beeper -> stringResource(Res.string.permission_name_beeper)
+    Permission.Reminders -> stringResource(Res.string.permission_name_reminders)
+    Permission.AlarmKit -> stringResource(Res.string.permission_name_alarm_kit)
 }
 
+@Composable
 fun Permission.description(): String = when (this) {
-    Permission.Location -> "To power watchfaces using location for e.g. weather"
-    Permission.BackgroundLocation -> "To power watchfaces using location for e.g. weather, while the Pebble app is running in the background"
-    Permission.PostNotifications -> "Get a notification when there is a new software update for your Pebble and show connection status"
-    Permission.Bluetooth -> "Connect to your Pebble"
-    Permission.ReadCallLog -> "To access the call log - to show missed calls on the watch"
-    Permission.Calendar -> "To show calendar events on the watch, and respond to invitations"
-    Permission.Contacts -> "To show who is calling, and filter notifications by contact"
-    Permission.ReadPhoneState -> "To show phone calls on the watch"
-    Permission.ReadNotifications -> "To display notifications on the watch"
-    Permission.RecordAudio -> "To record manual local notes"
-    Permission.SpeechRecognizer -> "To transcribe recordings on this device"
-    Permission.ExternalStorage -> "To store recordings"
-    Permission.SetAlarms -> "To notify when a reminder is triggered"
-    Permission.BatteryOptimization -> "To handle recordings in the background"
-    Permission.Beeper -> "To send messages via Beeper"
-    Permission.Reminders -> "To create reminders"
-    Permission.AlarmKit -> "To set timers and alarms"
+    Permission.Location -> stringResource(Res.string.permission_description_location)
+    Permission.BackgroundLocation -> stringResource(Res.string.permission_description_background_location)
+    Permission.PostNotifications -> stringResource(Res.string.permission_description_post_notifications)
+    Permission.Bluetooth -> stringResource(Res.string.permission_description_bluetooth)
+    Permission.ReadCallLog -> stringResource(Res.string.permission_description_read_call_log)
+    Permission.Calendar -> stringResource(Res.string.permission_description_calendar)
+    Permission.Contacts -> stringResource(Res.string.permission_description_contacts)
+    Permission.ReadPhoneState -> stringResource(Res.string.permission_description_read_phone_state)
+    Permission.ReadNotifications -> stringResource(Res.string.permission_description_read_notifications)
+    Permission.RecordAudio -> stringResource(Res.string.permission_description_record_audio)
+    Permission.SpeechRecognizer -> stringResource(Res.string.permission_description_speech_recognizer)
+    Permission.ExternalStorage -> stringResource(Res.string.permission_description_external_storage)
+    Permission.SetAlarms -> stringResource(Res.string.permission_description_set_alarms)
+    Permission.BatteryOptimization -> stringResource(Res.string.permission_description_battery_optimization)
+    Permission.Beeper -> stringResource(Res.string.permission_description_beeper)
+    Permission.Reminders -> stringResource(Res.string.permission_description_reminders)
+    Permission.AlarmKit -> stringResource(Res.string.permission_description_alarm_kit)
 }
 
 abstract class PermissionRequester(

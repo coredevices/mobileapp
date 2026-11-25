@@ -9,7 +9,7 @@ import platform.UserNotifications.UNUserNotificationCenter
 import kotlin.uuid.Uuid
 import PlatformContext
 
-actual fun createNotification(
+actual suspend fun createNotification(
     platformContext: PlatformContext,
     title: String,
     message: String,
@@ -17,7 +17,7 @@ actual fun createNotification(
 ) {
     val notifCenter = UNUserNotificationCenter.currentNotificationCenter()
     val content = UNMutableNotificationContent().apply {
-        setTitle("Pebble Support message")
+        setTitle(title)
         setBody(message)
         setUserInfo(
             mapOf(

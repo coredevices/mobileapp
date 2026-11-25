@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.util
 
-expect class Bitmap {
+internal expect class Bitmap {
     val width: Int
     val height: Int
 

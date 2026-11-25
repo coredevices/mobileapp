@@ -6,9 +6,9 @@ package io.rebble.libpebblecommon.imaging
  * ceil([width] / 2) bytes. Produced by the platform image encoder and chunked onto the wire by
  * [ImagingService].
  */
-class EncodedImage(
-    val width: Int,
-    val height: Int,
-    val palette: UByteArray,
-    val pixels: UByteArray,
+public class EncodedImage internal constructor(
+    public val width: Int,
+    public val height: Int,
+    public val palette: UByteArray,
+    public val pixels: UByteArray,
 )

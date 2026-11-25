@@ -28,11 +28,11 @@ internal fun reverseOrd(varr: UInt): UInt = ((reverseOrd((varr and 0xffffu).toUS
 
 internal fun reverseOrd(varr: ULong): ULong = ((reverseOrd((varr and 0xffffffffu).toUInt()).toLong() shl 32) or (reverseOrd((varr shr 32).toUInt()).toLong() and 0xffffffff)).toULong()
 
-fun ByteArray.toNative(): NSData = memScoped {
+internal fun ByteArray.toNative(): NSData = memScoped {
     NSData.create(bytes = allocArrayOf(this@toNative), length = castToNativeSize(this@toNative.size))
 }
 
-fun KUtil.byteArrayFromNative(arr: NSData): ByteArray = ByteArray(arr.length.toInt()).apply {
+internal fun KUtil.byteArrayFromNative(arr: NSData): ByteArray = ByteArray(arr.length.toInt()).apply {
     if (this.isNotEmpty()) {
         usePinned {
             memcpy(it.addressOf(0), arr.bytes, arr.length)

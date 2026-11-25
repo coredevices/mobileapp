@@ -47,7 +47,7 @@ actual fun notifyPermissionRequest(appContext: AppContext, notification: Permiss
         .setContentIntent(open)
         .setOnlyAlertOnce(true)
         .addAction(answer(granted = false))
-        .addAction(answer(granted = true))
+    if (notification.canAllow) builder.addAction(answer(granted = true))
     context.getSystemService(NotificationManager::class.java).notify(notification.key, builder.build())
 }
 

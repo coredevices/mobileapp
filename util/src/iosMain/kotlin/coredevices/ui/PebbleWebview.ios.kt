@@ -26,6 +26,9 @@ import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.javaScriptEnabled
 import platform.darwin.NSObject
 import theme.currentColorScheme
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.misc_webview_stopped_responding
+import org.jetbrains.compose.resources.stringResource
 
 private val logger = Logger.withTag("PebbleWebview")
 
@@ -40,6 +43,7 @@ actual fun PebbleWebview(
 ) {
     val currentInterceptor by rememberUpdatedState(interceptor)
     val currentOnPageError by rememberUpdatedState(onPageError)
+    val stoppedRespondingText by rememberUpdatedState(stringResource(Res.string.misc_webview_stopped_responding))
 
     val navigationDelegate = remember {
         object : NSObject(), WKNavigationDelegateProtocol {
@@ -117,7 +121,7 @@ actual fun PebbleWebview(
 
             override fun webViewWebContentProcessDidTerminate(webView: WKWebView) {
                 logger.w { "WebView content process terminated" }
-                currentOnPageError?.invoke("The page stopped responding")
+                currentOnPageError?.invoke(stoppedRespondingText)
             }
 
             private fun reportError(error: NSError) {

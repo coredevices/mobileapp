@@ -23,7 +23,7 @@ private val logger = Logger.withTag("HealthDataParser")
  * @param itemSize Size of each data item in bytes
  * @return List of parsed health data entities ready for database insertion
  */
-fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity> {
+internal fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity> {
     if (payload.isEmpty() || itemSize.toInt() == 0) {
         logger.w { "Cannot parse steps data: empty payload or zero item size" }
         return emptyList()
@@ -159,7 +159,7 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
  * @param itemSize Size of each data item in bytes
  * @return List of parsed overlay data entities ready for database insertion
  */
-fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEntity> {
+internal fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEntity> {
     if (payload.isEmpty() || itemSize.toInt() == 0) {
         logger.w { "Cannot parse overlay data: empty payload or zero item size" }
         return emptyList()

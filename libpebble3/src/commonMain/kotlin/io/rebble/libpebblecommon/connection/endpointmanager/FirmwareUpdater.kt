@@ -37,7 +37,7 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlin.time.Instant
 
-sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
+internal sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
     class SafetyCheckFailed(message: String) : FirmwareUpdateException(message)
     class TransferFailed(message: String, cause: Throwable?, val bytesTransferred: UInt) :
@@ -45,7 +45,7 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
 }
 
 /** What started a firmware update. */
-enum class FirmwareUpdateTrigger {
+public enum class FirmwareUpdateTrigger {
     AutoUpdate,
     Ui,
     Sideload,
@@ -53,51 +53,51 @@ enum class FirmwareUpdateTrigger {
 }
 
 /** One firmware install: the update, its downloaded or sideloaded bundle, and what started it. */
-data class FirmwareInstall(
+internal data class FirmwareInstall(
     val update: FirmwareUpdateCheckResult.FoundUpdate,
     val path: Path,
     val trigger: FirmwareUpdateTrigger,
 )
 
-enum class FirmwareUpdateErrorStarting {
+public enum class FirmwareUpdateErrorStarting {
     ErrorDownloading,
     ErrorParsingPbz,
 }
 
-interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
-    val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
-    fun init(
+public interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
+    public val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
+    public fun init(
         watchPlatform: WatchHardwarePlatform,
         runningSlot: Int?,
         supportsResume: Boolean,
         runningFwVersion: FirmwareVersion,
     )
 
-    sealed class FirmwareUpdateStatus {
+    public sealed class FirmwareUpdateStatus {
         /** What started the update; null on an [NotInProgress.Idle] with no update behind it. */
-        abstract val trigger: FirmwareUpdateTrigger?
+        public abstract val trigger: FirmwareUpdateTrigger?
 
-        sealed class NotInProgress : FirmwareUpdateStatus() {
-            data class Idle(
+        public sealed class NotInProgress : FirmwareUpdateStatus() {
+            public data class Idle(
                 val lastFailure: Exception? = null,
                 override val trigger: FirmwareUpdateTrigger? = null,
             ) : NotInProgress()
-            data class ErrorStarting(
+            public data class ErrorStarting internal constructor(
                 val error: FirmwareUpdateErrorStarting,
                 override val trigger: FirmwareUpdateTrigger,
             ) : NotInProgress()
         }
 
-        sealed class Active : FirmwareUpdateStatus() {
-            abstract val update: FirmwareUpdateCheckResult.FoundUpdate
+        public sealed class Active : FirmwareUpdateStatus() {
+            public abstract val update: FirmwareUpdateCheckResult.FoundUpdate
             abstract override val trigger: FirmwareUpdateTrigger
         }
 
-        data class WaitingToStart(
+        public data class WaitingToStart internal constructor(
             override val update: FirmwareUpdateCheckResult.FoundUpdate,
             override val trigger: FirmwareUpdateTrigger,
         ) : Active()
-        data class InProgress(
+        public data class InProgress internal constructor(
             override val update: FirmwareUpdateCheckResult.FoundUpdate,
             val progress: StateFlow<Float>,
             override val trigger: FirmwareUpdateTrigger,
@@ -107,7 +107,7 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
          * Won't be in this state for long (we'll be disconnected very soon, at which point no-one
          * is looking at this state). [viaPrf]: rebooting into recovery, which installs the update.
          */
-        data class WaitingForReboot(
+        public data class WaitingForReboot internal constructor(
             override val update: FirmwareUpdateCheckResult.FoundUpdate,
             override val trigger: FirmwareUpdateTrigger,
             val viaPrf: Boolean = false,
@@ -126,7 +126,7 @@ private data class FwupProperties(
  * A firmware install that continues on the watch's next connection. In-memory only: an app restart
  * loses it, but a manual retry still resumes (the watch owns the transfer state).
  */
-class PendingFirmwareInstalls {
+internal class PendingFirmwareInstalls {
     enum class Reason {
         /** A disconnection interrupted it: auto-resumed. */
         Interrupted,
@@ -145,10 +145,10 @@ class PendingFirmwareInstalls {
 
     private val pending = MutableStateFlow<Map<PebbleIdentifier, Pending>>(emptyMap())
 
-    fun record(identifier: PebbleIdentifier, install: FirmwareInstall, reason: Reason = Reason.Interrupted) =
+    fun record(identifier: PebbleIdentifier, install: FirmwareInstall, reason: Reason = Reason.Interrupted): Unit =
         pending.update { it + (identifier to Pending(install, reason)) }
 
-    fun clear(identifier: PebbleIdentifier) = pending.update { it - identifier }
+    fun clear(identifier: PebbleIdentifier): Unit = pending.update { it - identifier }
 
     fun get(identifier: PebbleIdentifier): Pending? = pending.value[identifier]
 }
@@ -160,7 +160,7 @@ private data class ResumeOffsets(
     val total: UInt get() = firmware + resources
 }
 
-class RealFirmwareUpdater(
+internal class RealFirmwareUpdater(
     private val identifier: PebbleIdentifier,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
@@ -729,7 +729,7 @@ internal fun validatedResumeOffset(
 private fun FirmwareVersion.sameVersionNumberAs(other: FirmwareVersion): Boolean =
     major == other.major && minor == other.minor && patch == other.patch
 
-fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
+internal fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
     val versionTag = firmware.versionTag
     if (versionTag == null) {
         Logger.w { "Firmware version tag is null" }

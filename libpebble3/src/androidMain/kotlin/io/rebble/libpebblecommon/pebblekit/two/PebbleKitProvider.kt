@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-class PebbleKitProvider : BasePebbleKitProvider(), LibPebbleKoinComponent {
+internal class PebbleKitProvider : BasePebbleKitProvider(), LibPebbleKoinComponent {
    private lateinit var watchManager: Watches
    private lateinit var locker: LockerApi
    override lateinit var coroutineScope: LibPebbleCoroutineScope

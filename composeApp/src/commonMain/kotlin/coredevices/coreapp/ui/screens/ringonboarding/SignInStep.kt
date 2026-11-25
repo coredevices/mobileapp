@@ -29,6 +29,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.ui.SignInButtons
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.ring_onboarding_sign_in_body
+import coreapp.composeapp.generated.resources.ring_onboarding_sign_in_title
+import coreapp.composeapp.generated.resources.ring_onboarding_signed_in_as
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.continue_action
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -69,7 +76,7 @@ internal fun SignInStep(
             }
             Spacer(Modifier.height(40.dp))
             Text(
-                text = "Sign in to continue",
+                text = stringResource(Res.string.ring_onboarding_sign_in_title),
                 fontSize = 32.sp,
                 lineHeight = 38.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -78,8 +85,7 @@ internal fun SignInStep(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Index 01 needs an account for backup and agent processing. " +
-                        "Sign in to finish setting up your ring.",
+                text = stringResource(Res.string.ring_onboarding_sign_in_body),
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
                 color = palette.onSurfaceVariant,
@@ -99,7 +105,7 @@ internal fun SignInStep(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Signed in as $userEmail",
+                        text = stringResource(Res.string.ring_onboarding_signed_in_as, userEmail.orEmpty()),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = palette.onSurface,
@@ -122,7 +128,7 @@ internal fun SignInStep(
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
         ) {
-            PrimaryFilledButton(text = "Continue", onClick = onContinue, enabled = signedIn)
+            PrimaryFilledButton(text = stringResource(UtilRes.string.continue_action), onClick = onContinue, enabled = signedIn)
         }
     }
 }

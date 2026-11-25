@@ -137,7 +137,7 @@ private fun createTrack(metadata: MediaMetadata): MusicTrack {
     )
 }
 
-class AndroidSystemMusicControl(
+internal class AndroidSystemMusicControl(
     appContext: AppContext,
     libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val clock: Clock,
@@ -374,9 +374,9 @@ class AndroidSystemMusicControl(
         }
     }
 
-    override fun nextTrack() = skipOrSeek(forward = true)
+    override fun nextTrack(): Unit = skipOrSeek(forward = true)
 
-    override fun previousTrack() = skipOrSeek(forward = false)
+    override fun previousTrack(): Unit = skipOrSeek(forward = false)
 
     private fun skipOrSeek(forward: Boolean) {
         val session = targetSession.value ?: return

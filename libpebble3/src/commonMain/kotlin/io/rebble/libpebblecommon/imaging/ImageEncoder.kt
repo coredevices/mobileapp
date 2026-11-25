@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.imaging
 
+
 /**
  * Encodes an ARGB image as the watch's 4-bpp palettized [EncodedImage]: choose a 16-colour palette
  * by median cut over the watch's 64 screen colors, Floyd–Steinberg dither to that palette, and
@@ -12,7 +13,7 @@ package io.rebble.libpebblecommon.imaging
  * ScreenColors.kt), not the nominal 0/85/170/255 the GColor8 bits suggest. The bytes on the wire
  * are still GColor8 codes.
  */
-object ImageEncoder {
+public object ImageEncoder {
     private const val MAX_COLORS = 16
 
     /** At or above this, a source pixel keeps its colour; below it, it becomes transparent. */
@@ -29,7 +30,7 @@ object ImageEncoder {
     private class Entry(val code: Int, val count: Int)
 
     /** Encodes an ARGB8888 pixel array (row-major, [width] * [height]). */
-    fun encode(argb: IntArray, width: Int, height: Int): EncodedImage {
+    public fun encode(argb: IntArray, width: Int, height: Int): EncodedImage {
         val hasTransparency = argb.any { alphaOf(it) < OPAQUE_ALPHA }
         val colors = medianCutPalette(argb, if (hasTransparency) MAX_COLORS - 1 else MAX_COLORS)
         val palR = IntArray(colors.size) { SCREEN_R[colors[it]] }

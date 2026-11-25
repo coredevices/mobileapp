@@ -2,6 +2,9 @@
 
 package coredevices.ring.ui.viewmodel
 
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.index_new_list_name
+import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -53,7 +56,7 @@ class AllListsViewModel(
      *  doc id so the screen can navigate into rename mode. */
     fun newList(onCreated: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val newId = listRepo.createList("New list")
+            val newId = listRepo.createList(getString(Res.string.index_new_list_name))
             // Hop to Main: onCreated navigates, and NavController
             // requires the main thread.
             withContext(Dispatchers.Main) { onCreated(newId) }

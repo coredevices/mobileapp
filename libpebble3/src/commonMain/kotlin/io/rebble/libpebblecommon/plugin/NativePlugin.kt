@@ -8,15 +8,16 @@ import kotlinx.serialization.json.JsonObject
  * A built-in plugin the app ships (a phone-side data source like Music or Weather), shown in the
  * Plugins tab's "Built-in Plugins" section. It's the root of its own data, so never prompts.
  */
-interface NativePlugin : Plugin {
-    fun observe(
+public interface NativePlugin : Plugin {
+    public fun observe(
         category: String,
         item: String,
         properties: List<String>? = null,
         iconPixelSize: IconPixelSize? = null,
+        limit: Int? = null,
     ): Flow<SourceEnvelope>
 
-    suspend fun invoke(action: String, args: JsonObject): ActionResult =
+    public suspend fun invoke(action: String, args: JsonObject): ActionResult =
         ActionResult.error(PluginErrors.PLUGIN_UNAVAILABLE, "$name exposes no actions")
 
     override fun observe(
@@ -24,8 +25,9 @@ interface NativePlugin : Plugin {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
-    ): Flow<SourceUpdate> = observe(category, item, properties, iconPixelSize).map { SourceUpdate.Data(it) }
+    ): Flow<SourceUpdate> = observe(category, item, properties, iconPixelSize, limit).map { SourceUpdate.Data(it) }
 
     override suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult =
         invoke(action, args)

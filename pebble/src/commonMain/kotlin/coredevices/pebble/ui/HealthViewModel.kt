@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coredevices.util.formatHourOfDay
+import coredevices.util.formatTimeOfDay
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
@@ -208,7 +210,7 @@ class HealthViewModel(
             totalDistanceM = (aggregates?.distanceCm ?: 0) / 100,
             totalActiveMinutes = aggregates?.activeMinutes ?: 0,
             barValues = hourlySteps.toList(),
-            barLabels = (0..23).map { "$it" },
+            barLabels = (0..23).map { formatHourOfDay(it) },
             typicalSteps = typicalSteps,
             typicalTotal = if (typicalSteps.isNotEmpty()) typicalSteps.sum() else 0,
             activitySessions = sessionUis,
@@ -216,8 +218,8 @@ class HealthViewModel(
         )
 
         val segments = buildDailySleepSegments(dayStart, sleepSession)
-        val bedtimeStr = sleepSession?.let { formatTimeOfDay(it.firstStart, tz) } ?: ""
-        val wakeStr = sleepSession?.let { formatTimeOfDay(it.lastEnd, tz) } ?: ""
+        val bedtimeStr = sleepSession?.let { formatEpochTimeOfDay(it.firstStart, tz) } ?: ""
+        val wakeStr = sleepSession?.let { formatEpochTimeOfDay(it.lastEnd, tz) } ?: ""
 
         _sleep.value = SleepUiState(
             segments = segments,
@@ -450,12 +452,9 @@ internal fun buildDailySleepSegments(dayStart: Long, dailySleep: DailySleep?): L
         intervals.filter { it.isDeep }.mapNotNull { toSegment(it.start, it.end, true) }
 }
 
-private fun formatTimeOfDay(epochSec: Long, tz: TimeZone): String {
+private fun formatEpochTimeOfDay(epochSec: Long, tz: TimeZone): String {
     val dt = Instant.fromEpochSeconds(epochSec).toLocalDateTime(tz)
-    val h = dt.hour; val m = dt.minute
-    val ampm = if (h < 12) "AM" else "PM"
-    val h12 = if (h == 0) 12 else if (h > 12) h - 12 else h
-    return "$h12:${m.toString().padStart(2, '0')} $ampm"
+    return formatTimeOfDay(dt.hour, dt.minute)
 }
 
 internal fun averageTimeOfDay(secondsOfDay: List<Long>): Long {
@@ -474,10 +473,5 @@ internal fun averageTimeOfDay(secondsOfDay: List<Long>): Long {
     return ((normalized.average().toLong()) % fullDay + fullDay) % fullDay
 }
 
-private fun formatTimeFromSeconds(secOfDay: Long): String {
-    val h = ((secOfDay / 3600) % 24).toInt()
-    val m = ((secOfDay % 3600) / 60).toInt()
-    val ampm = if (h < 12) "AM" else "PM"
-    val h12 = if (h == 0) 12 else if (h > 12) h - 12 else h
-    return "$h12:${m.toString().padStart(2, '0')} $ampm"
-}
+private fun formatTimeFromSeconds(secOfDay: Long): String =
+    formatTimeOfDay(((secOfDay / 3600) % 24).toInt(), ((secOfDay % 3600) / 60).toInt())

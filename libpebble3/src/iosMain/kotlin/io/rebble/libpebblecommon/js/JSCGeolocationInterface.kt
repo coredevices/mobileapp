@@ -6,18 +6,18 @@ import io.rebble.libpebblecommon.js.RegisterableJsInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlin.uuid.Uuid
 
-class JSCGeolocationInterface(
+internal class JSCGeolocationInterface(
     scope: CoroutineScope,
     jsRunner: JsRunner
 ): GeolocationInterface(scope, jsRunner::eval, Uuid.parse(jsRunner.appInfo.uuid)), RegisterableJsInterface {
-    override val interf = mapOf(
+    override val interf: Map<String, *> = mapOf(
         "getCurrentPosition" to this::getCurrentPosition,
         "watchPosition" to this::watchPosition,
         "clearWatch" to this::clearWatch,
         "getRequestCallbackID" to this::getRequestCallbackID,
         "getWatchCallbackID" to this::getWatchCallbackID
     )
-    override val name = "_PebbleGeo"
+    override val name: String = "_PebbleGeo"
 
     override fun dispatch(method: String, args: List<Any?>): Int? = dispatchCall(method, args)
 

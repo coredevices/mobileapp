@@ -7,6 +7,7 @@ import com.cactus.cactusSetBackend
 import com.cactus.isCactusSupported
 import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.ToolCallingAgent
+import coredevices.indexai.agent.ToolDeclarationRecord
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
 import coredevices.indexai.data.entity.MessageRole
@@ -14,11 +15,14 @@ import coredevices.indexai.data.entity.ToolCall
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
+import coredevices.ring.agent.toolschema.localModelSchemaCheckpoint
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
+import coredevices.toolschema.LocalModelTool
 import coredevices.util.CoreConfigFlow
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
-import io.rebble.libpebblecommon.connection.Plugins
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -37,7 +41,6 @@ import kotlin.time.Clock
 class IndexAgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
-    private val plugins: Plugins,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
 ) : KoinComponent, ToolCallingAgent(conversation) {
     override val label = "Cactus"
@@ -46,15 +49,16 @@ class IndexAgentCactus(
     companion object {
         /** Prefix of `language_model_used` on assistant messages this agent produced. */
         const val LANGUAGE_MODEL_PREFIX = "cactus-"
+
+        // Shared across instances: agents are created per recording and the native model is never freed.
+        private val agentMutex = Mutex()
+        private var modelHandle: Long = 0L
     }
 
     override val logger = Logger.withTag("AgentCactus")
 
     /** Cactus tools JSON plus the short-name -> integration-name map for mapping calls back. */
     data class CactusTools(val toolsJson: String, val parentMap: Map<String, String>)
-
-    private val agentMutex = Mutex()
-    private var modelHandle: Long = 0L
 
     override suspend fun prepare() {
         agentMutex.withLock {
@@ -71,52 +75,16 @@ class IndexAgentCactus(
         }
     }
 
-    // Use SHORT tool names (e.g. "create_note") not composite names
-    // (e.g. "builtin_clock__set_alarm") because Needle's constrained decoding
-    // grammar is built from these names and the model was trained on short names.
-    // Strip any "integration__tool" prefix defensively so the model only ever
-    // runs inference on the secondary part, regardless of how the tool is named.
     private fun prepareTools(tools: List<McpSessionTool>): CactusTools {
-        val parentMap = mutableMapOf<String, String>()
-        val unsupported = LOCAL_MODEL_UNSUPPORTED_SERVLETS + plugins.getAllPlugins().map { it.name }
-        val tools = tools.filterNot { it.integrationName in unsupported }
-        val toolsJson = buildJsonArray {
-            tools.forEach { (parentName, tool) ->
-                val definition = tool.localDefinition
-                val required = definition.inputSchema.required ?: emptyList()
-                val shortName = definition.name.substringAfter("__")
-                parentMap[shortName] = parentName
-                add(buildJsonObject {
-                    put("type", "function")
-                    put("function", buildJsonObject {
-                        put("name", shortName)
-                        put("description", definition.description ?: "")
-                        put("parameters", buildJsonObject {
-                            put("type", "object")
-                            put("properties", buildJsonObject {
-                                definition.inputSchema.properties?.forEach { (propName, param) ->
-                                    put(propName, buildJsonObject {
-                                        put("type", param.jsonObject["type"]?.jsonPrimitive?.content ?: "string")
-                                        param.jsonObject["description"]?.jsonPrimitive?.content?.let {
-                                            put("description", it)
-                                        }
-                                    })
-                                }
-                            })
-                            put("required", buildJsonArray {
-                                required.forEach { add(JsonPrimitive(it)) }
-                            })
-                        })
-                    })
-                })
-            }
-        }.toString()
-
-        tools.forEach { (parentName, tool) ->
-            logger.i { "CactusAgent tool available: $parentName.${tool.definition.name}" }
+        val prepared = cactusTools(localModelSchemaCheckpoint.tools, tools)
+        prepared.parentMap.forEach { (toolName, parentName) ->
+            logger.i { "CactusAgent tool available: $parentName.$toolName" }
         }
-        return CactusTools(toolsJson, parentMap)
+        return prepared
     }
+
+    override fun declaredTools(tools: List<McpSessionTool>): List<ToolDeclarationRecord> =
+        localModelSchemaCheckpoint.tools.offeredBy(tools).map { ToolDeclarationRecord(it.servlet, it.toToolDefinition()) }
 
     override suspend fun runInference(
         input: String,
@@ -205,3 +173,61 @@ class IndexAgentCactus(
         }
     }
 }
+
+/**
+ * The Cactus tool list: the [checkpoint] tools the session currently offers, with their frozen
+ * schemas. Needle's constrained decoding grammar is built from these names.
+ */
+internal fun cactusTools(
+    checkpoint: List<LocalModelTool>,
+    sessionTools: List<McpSessionTool>,
+): IndexAgentCactus.CactusTools {
+    val tools = checkpoint.offeredBy(sessionTools)
+    val toolsJson = buildJsonArray {
+        tools.forEach { tool ->
+            add(buildJsonObject {
+                put("type", "function")
+                put("function", buildJsonObject {
+                    put("name", tool.name)
+                    put("description", tool.description)
+                    put("parameters", buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            tool.parameters.forEach { param ->
+                                put(param.name, buildJsonObject {
+                                    put("type", param.type)
+                                    param.description?.let { put("description", it) }
+                                })
+                            }
+                        })
+                        put("required", buildJsonArray {
+                            tool.parameters.filter { it.required }.forEach { add(JsonPrimitive(it.name)) }
+                        })
+                    })
+                })
+            })
+        }
+    }.toString()
+    return IndexAgentCactus.CactusTools(toolsJson, tools.associate { it.name to it.servlet })
+}
+
+internal fun List<LocalModelTool>.offeredBy(sessionTools: List<McpSessionTool>): List<LocalModelTool> {
+    val offered = sessionTools.map { it.integrationName to it.tool.definition.name }.toSet()
+    return filter { (it.servlet to it.name) in offered }
+}
+
+internal fun LocalModelTool.toToolDefinition(): Tool = Tool(
+    name = name,
+    description = description,
+    inputSchema = ToolSchema(
+        properties = buildJsonObject {
+            parameters.forEach { param ->
+                put(param.name, buildJsonObject {
+                    put("type", param.type)
+                    param.description?.let { put("description", it) }
+                })
+            }
+        },
+        required = parameters.filter { it.required }.map { it.name },
+    ),
+)

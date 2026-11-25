@@ -90,6 +90,20 @@ import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_all_done
+import coreapp.ring.generated.resources.feed_due_in_days
+import coreapp.ring.generated.resources.feed_due_in_hours
+import coreapp.ring.generated.resources.feed_due_in_minutes
+import coreapp.ring.generated.resources.feed_index_feed_title
+import coreapp.ring.generated.resources.feed_match_count
+import coreapp.ring.generated.resources.feed_no_matches_for
+import coreapp.ring.generated.resources.feed_overdue
+import coreapp.ring.generated.resources.feed_reminders
+import coreapp.ring.generated.resources.feed_you_asked
+import coreapp.ring.generated.resources.notes
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Index home: peek strip of recent recordings, Todos / Notes / Q&A
@@ -174,7 +188,7 @@ fun IndexFeedScreen(
             if (state.searching) {
                 item("matchcount") {
                     Text(
-                        "${state.matches} ${if (state.matches == 1) "match" else "matches"}",
+                        pluralStringResource(Res.plurals.feed_match_count, state.matches, state.matches),
                         color = colors.onSurfaceVariant,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 8.dp),
@@ -185,7 +199,7 @@ fun IndexFeedScreen(
             if (state.recordings.isNotEmpty() || state.pendingTransfers.isNotEmpty()) {
                 item("peek-header") {
                     PeekSectionHeader(
-                        title = "Index feed",
+                        title = stringResource(Res.string.feed_index_feed_title),
                         count = state.recordings.size,
                         onSeeAll = { coreNav.navigateTo(RingRoutes.FullFeed) },
                     )
@@ -203,7 +217,7 @@ fun IndexFeedScreen(
             if (state.todosPreview.isNotEmpty() || (!state.searching && state.totalTodos == 0)) {
                 item("todos-header") {
                     FeedSectionHeader(
-                        left = "Reminders",
+                        left = stringResource(Res.string.feed_reminders),
                         right = state.totalTodos.toString(),
                         onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(LIST_TODOS_ID)) },
                         topPad = 14.dp,
@@ -212,7 +226,7 @@ fun IndexFeedScreen(
                 if (state.todosPreview.isEmpty() && !state.searching) {
                     item("todos-empty") {
                         Text(
-                            "You're all done!",
+                            stringResource(Res.string.feed_all_done),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                             modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 4.dp),
@@ -229,7 +243,7 @@ fun IndexFeedScreen(
             if (state.notesLists.isNotEmpty()) {
                 item("notes-header") {
                     FeedSectionHeader(
-                        left = "Notes",
+                        left = stringResource(Res.string.notes),
                         right = state.totalNotesLists.toString(),
                         onClick = { coreNav.navigateTo(RingRoutes.AllLists) },
                         topPad = 12.dp,
@@ -252,7 +266,7 @@ fun IndexFeedScreen(
             if (state.answersPreview.isNotEmpty()) {
                 item("answers-header") {
                     FeedSectionHeader(
-                        left = "You asked",
+                        left = stringResource(Res.string.feed_you_asked),
                         right = state.totalAnswers.toString(),
                         onClick = { coreNav.navigateTo(RingRoutes.AllAnswers) },
                         topPad = 26.dp,
@@ -273,7 +287,7 @@ fun IndexFeedScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "No matches for \"$query\"",
+                            stringResource(Res.string.feed_no_matches_for, query),
                             color = colors.onSurfaceVariant,
                             fontSize = 14.sp,
                         )
@@ -294,12 +308,13 @@ fun IndexFeedScreen(
     }
 }
 
+@Composable
 internal fun formatDue(at: Instant): String {
     val diffMs = at.toEpochMilliseconds() - Clock.System.now().toEpochMilliseconds()
-    if (diffMs < 0) return "Overdue"
+    if (diffMs < 0) return stringResource(Res.string.feed_overdue)
     val m = (diffMs / 60_000L)
-    if (m < 60) return "in ${m}m"
+    if (m < 60) return stringResource(Res.string.feed_due_in_minutes, m)
     val h = m / 60
-    if (h < 24) return "in ${h}h"
-    return "in ${h / 24}d"
+    if (h < 24) return stringResource(Res.string.feed_due_in_hours, h)
+    return stringResource(Res.string.feed_due_in_days, h / 24)
 }

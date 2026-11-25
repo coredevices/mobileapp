@@ -7,17 +7,20 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.ContactsContract.Contacts
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import org.koin.core.component.inject
 import kotlin.random.Random
 import kotlin.random.nextUInt
 
-class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
+internal class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     companion object {
         private val logger = Logger.withTag("LibPebbleInCallService")
 
@@ -47,16 +50,20 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     }
 
     private val libPebble: LibPebble by inject()
+    private val notificationConfig: NotificationConfigFlow by inject()
+    @Volatile
+    private var speakerOnActiveCall: Call? = null
 
     override fun onCreate() {
         super.onCreate()
         logger.d { "onCreate()" }
+        if (!LibPebble3.isCreated) return
         libPebble.currentCall.value = null
     }
 
     override fun onDestroy() {
         logger.d { "onDestroy()" }
-        libPebble.currentCall.value = null
+        if (LibPebble3.isCreated) libPebble.currentCall.value = null
         super.onDestroy()
     }
 
@@ -71,12 +78,17 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
         override fun onStateChanged(call: Call?, state: Int) {
             call ?: return
             logger.d { "Call state changed: ${call.state} (arg state: $state)" }
+            if (state == Call.STATE_ACTIVE && call == speakerOnActiveCall) {
+                speakerOnActiveCall = null
+                routeToSpeakerIfNoHeadset()
+            }
             libPebble.currentCall.value = createLibPebbleCall(call, cookie)
         }
     }
 
     override fun onCallAdded(call: Call?) {
         call ?: return
+        if (!LibPebble3.isCreated) return
         if (calls.size > 1) {
             logger.w { "Multiple calls detected" }
         }
@@ -92,7 +104,24 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onCallRemoved(call: Call?) {
         call ?: return
+        if (call == speakerOnActiveCall) speakerOnActiveCall = null
+        if (!LibPebble3.isCreated) return
         libPebble.currentCall.value = null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun routeToSpeakerIfNoHeadset() {
+        val audioState = callAudioState ?: run {
+            logger.w { "Not routing to speaker: no call audio state" }
+            return
+        }
+        val headsetRoutes = CallAudioState.ROUTE_BLUETOOTH or CallAudioState.ROUTE_WIRED_HEADSET
+        if (audioState.supportedRouteMask and headsetRoutes != 0) {
+            logger.d { "Not routing to speaker: headset available ($audioState)" }
+            return
+        }
+        logger.d { "Routing answered call to speaker" }
+        setAudioRoute(CallAudioState.ROUTE_SPEAKER)
     }
 
     private fun Call.resolveContactName(): String? {
@@ -121,7 +150,10 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
                 contactName = call.resolveContactName(),
                 contactNumber = call.resolveContactNumber(),
                 onCallEnd = { call.disconnect() },
-                onCallAnswer = { call.answer(VideoProfile.STATE_AUDIO_ONLY) },
+                onCallAnswer = {
+                    if (notificationConfig.value.answerCallsFromWatchOnSpeaker) speakerOnActiveCall = call
+                    call.answer(VideoProfile.STATE_AUDIO_ONLY)
+                },
                 cookie = cookie,
             )
             Call.STATE_DIALING, Call.STATE_CONNECTING -> io.rebble.libpebblecommon.calls.Call.DialingCall(

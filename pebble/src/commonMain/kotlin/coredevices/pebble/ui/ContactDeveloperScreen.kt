@@ -45,8 +45,29 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
-import coreapp.util.generated.resources.Res
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.contact_dev_add_files
+import coreapp.pebble.generated.resources.contact_dev_add_photos
+import coreapp.pebble.generated.resources.contact_dev_attach_hint
+import coreapp.pebble.generated.resources.contact_dev_attachment_size
+import coreapp.pebble.generated.resources.contact_dev_attachment_too_large
+import coreapp.pebble.generated.resources.contact_dev_characters_remaining
+import coreapp.pebble.generated.resources.contact_dev_email_not_verified
+import coreapp.pebble.generated.resources.contact_dev_enter_message
+import coreapp.pebble.generated.resources.contact_dev_intro
+import coreapp.pebble.generated.resources.contact_dev_message
+import coreapp.pebble.generated.resources.contact_dev_message_too_long
+import coreapp.pebble.generated.resources.contact_dev_network_error
+import coreapp.pebble.generated.resources.contact_dev_read_failed
+import coreapp.pebble.generated.resources.contact_dev_send
+import coreapp.pebble.generated.resources.contact_dev_sent
+import coreapp.pebble.generated.resources.contact_dev_sign_in_again
+import coreapp.pebble.generated.resources.contact_dev_sign_in_required
+import coreapp.pebble.generated.resources.contact_dev_title
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.close
+import coreapp.util.generated.resources.remove
+import coreapp.util.generated.resources.sign_in
 import coredevices.pebble.services.ContactAttachment
 import coredevices.pebble.services.ContactDeveloperApi
 import coredevices.pebble.services.ContactResult
@@ -58,10 +79,12 @@ import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.io.readByteArray
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
+import coreapp.util.generated.resources.Res as UtilRes
 
 private const val MAX_BODY = 5000
 private const val MAX_ATTACHMENTS = 3
@@ -101,11 +124,11 @@ fun ContactDeveloperScreen(
                 doc.source.use { it.readByteArray() }
             } catch (e: Exception) {
                 logger.w(e) { "Failed to read picked attachment: ${doc.fileName}" }
-                error = "Could not read \"${doc.fileName}\"."
+                scope.launch { error = getString(Res.string.contact_dev_read_failed, doc.fileName) }
                 return
             }
             if (bytes.size > MAX_ATTACHMENT_BYTES) {
-                error = "Attachment \"${doc.fileName}\" exceeds 2 MB."
+                scope.launch { error = getString(Res.string.contact_dev_attachment_too_large, doc.fileName) }
                 return
             }
             prepared += ContactAttachment(
@@ -128,11 +151,11 @@ fun ContactDeveloperScreen(
     fun submit() {
         val trimmed = message.trim()
         if (trimmed.isEmpty()) {
-            error = "Please enter a message."
+            scope.launch { error = getString(Res.string.contact_dev_enter_message) }
             return
         }
         if (trimmed.length > MAX_BODY) {
-            error = "Message is too long (${trimmed.length}/$MAX_BODY)."
+            scope.launch { error = getString(Res.string.contact_dev_message_too_long, trimmed.length, MAX_BODY) }
             return
         }
         sending = true
@@ -146,13 +169,13 @@ fun ContactDeveloperScreen(
             }
             when (result) {
                 ContactResult.Success -> sent = true
-                ContactResult.NotSignedIn -> error = "Please sign in again."
+                ContactResult.NotSignedIn -> error = getString(Res.string.contact_dev_sign_in_again)
                 ContactResult.EmailNotVerified ->
-                    error = "Your email address must be verified before contacting developers."
+                    error = getString(Res.string.contact_dev_email_not_verified)
                 is ContactResult.NotContactable -> error = result.message
                 is ContactResult.RateLimited -> error = result.message
                 is ContactResult.BadRequest -> error = result.message
-                ContactResult.NetworkError -> error = "Network error. Please try again."
+                ContactResult.NetworkError -> error = getString(Res.string.contact_dev_network_error)
                 is ContactResult.ServerError -> error = result.message
             }
             sending = false
@@ -166,7 +189,7 @@ fun ContactDeveloperScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Contact the developer") },
+                title = { Text(stringResource(Res.string.contact_dev_title)) },
                 navigationIcon = {
                     IconButton(
                         onClick = coreNav::goBack,
@@ -174,7 +197,7 @@ fun ContactDeveloperScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(Res.string.back),
+                            contentDescription = stringResource(UtilRes.string.back),
                         )
                     }
                 },
@@ -193,7 +216,7 @@ fun ContactDeveloperScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Text(
-                    "Send a message about $appTitle. The developer will receive it via email and can reply to you. Your email address is not shared with them.",
+                    stringResource(Res.string.contact_dev_intro, appTitle),
                     fontSize = 13.sp,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -201,7 +224,7 @@ fun ContactDeveloperScreen(
                 when {
                     sent -> {
                         Text(
-                            "Message sent. The developer will receive an email and may reply to you directly.",
+                            stringResource(Res.string.contact_dev_sent),
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                         )
@@ -210,13 +233,13 @@ fun ContactDeveloperScreen(
                             onClick = coreNav::goBack,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Close")
+                            Text(stringResource(UtilRes.string.close))
                         }
                     }
 
                     !signedIn -> {
                         Text(
-                            "You need to sign in to contact the developer.",
+                            stringResource(Res.string.contact_dev_sign_in_required),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -225,7 +248,7 @@ fun ContactDeveloperScreen(
                             onClick = { showSignInDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Sign in")
+                            Text(stringResource(UtilRes.string.sign_in))
                         }
                     }
 
@@ -236,21 +259,21 @@ fun ContactDeveloperScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp),
-                            label = { Text("Message") },
+                            label = { Text(stringResource(Res.string.contact_dev_message)) },
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Sentences,
                             ),
                             enabled = !sending,
                         )
                         Text(
-                            "${MAX_BODY - message.length} characters remaining",
+                            stringResource(Res.string.contact_dev_characters_remaining, MAX_BODY - message.length),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp),
                         )
 
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "Attach up to $MAX_ATTACHMENTS files, 2 MB each (optional)",
+                            stringResource(Res.string.contact_dev_attach_hint, MAX_ATTACHMENTS),
                             fontSize = 12.sp,
                         )
                         Spacer(Modifier.height(4.dp))
@@ -269,7 +292,7 @@ fun ContactDeveloperScreen(
                                     modifier = Modifier.size(ButtonDefaults.IconSize),
                                 )
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                Text("Add files")
+                                Text(stringResource(Res.string.contact_dev_add_files))
                             }
                             if (pickPhotos != null) {
                                 OutlinedButton(
@@ -283,7 +306,7 @@ fun ContactDeveloperScreen(
                                         modifier = Modifier.size(ButtonDefaults.IconSize),
                                     )
                                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                    Text("Add photos")
+                                    Text(stringResource(Res.string.contact_dev_add_photos))
                                 }
                             }
                         }
@@ -296,7 +319,7 @@ fun ContactDeveloperScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Text(
-                                    "${file.fileName} — ${file.bytes.size / 1024} KB",
+                                    stringResource(Res.string.contact_dev_attachment_size, file.fileName, file.bytes.size / 1024),
                                     fontSize = 12.sp,
                                     modifier = Modifier
                                         .padding(start = 4.dp),
@@ -312,7 +335,7 @@ fun ContactDeveloperScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Close,
-                                        contentDescription = "Remove",
+                                        contentDescription = stringResource(UtilRes.string.remove),
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
@@ -341,7 +364,7 @@ fun ContactDeveloperScreen(
                                     strokeWidth = 2.dp,
                                 )
                             } else {
-                                Text("Send message")
+                                Text(stringResource(Res.string.contact_dev_send))
                             }
                         }
                     }

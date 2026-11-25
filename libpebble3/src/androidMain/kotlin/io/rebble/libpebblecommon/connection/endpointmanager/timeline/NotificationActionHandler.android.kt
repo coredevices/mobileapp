@@ -27,7 +27,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-class AndroidNotificationActionHandler(
+internal class AndroidNotificationActionHandler(
     private val notificationListenerConnection: AndroidPebbleNotificationListenerConnection,
     private val notificationApps: NotificationApps,
 ) : PlatformNotificationActionHandler, NotificationReplies {

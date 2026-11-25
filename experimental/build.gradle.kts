@@ -54,6 +54,10 @@ kotlin {
         withDeviceTestBuilder {}.configure {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
+
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
     }
 
 // Target declarations - add or remove as needed below. These define
@@ -175,6 +179,7 @@ kotlin {
         }
         commonMain {
             dependencies {
+                implementation(project(":toolschemaannotations"))
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(libs.compose.material3)
@@ -201,6 +206,8 @@ kotlin {
                 implementation(libs.room.runtime)
                 implementation(libs.room.paging)
                 implementation(libs.sqlite.bundled)
+                implementation(libs.swmansion.kmpMaps.core)
+                implementation(libs.compass.geocoder)
 
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
@@ -243,6 +250,7 @@ kotlin {
                 implementation(libs.androidx.credentials)
                 implementation(libs.zxing.core)
                 implementation(libs.androidx.documentfile)
+                implementation(libs.gms.location)
             }
         }
 
@@ -285,12 +293,39 @@ buildkonfig {
     }
 }
 
+val localModelCheckpointDir = layout.projectDirectory.dir("local-model-schemas")
+
+ksp {
+    arg("toolSchema.package", "coredevices.ring.agent.toolschema")
+    // A checkpoint of the tool schemas is written here once per version, then left frozen.
+    arg("toolSchema.localModelVersion", libs.versions.cactus.lm.weights.get())
+    arg("toolSchema.localModelCheckpointDir", localModelCheckpointDir.asFile.path)
+    // TODO(RING-84): servlets the on-device model isn't trained on, so only cloud agents get them.
+    arg(
+        "toolSchema.localModelExcludedServlets",
+        listOf(
+            "builtin_calendar",
+            "builtin_messaging",
+            "builtin_plugins",
+            "builtin_notification_reply",
+            "builtin_bug_report",
+        ).joinToString(",")
+    )
+}
+
+tasks.matching { it.name.startsWith("ksp") }.configureEach {
+    inputs.dir(localModelCheckpointDir)
+}
+
 dependencies {
     add("kspCommonMainMetadata", libs.room.compiler)
     add("kspAndroid", libs.room.compiler)
+    add("kspAndroid", project(":toolschemagen"))
     add("kspIosArm64", libs.room.compiler)
+    add("kspIosArm64", project(":toolschemagen"))
     if (!ideSync) {
         //add("kspIosX64", libs.room.compiler)
         add("kspIosSimulatorArm64", libs.room.compiler)
+        add("kspIosSimulatorArm64", project(":toolschemagen"))
     }
 }

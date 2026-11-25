@@ -19,4 +19,4 @@ internal expect suspend fun seedBondedWatches(
     knownWatchDao: KnownWatchDao,
 ): List<KnownWatchItem>?
 
-const val UNKNOWN_WATCH_SERIAL_OR_VERSION = "unknown"
+public const val UNKNOWN_WATCH_SERIAL_OR_VERSION: String = "unknown"

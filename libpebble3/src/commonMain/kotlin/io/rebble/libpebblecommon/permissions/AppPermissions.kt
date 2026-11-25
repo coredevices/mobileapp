@@ -8,7 +8,10 @@ import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.PermissionDeclaration
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.packets.blobdb.WatchPermission
+import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
 import io.rebble.libpebblecommon.plugin.PluginPermissions
+import kotlin.time.Duration
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -20,7 +23,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
@@ -34,7 +36,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 @Serializable
-enum class PermissionPolicy {
+public enum class PermissionPolicy {
     /** Asks for everything except reads by an app that can't send data off the phone. */
     AskIfExfiltrating,
     /** Asks for everything. */
@@ -43,14 +45,16 @@ enum class PermissionPolicy {
     NeverAsk,
 }
 
-data class PermissionSubject(
+public data class PermissionSubject internal constructor(
     val appUuid: Uuid,
     val legacy: Boolean,
     val hasAndroidCompanion: Boolean = false,
     val hasCompanionApp: Boolean = false,
+    /** See [isLegacyForHealth]. */
+    val legacyForHealth: Boolean = legacy,
 )
 
-enum class PermissionStatus {
+public enum class PermissionStatus {
     Granted,
     Denied,
     /** Undecided, and the policy allows it. */
@@ -59,7 +63,7 @@ enum class PermissionStatus {
     Waiting,
 }
 
-data class AppPermissionStatus(
+public data class AppPermissionStatus internal constructor(
     val appUuid: Uuid,
     val permission: String,
     val status: PermissionStatus,
@@ -72,25 +76,25 @@ data class AppPermissionStatus(
     val askedAtMs: Long? = null,
 )
 
-enum class PermissionDecision {
+public enum class PermissionDecision {
     Granted,
     Denied,
     NeedsApproval,
 }
 
-interface InstalledApps {
+internal interface InstalledApps {
     fun subjectsOf(appUuids: Set<Uuid>): Flow<Map<Uuid, PermissionSubject>>
     fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>>
-    suspend fun syncMicrophoneGrants(grants: Set<Uuid>) {}
+    suspend fun syncWatchPermissions(permissions: Map<Uuid, Int>) {}
 }
 
-class LockerInstalledApps(private val lockerEntryDao: LockerEntryRealDao) : InstalledApps {
-    override fun subjectsOf(appUuids: Set<Uuid>) = lockerEntryDao.getEntriesFlow(appUuids.toList())
+internal class LockerInstalledApps(private val lockerEntryDao: LockerEntryRealDao) : InstalledApps {
+    override fun subjectsOf(appUuids: Set<Uuid>): Flow<Map<Uuid, PermissionSubject>> = lockerEntryDao.getEntriesFlow(appUuids.toList())
         .map { entries -> entries.associate { it.id to it.permissionSubject() } }
 
-    override fun pluginPermissions() = lockerEntryDao.getPluginEntriesFlow().map(::pluginDefinedPermissions)
+    override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = lockerEntryDao.getPluginEntriesFlow().map(::pluginDefinedPermissions)
 
-    override suspend fun syncMicrophoneGrants(grants: Set<Uuid>) = lockerEntryDao.syncMicrophoneGrants(grants)
+    override suspend fun syncWatchPermissions(permissions: Map<Uuid, Int>): Unit = lockerEntryDao.syncWatchPermissions(permissions)
 }
 
 private fun LockerEntry.permissionSubject() = PermissionSubject(
@@ -98,28 +102,29 @@ private fun LockerEntry.permissionSubject() = PermissionSubject(
     legacy = isLegacy(manifestVersion),
     hasAndroidCompanion = androidCompanion != null,
     hasCompanionApp = androidCompanion != null || iosCompanion != null,
+    legacyForHealth = isLegacyForHealth(platforms.map { it.sdkVersion }),
 )
 
-interface AppPermissionsApi {
+public interface AppPermissionsApi {
     /**
      * Undecided permissions the policy needs the user to answer, that the app has asked for
      * ([LockerAppPermission.askedAtMs]), from apps running now (see [RunningApps]).
      */
-    fun activePermissionRequests(): Flow<List<LockerAppPermission>>
-    val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>>
-    suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>)
+    public fun activePermissionRequests(): Flow<List<LockerAppPermission>>
+    public val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>>
+    public suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>)
     /** Hides [permissions] from the locker's request cards while leaving them undecided. */
-    suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>)
-    fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>>
+    public suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>)
+    public fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>>
     /** Every decision the user has made, for every app. */
-    fun permissionDecisions(): Flow<List<LockerAppPermission>>
+    public fun permissionDecisions(): Flow<List<LockerAppPermission>>
 }
 
 @Serializable
-data class PermissionDecisionRecord(val granted: Boolean, val decidedAtMs: Long)
+public data class PermissionDecisionRecord(val granted: Boolean, val decidedAtMs: Long)
 
 /** Undecided rows are decided by the policy on every check, so policy changes apply immediately. */
-class AppPermissions(
+internal class AppPermissions internal constructor(
     private val dao: LockerAppPermissionDao,
     private val installed: InstalledApps,
     private val watchConfig: WatchConfigFlow,
@@ -128,13 +133,9 @@ class AppPermissions(
     private val scope: LibPebbleCoroutineScope,
 ) : AppPermissionsApi {
     fun init() {
-        // Any watch-synced permission added here must also be carried over in Locker.sideloadApp: the
-        // watch won't reload the binary on a permissions-only change.
-        localMicrophoneGrants().onEach { installed.syncMicrophoneGrants(it) }.launchIn(scope)
+        // Locker.sideloadApp carries these over: the watch won't reload the binary on a permissions-only change.
+        localWatchPermissions().onEach { installed.syncWatchPermissions(it) }.launchIn(scope)
     }
-
-    /** Controls the permission system. */
-    val enforcing: Boolean get() = watchConfig.value.enablePlugins
 
     suspend fun subjectOf(appUuid: Uuid): PermissionSubject? = installed.subjectsOf(setOf(appUuid)).first()[appUuid]
 
@@ -142,7 +143,7 @@ class AppPermissions(
         val config = watchConfig.value
         val rows = dao.getByAppUuid(subject.appUuid)
         val decision = decidePermission(permission, subject, rows, config, pluginDefinitionsFor(rows, permission))
-        if (config.enablePlugins && decision == PermissionDecision.Granted) {
+        if (decision == PermissionDecision.Granted) {
             rows.coveringRow(permission)?.let { markUsed(it) }
         }
         return decision
@@ -151,7 +152,6 @@ class AppPermissions(
     /** The domains (each covering its subdomains) [appUuid] may reach; null if it may reach any host. */
     suspend fun grantedDomains(appUuid: Uuid): List<String>? {
         val config = watchConfig.value
-        if (!config.enablePlugins) return null
         val subject = subjectOf(appUuid) ?: return emptyList()
         val rows = dao.getByAppUuid(appUuid)
         fun granted(permission: String) =
@@ -161,13 +161,30 @@ class AppPermissions(
         return rows.mapNotNull { domainOf(it.permission) }.filter { isHostname(it) && granted(internetKey(it)) }
     }
 
+    /**
+     * The key traffic to each of [urls] counts under: the declared or granted domain covering its
+     * host, whether or not permissions are enforced. Missing for a URL that can't be requested.
+     */
+    suspend fun usageKeys(appUuid: Uuid, urls: Collection<String>): Map<String, UsageKey> {
+        val scoped = urls.mapNotNull { url -> PluginNetworkPolicy.permissionFor(url)?.let { url to it } }.toMap()
+        if (scoped.isEmpty()) return emptyMap()
+        val subject = subjectOf(appUuid)
+        if (subject?.legacy == true) return scoped.mapValues { UsageKey(PluginPermissions.GLOBAL_INTERNET, declared = true) }
+        val rows = if (subject == null) emptyList() else dao.getByAppUuid(appUuid)
+        return scoped.mapValues { (_, key) ->
+            if (domainOf(key) == null) return@mapValues UsageKey(key, declared = true)
+            val row = rows.coveringRow(key)?.takeIf { domainOf(it.permission) != null }
+            UsageKey(row?.permission ?: key, declared = row?.declared == true)
+        }
+    }
+
     /** As [check], but records the use. [wait] waits for the user's answer: never from a blocking callback. */
     suspend fun request(subject: PermissionSubject, permission: String, wait: Boolean = false): PermissionDecision {
         val config = watchConfig.value
         val rows = dao.getByAppUuid(subject.appUuid)
         val pluginDefined = pluginDefinitionsFor(rows, permission)
         val decision = decidePermission(permission, subject, rows, config, pluginDefined)
-        if (config.enablePlugins) recordUse(subject.appUuid, rows, permission, decision)
+        recordUse(subject.appUuid, rows, permission, decision)
         return if (wait && decision == PermissionDecision.NeedsApproval) {
             awaitAnswer(subject, permission, pluginDefined)
         } else {
@@ -255,20 +272,28 @@ class AppPermissions(
             }.toSet()
         }.distinctUntilChanged()
 
+    /** [WatchPermission] bits for each app that has asked for a permission the watch enforces. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun localMicrophoneGrants(): Flow<Set<Uuid>> =
+    fun localWatchPermissions(): Flow<Map<Uuid, Int>> =
         combine(dao.allFlow(), watchConfig.flow, installed.pluginPermissions()) { rows, config, defined ->
             Triple(rows, config.watchConfig, defined)
         }.flatMapLatest { (rows, config, defined) ->
-            if (!config.enablePlugins) return@flatMapLatest flowOf(emptySet())
             val appRows = rows.groupBy { it.appUuid }
-                .filterValues { permissions -> permissions.any { it.permission == PluginPermissions.WATCH_MICROPHONE } }
+                .filterValues { permissions -> permissions.any { it.permission in WATCH_ENFORCED } }
             installed.subjectsOf(appRows.keys).map { subjects ->
-                subjects.filterKeys { it in appRows }.values.filter { subject ->
-                    decidePermission(
-                        PluginPermissions.WATCH_MICROPHONE, subject, appRows.getValue(subject.appUuid), config, defined,
-                    ) == PermissionDecision.Granted
-                }.map { it.appUuid }.toSet()
+                subjects.filterKeys { it in appRows }.values.associate { subject ->
+                    val rowsOfApp = appRows.getValue(subject.appUuid)
+                    fun granted(permission: String) =
+                        decidePermission(permission, subject, rowsOfApp, config, defined) == PermissionDecision.Granted
+                    var bits = 0
+                    if (granted(PluginPermissions.WATCH_MICROPHONE)) bits = bits or WatchPermission.MICROPHONE
+                    // Only apps that asked for Health are restricted: others may predate it.
+                    if (rowsOfApp.any { it.permission == PluginPermissions.HEALTH }) {
+                        bits = bits or WatchPermission.HEALTH_ENFORCED
+                        if (granted(PluginPermissions.HEALTH)) bits = bits or WatchPermission.HEALTH_GRANTED
+                    }
+                    subject.appUuid to bits
+                }.filterValues { it != 0 }
             }
         }
 
@@ -276,7 +301,7 @@ class AppPermissions(
     suspend fun recordRequested(appUuid: Uuid, requested: RequestedPermissions) {
         val all = requested.all
         if (requested.declared != null) {
-            val undeclared = legacyRequested(hasPkjs = true, hasAndroidCompanion = true) - all.toSet()
+            val undeclared = legacyRequested(hasPkjs = true, hasAndroidCompanion = true) + PluginPermissions.HEALTH - all.toSet()
             dao.deleteByAppUuidAndPermissions(appUuid, undeclared)
         }
         val declared = requested.declared
@@ -395,10 +420,10 @@ class AppPermissions(
             .stateIn(scope, SharingStarted.WhileSubscribed(), emptySet())
     }
 
-    override suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>) =
+    override suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>): Unit =
         setDecisions(appUuid, decisions)
 
-    override suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>) =
+    override suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>): Unit =
         dao.markSeen(appUuid, permissions.toList(), clock.now().toEpochMilliseconds())
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = installed.pluginPermissions()
@@ -457,12 +482,12 @@ class AppPermissions(
     }
 
     companion object {
-        val ANSWER_TIMEOUT = 10.seconds
+        val ANSWER_TIMEOUT: Duration = 10.seconds
         private val USED_RESOLUTION = 1.minutes
     }
 }
 
-fun refusalMessage(appName: String, refused: Map<String, PermissionDecision>): String {
+internal fun refusalMessage(appName: String, refused: Map<String, PermissionDecision>): String {
     val (pending, denied) = refused.keys.sorted().partition { refused[it] == PermissionDecision.NeedsApproval }
     return listOfNotNull(
         denied.takeIf { it.isNotEmpty() }?.let { "$appName was not allowed ${it.joinToString()}" },
@@ -472,8 +497,10 @@ fun refusalMessage(appName: String, refused: Map<String, PermissionDecision>): S
 
 private val LEGACY_NETWORK = setOf(PluginPermissions.INTERNET, PluginPermissions.LOCAL_NETWORK)
 
+private val WATCH_ENFORCED = setOf(PluginPermissions.WATCH_MICROPHONE, PluginPermissions.HEALTH)
+
 /** As `Pebble.permissions.query` reports it, after the browser's PermissionState. */
-fun PermissionDecision.queryState(): String = when (this) {
+internal fun PermissionDecision.queryState(): String = when (this) {
     PermissionDecision.Granted -> "granted"
     PermissionDecision.Denied -> "denied"
     PermissionDecision.NeedsApproval -> "prompt"
@@ -534,7 +561,6 @@ internal fun decidePermission(
     pluginDefined: Map<String, PluginDefinedPermission>,
 ): PermissionDecision {
     if (config.disables(permission)) return PermissionDecision.Denied
-    if (!config.enablePlugins) return PermissionDecision.Granted
     val rows = rows.filterNot { config.disables(it.permission) }
     val decision = decideAsking(permission, subject, rows, config, pluginDefined)
     return if (
@@ -565,6 +591,9 @@ private fun decideAsking(
     if (subject.legacy && !config.askLegacyAppsForPermissions && isLegacyImplicit(permission, subject.hasAndroidCompanion)) {
         return PermissionDecision.Granted
     }
+    if (permission == PluginPermissions.HEALTH && subject.legacyForHealth && !config.askLegacyAppsForPermissions) {
+        return PermissionDecision.Granted
+    }
     if (kind != PermissionKind.Read) return PermissionDecision.NeedsApproval
     return when (config.permissionPolicy) {
         PermissionPolicy.AlwaysAsk, PermissionPolicy.NeverAsk -> PermissionDecision.NeedsApproval
@@ -586,7 +615,7 @@ internal fun isExfiltrating(
 private fun WatchConfig.disables(permission: String) =
     permission == PluginPermissions.LEGACY_PEBBLEKIT && !enableLegacyPebbleKit
 
-fun permissionKind(key: String, pluginDefined: Map<String, PluginDefinedPermission>): PermissionKind? =
+public fun permissionKind(key: String, pluginDefined: Map<String, PluginDefinedPermission>): PermissionKind? =
     PermissionRegistry[permissionOf(key)]?.kind ?: pluginDefined[key]?.kind
 
 private fun List<LockerAppPermission>.coveringRow(key: String): LockerAppPermission? =

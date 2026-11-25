@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-class TestPebbleProtocolHandler(
+internal class TestPebbleProtocolHandler(
     private val onPacket: suspend TestPebbleProtocolHandler.(PebblePacket) -> Unit,
 ) : PebbleProtocolHandler {
     private val _inboundMessages = MutableSharedFlow<PebblePacket>()

@@ -32,7 +32,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
 
-class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
+internal class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
     companion object {
         private val logger = Logger.withTag("AndroidSystemGeolocation")
     }

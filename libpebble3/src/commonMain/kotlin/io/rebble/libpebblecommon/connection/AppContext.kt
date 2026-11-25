@@ -1,3 +1,3 @@
 package io.rebble.libpebblecommon.connection
 
-expect class AppContext
+public expect class AppContext

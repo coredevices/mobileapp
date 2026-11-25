@@ -96,6 +96,8 @@ class WeatherPlugin(
                 PROPERTY_HOURLY_TEMPERATURE to NUMERIC_SERIES_SHAPES,
                 PROPERTY_HOURLY_CONDITION to CONDITION_SERIES_SHAPES,
                 PROPERTY_HOURLY_CONDITION_CODE to CODE_SERIES_SHAPES,
+                PROPERTY_HOURLY_PRECIPITATION to NUMERIC_SERIES_SHAPES,
+                PROPERTY_HOURLY_PRECIPITATION_AMOUNT to NUMERIC_SERIES_SHAPES,
                 PROPERTY_DAILY_HIGH to NUMERIC_SERIES_SHAPES,
                 PROPERTY_DAILY_LOW to NUMERIC_SERIES_SHAPES,
                 PROPERTY_DAILY_CONDITION to CONDITION_SERIES_SHAPES,
@@ -121,6 +123,7 @@ class WeatherPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         val wanted = { property: String -> properties == null || property in properties }
@@ -207,6 +210,16 @@ class WeatherPlugin(
         series(PROPERTY_HOURLY_CONDITION_CODE, hours, SECONDS_PER_HOUR) {
             copy(longText = TextSeries(hours.map { conditionCodeOf(it.weatherType.code) }))
         }
+        series(PROPERTY_HOURLY_PRECIPITATION, hours.takeIf { it.any { hour -> hour.precipProbability != null } }.orEmpty(), SECONDS_PER_HOUR) {
+            percentSeries(hours.map { it.precipProbability?.toDouble() })
+        }
+        series(PROPERTY_HOURLY_PRECIPITATION_AMOUNT, hours.takeIf { it.any { hour -> hour.precipMm != null } }.orEmpty(), SECONDS_PER_HOUR) {
+            val mm = hours.map { it.precipMm }
+            copy(
+                numericValue = NumericSeries(mm, unit = "mm", min = 0.0),
+                shortText = TextSeries(mm.map { it?.let { amount -> "${(amount * 10).roundToInt() / 10.0} mm" } }),
+            )
+        }
         series(PROPERTY_DAILY_HIGH, days, SECONDS_PER_DAY) {
             temperatureSeries(days.map { it.highTemp.takeUnless { temp -> temp == TEMP_NO_VALUE } }, unit)
         }
@@ -226,13 +239,14 @@ class WeatherPlugin(
             copy(timestamp = TimestampSeries(days.map { it.sunsetUtcSecs }))
         }
         series(PROPERTY_DAILY_PRECIPITATION, days, SECONDS_PER_DAY) {
-            val percents = days.map { it.precipProbability?.toDouble() }
-            copy(
-                numericValue = NumericSeries(percents, unit = "%", min = 0.0, max = 100.0),
-                shortText = TextSeries(percents.map { it?.let { percent -> "${percent.roundToInt()}%" } }),
-            )
+            percentSeries(days.map { it.precipProbability?.toDouble() })
         }
     }
+
+    private fun SeriesShape.percentSeries(percents: List<Double?>) = copy(
+        numericValue = NumericSeries(percents, unit = "%", min = 0.0, max = 100.0),
+        shortText = TextSeries(percents.map { it?.let { percent -> "${percent.roundToInt()}%" } }),
+    )
 
     private fun SeriesShape.temperatureSeries(temps: List<Short?>, unit: String) = copy(
         numericValue = NumericSeries(temps.map { it?.toDouble() }, unit = unit),
@@ -297,9 +311,11 @@ class WeatherPlugin(
         )
     }
 
-    /** v4-only, so a watch that never reported one leaves the property off the instance. */
+    /** The hour the forecast was fetched in; absent when the forecast had no hourly UV. */
     private fun uvShapes(entry: WeatherAppEntry): Map<String, Map<String, JsonElement>> {
-        val uv = entry.todayUvIndexX10?.let { it / 10.0 } ?: return emptyMap()
+        val hour = ((entry.lastUpdateTimeUtcSecs - entry.forecastDayStart()) / SECONDS_PER_HOUR).toInt()
+        val hours = entry.todayHourly.orEmpty() + entry.tomorrowHourly.orEmpty()
+        val uv = hours.getOrNull(hour)?.uvIndexX10?.let { it / 10.0 } ?: return emptyMap()
         return mapOf(
             PROPERTY_UV_INDEX to mapOf(
                 // 11 is the top of the published scale; anything above it is still "extreme".
@@ -392,6 +408,8 @@ class WeatherPlugin(
         const val PROPERTY_HOURLY_TEMPERATURE = "hourly_temperature"
         const val PROPERTY_HOURLY_CONDITION = "hourly_condition"
         const val PROPERTY_HOURLY_CONDITION_CODE = "hourly_condition_code"
+        const val PROPERTY_HOURLY_PRECIPITATION = "hourly_precipitation"
+        const val PROPERTY_HOURLY_PRECIPITATION_AMOUNT = "hourly_precipitation_amount"
         const val PROPERTY_DAILY_HIGH = "daily_high"
         const val PROPERTY_DAILY_LOW = "daily_low"
         const val PROPERTY_DAILY_CONDITION = "daily_condition"

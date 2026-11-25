@@ -121,6 +121,27 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_click_ring_to_sync
+import coreapp.ring.generated.resources.feed_index_recording
+import coreapp.ring.generated.resources.feed_last_synced
+import coreapp.ring.generated.resources.feed_list_untitled
+import coreapp.ring.generated.resources.feed_new_note
+import coreapp.ring.generated.resources.feed_no_list_items_yet
+import coreapp.ring.generated.resources.feed_no_speech_detected
+import coreapp.ring.generated.resources.feed_processed_offline
+import coreapp.ring.generated.resources.feed_processing
+import coreapp.ring.generated.resources.feed_scheduled
+import coreapp.ring.generated.resources.feed_see_all
+import coreapp.ring.generated.resources.feed_transcription_error
+import coreapp.ring.generated.resources.feed_transferring
+import coreapp.ring.generated.resources.search
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.retry
+import coreapp.util.generated.resources.search_ellipsis
+import org.jetbrains.compose.resources.stringResource
 
 // Helper composables for the Index home feed — split out of
 // IndexFeedScreen.kt to keep that file focused on the route entry.
@@ -175,19 +196,19 @@ internal fun IndexHeader(
                     }),
                     decorationBox = { inner ->
                         if (query.isEmpty()) {
-                            Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
+                            Text(stringResource(UtilRes.string.search_ellipsis), color = colors.onSurfaceVariant, fontSize = 15.sp)
                         }
                         inner()
                     },
                 )
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     }
                 }
             }
             Text(
-                "Cancel",
+                stringResource(UtilRes.string.cancel),
                 color = colors.primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -218,7 +239,7 @@ internal fun IndexHeader(
                 PulsingSyncHint(modifier = Modifier.weight(1f))
             }
             IconButton(onClick = onStartSearch) {
-                Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Search, stringResource(Res.string.search), tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
             trailingActions?.invoke(this)
         }
@@ -231,7 +252,7 @@ internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
     val lastSyncedAt by koinInject<RingSync>().lastSyncedAt.collectAsState()
 
     // Re-evaluate on a slow tick so the relative label ages ("just now" →
-    // "5m ago") and flips back to the pulsing prompt once the sync goes stale.
+    // "5 min ago") and flips back to the pulsing prompt once the sync goes stale.
     var now by remember { mutableStateOf(Clock.System.now()) }
     LaunchedEffect(lastSyncedAt) {
         while (true) {
@@ -243,7 +264,7 @@ internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
     val synced = lastSyncedAt
     if (synced != null && now - synced < SYNC_HINT_FRESH_WINDOW) {
         Text(
-            "Last synced ${relativeTime(synced)}",
+            stringResource(Res.string.feed_last_synced, relativeTime(synced)),
             color = colors.onSurfaceVariant,
             fontSize = 12.sp,
             letterSpacing = (-0.05).sp,
@@ -264,7 +285,7 @@ internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
             label = "sync-hint-alpha",
         )
         Text(
-            "Click ring to sync",
+            stringResource(Res.string.feed_click_ring_to_sync),
             color = colors.onSurfaceVariant,
             fontSize = 12.sp,
             letterSpacing = (-0.05).sp,
@@ -315,7 +336,7 @@ internal fun PeekSectionHeader(
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "See all",
+                stringResource(Res.string.feed_see_all),
                 color = colors.primary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
@@ -367,7 +388,7 @@ internal fun FeedSectionHeader(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .clickable(role = Role.Button, onClickLabel = "New note") { onAdd() }
+                    .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.feed_new_note)) { onAdd() }
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
@@ -487,7 +508,7 @@ internal fun PendingTransferPeekCard(
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            if (transfer.status == RingTransferStatus.Completed) "Processing…" else "Transferring…",
+            stringResource(if (transfer.status == RingTransferStatus.Completed) Res.string.feed_processing else Res.string.feed_transferring),
             color = colors.onSurfaceVariant,
             fontSize = 13.sp,
             lineHeight = 18.sp,
@@ -534,7 +555,7 @@ internal fun PeekCard(
                 Spacer(Modifier.weight(1f))
                 Icon(
                     Icons.Outlined.CloudOff,
-                    contentDescription = "Processed offline",
+                    contentDescription = stringResource(Res.string.feed_processed_offline),
                     tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(13.dp),
                 )
@@ -545,9 +566,9 @@ internal fun PeekCard(
             peek.transcription.takeIf { it.isNotBlank() }
                 ?: peek.recording.assistantTitle?.takeIf { it.isNotBlank() }
                 ?: if (peek.retryEntry?.errorType == RecordingEntryErrorType.no_speech) {
-                    "No speech detected"
+                    stringResource(Res.string.feed_no_speech_detected)
                 } else {
-                    "Index Recording"
+                    stringResource(Res.string.feed_index_recording)
                 },
             color = colors.onSurface,
             fontSize = 13.sp,
@@ -565,7 +586,7 @@ internal fun PeekCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Transcription error",
+                    stringResource(Res.string.feed_transcription_error),
                     color = colors.error,
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
@@ -576,7 +597,7 @@ internal fun PeekCard(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    "Retry",
+                    stringResource(UtilRes.string.retry),
                     color = colors.primary,
                     fontSize = 11.sp,
                     lineHeight = 13.sp,
@@ -757,6 +778,7 @@ internal fun LazyListScope.todosCarousel(
     }
 }
 
+@Composable
 internal fun taskSubline(task: CachedItem): String? {
     val due = task.dueAt
     return when (task.kind) {
@@ -764,7 +786,7 @@ internal fun taskSubline(task: CachedItem): String? {
         "scheduled" -> {
             // We could parse fields for fireKind = alarm/timer; for the home
             // preview just show due-time / "Timer".
-            due?.let { formatDue(it) } ?: "Scheduled"
+            due?.let { formatDue(it) } ?: stringResource(Res.string.feed_scheduled)
         }
         else -> null
     }
@@ -914,7 +936,7 @@ fun NoteListCard(
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                list.displayTitle.ifBlank { "List" },
+                list.displayTitle.ifBlank { stringResource(Res.string.feed_list_untitled) },
                 color = colors.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -932,7 +954,7 @@ fun NoteListCard(
         }
         Spacer(Modifier.height(8.dp))
         if (items.isEmpty()) {
-            Text("No 🎶 yet", color = colors.onSurfaceVariant, fontSize = 12.sp)
+            Text(stringResource(Res.string.feed_no_list_items_yet), color = colors.onSurfaceVariant, fontSize = 12.sp)
         } else {
             items.take(3).forEach { item ->
                 // Bullet glyph rendered as Text at the same fontSize as the

@@ -6,7 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,14 +35,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
-import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.coreapp.api.BugReports
 import coredevices.pebble.Platform
@@ -57,9 +56,21 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.bug_report_add_image
+import coreapp.composeapp.generated.resources.bug_report_attach_files
+import coreapp.composeapp.generated.resources.bug_report_uploading_attachments_count
+import coreapp.composeapp.generated.resources.bug_report_view_attach_more_logs
+import coreapp.composeapp.generated.resources.bug_report_view_fetching_logs
+import coreapp.composeapp.generated.resources.bug_report_view_title
+import coreapp.composeapp.generated.resources.bug_report_view_upload_more_logs
+import coreapp.util.generated.resources.Res as UtilRes
+import org.jetbrains.compose.resources.getPluralString
+import org.jetbrains.compose.resources.getString
 
 private val logger = Logger.withTag("ViewBugReportScreen")
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ViewBugReportScreen(
     coreNav: CoreNav,
@@ -103,8 +114,7 @@ fun ViewBugReportScreen(
             if (attachments != null) {
                 ticket?.let {
                     scope.launch {
-                        val message =
-                            if (attachments.size == 1) "Uploading attachment" else "Uploading attachments"
+                        val message = getPluralString(Res.plurals.bug_report_uploading_attachments_count, attachments.size)
                         snackBarHostState.showSnackbar(message)
                     }
                     bugReportProcessor.updateBugReportWithNewAttachments(ticket.ticketId, attachments)
@@ -119,12 +129,12 @@ fun ViewBugReportScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Report: $subject", maxLines = 1, fontSize = 17.sp) },
+                    title = { Text(stringResource(Res.string.bug_report_view_title, subject), maxLines = 1, fontSize = 17.sp) },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
                                 Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = stringResource(Res.string.back),
+                                contentDescription = stringResource(UtilRes.string.back),
                             )
                         }
                     },
@@ -133,14 +143,13 @@ fun ViewBugReportScreen(
             snackbarHost = { SnackbarHost(snackBarHostState) }
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                FlowRow(
                     horizontalArrangement = SpaceEvenly,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (showPhotoChip) {
                         ElevatedAssistChip(
-                            label = { Text("Add Image") },
+                            label = { Text(stringResource(Res.string.bug_report_add_image)) },
                             onClick = {
                                 ticket?.let {
                                     launchPhotoDialog()
@@ -150,14 +159,14 @@ fun ViewBugReportScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.InsertPhoto,
-                                    contentDescription = "Add Image",
+                                    contentDescription = stringResource(Res.string.bug_report_add_image),
                                 )
                             },
                             elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),
                         )
                     }
                     ElevatedAssistChip(
-                        label = { Text("Attach Files") },
+                        label = { Text(stringResource(Res.string.bug_report_attach_files)) },
                         onClick = {
                             ticket?.let {
                                 launchAttachmentDialog(listOf("*/*"))
@@ -167,18 +176,18 @@ fun ViewBugReportScreen(
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.AttachFile,
-                                contentDescription = "Attach Files",
+                                contentDescription = stringResource(Res.string.bug_report_attach_files),
                             )
                         },
                         elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),
                     )
                     ElevatedAssistChip(
-                        label = { Text("Attach More Logs") },
+                        label = { Text(stringResource(Res.string.bug_report_view_attach_more_logs)) },
                         onClick = {
                             ticket?.let {
                                 requestedMoreLogs = true
                                 scope.launch {
-                                    snackBarHostState.showSnackbar("Fetching and uploading new logs")
+                                    snackBarHostState.showSnackbar(getString(Res.string.bug_report_view_fetching_logs))
                                 }
                                 bugReportProcessor.updateBugReportWithNewLogs(ticket.ticketId)
                             }
@@ -187,7 +196,7 @@ fun ViewBugReportScreen(
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Troubleshoot,
-                                contentDescription = "Upload More Logs",
+                                contentDescription = stringResource(Res.string.bug_report_view_upload_more_logs),
                             )
                         },
                         elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),

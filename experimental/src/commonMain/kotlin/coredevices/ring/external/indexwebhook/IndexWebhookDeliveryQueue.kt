@@ -5,17 +5,24 @@ import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.storage.RecordingStorage
+import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
 import coredevices.util.queue.RecoverableTaskException
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
- * Sends recordings to their gesture's webhook, retrying network errors and 408/429/5xx
- * responses (including after an app restart) so a brief outage doesn't lose a recording.
+ * Sends recordings and click events to their gesture's webhook, retrying network errors and
+ * 408/429/5xx responses (including after an app restart) so a brief outage doesn't lose one.
  */
 class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
@@ -25,18 +32,27 @@ class IndexWebhookDeliveryQueue(
     private val localRecordingDao: LocalRecordingDao,
     scope: RecordingBackgroundScope,
     settings: Settings,
+    platform: Platform,
     rescheduleDelay: Duration = 1.minutes,
 ) : PersistentQueueScheduler<IndexWebhookDeliveryEntity>(
     repository = repository,
     scope = scope,
     settings = settings,
+    platform = platform,
     label = "IndexWebhookDelivery",
     rescheduleDelay = rescheduleDelay,
     maxAttempts = MAX_ATTEMPTS,
 ) {
     companion object {
         const val MAX_ATTEMPTS = 10
+        /** [IndexWebhookDeliveryEntity.recordingId] of a click event, which has no recording. */
+        private const val NO_RECORDING = 0L
     }
+
+    private val _outcomes = MutableSharedFlow<IndexWebhookDeliveryOutcome>(extraBufferCapacity = 64)
+
+    /** One per attempt, for whoever is waiting on a delivery. */
+    val outcomes: SharedFlow<IndexWebhookDeliveryOutcome> = _outcomes.asSharedFlow()
 
     /** Does nothing if a delivery with the same deliveryId was already queued. */
     suspend fun enqueue(delivery: IndexWebhookDeliveryEntity) {
@@ -49,19 +65,40 @@ class IndexWebhookDeliveryQueue(
         repository.resetFailed(deliveryId)?.let { scheduleTask(it) }
     }
 
+    /** Queues a click gesture's button event; [pressedAt] is sent as the press time on every attempt. */
+    suspend fun enqueueButtonEvent(gesture: RingGesture, pressedAt: Instant) = enqueue(
+        IndexWebhookDeliveryEntity(
+            created = pressedAt,
+            deliveryId = Uuid.random().toString(),
+            gesture = gesture,
+            recordingId = NO_RECORDING,
+            fileId = null,
+            transcription = null,
+        )
+    )
+
     override suspend fun processTask(task: IndexWebhookDeliveryEntity) {
-        val audio = task.fileId?.let { readAudio(it) }
-        val recordedAt = localRecordingDao.getRecording(task.recordingId)?.localTimestamp ?: task.created
-        val result = webhookApi.upload(
-            samples = audio?.first,
-            sampleRate = audio?.second ?: 16000,
-            recordingId = task.deliveryId,
-            transcription = task.transcription,
-            recordedAt = recordedAt,
-            gesture = task.gesture,
-        ) ?: return
+        val result = if (task.gesture.isClick) {
+            webhookApi.sendButtonEvent(task.gesture, pressedAt = task.created, deliveryId = task.deliveryId)
+        } else {
+            val audio = task.fileId?.let { readAudio(it) }
+            val recordedAt = localRecordingDao.getRecording(task.recordingId)?.localTimestamp ?: task.created
+            webhookApi.upload(
+                samples = audio?.first,
+                sampleRate = audio?.second ?: 16000,
+                recordingId = task.deliveryId,
+                transcription = task.transcription,
+                recordedAt = recordedAt,
+                gesture = task.gesture,
+            )
+        }
+        if (result == null) {
+            _outcomes.emit(IndexWebhookDeliveryOutcome(task.deliveryId, result = null, willRetry = false))
+            return
+        }
         // The scheduler counts this attempt before running it.
         val failedForGood = !result.ok && (!result.retryable || task.attempts + 1 >= MAX_ATTEMPTS)
+        _outcomes.emit(IndexWebhookDeliveryOutcome(task.deliveryId, result, willRetry = !result.ok && !failedForGood))
         runRepository.record(
             gesture = task.gesture,
             ok = result.ok,
@@ -71,10 +108,11 @@ class IndexWebhookDeliveryQueue(
             durationMs = result.durationMs,
             retryDeliveryId = task.deliveryId.takeIf { failedForGood },
         )
+        // A final attempt fails the task now, so its run's Retry can reset it.
         when {
             result.ok -> Unit
-            result.retryable -> throw RecoverableTaskException("Webhook delivery failed: ${result.status}")
-            else -> error("Webhook delivery failed: ${result.status} ${result.detail}")
+            failedForGood -> error("Webhook delivery failed: ${result.status} ${result.detail}")
+            else -> throw RecoverableTaskException("Webhook delivery failed: ${result.status}")
         }
     }
 
@@ -89,3 +127,10 @@ class IndexWebhookDeliveryQueue(
         return samples to meta.cachedMetadata.sampleRate
     }
 }
+
+/** [result] is null when the webhook was off by the time the delivery ran. */
+data class IndexWebhookDeliveryOutcome(
+    val deliveryId: String,
+    val result: IndexWebhookRunResult?,
+    val willRetry: Boolean,
+)

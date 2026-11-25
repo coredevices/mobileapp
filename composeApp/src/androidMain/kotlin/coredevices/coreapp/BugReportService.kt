@@ -1,5 +1,6 @@
 package coredevices.coreapp
 
+import coredevices.util.R
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,7 +25,6 @@ class BugReportService : Service(), CoroutineScope {
         get() = Dispatchers.IO + job
 
     private val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("Bug Report")
         .setSmallIcon(android.R.drawable.ic_dialog_info)
 
     companion object {
@@ -78,7 +78,7 @@ class BugReportService : Service(), CoroutineScope {
         when (command) {
             COMMAND_START -> {
                 logger.v { "startForeground" }
-                val notification = createNotification("Creating bug report...")
+                val notification = createNotification(getString(R.string.bug_report_service_creating))
                 try {
                     ServiceCompat.startForeground(
                         this,
@@ -110,16 +110,17 @@ class BugReportService : Service(), CoroutineScope {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Bug Report Processing",
+            getString(R.string.bug_report_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Shows progress while processing bug reports"
+            description = getString(R.string.bug_report_channel_description)
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
     }
 
     private fun createNotification(text: String): Notification {
+        notificationBuilder.setContentTitle(getString(R.string.bug_report_service_title))
         notificationBuilder.setContentText(text)
         notificationBuilder.setOngoing(true)
         notificationBuilder.setProgress(0, 0, true)
@@ -135,7 +136,7 @@ class BugReportService : Service(), CoroutineScope {
 
     private fun postFinishedNotification(text: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Bug Report")
+            .setContentTitle(getString(R.string.bug_report_service_title))
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(false)

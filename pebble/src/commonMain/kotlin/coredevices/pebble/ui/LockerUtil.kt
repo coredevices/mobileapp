@@ -3,11 +3,14 @@ package coredevices.pebble.ui
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +37,8 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -50,6 +55,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.apps
+import coreapp.pebble.generated.resources.faces
+import coreapp.pebble.generated.resources.locker_made_for
+import coreapp.pebble.generated.resources.locker_my_apps
+import coreapp.pebble.generated.resources.locker_my_plugins
+import coreapp.pebble.generated.resources.locker_my_watchfaces
+import coreapp.pebble.generated.resources.locker_not_compatible
+import coreapp.pebble.generated.resources.locker_not_natively_compatible
+import coreapp.pebble.generated.resources.locker_order
+import coreapp.pebble.generated.resources.locker_order_manually
+import coreapp.pebble.generated.resources.locker_order_recently_used
+import coreapp.pebble.generated.resources.locker_plugins
+import coreapp.pebble.generated.resources.locker_remove_app_failed
+import coreapp.pebble.generated.resources.locker_removing_app
+import coreapp.pebble.generated.resources.locker_selected
+import coreapp.pebble.generated.resources.locker_show_incompatible
+import coreapp.pebble.generated.resources.locker_sideloaded_file
+import coreapp.pebble.generated.resources.locker_unknown_app_store
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.settings
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.database.HeartsDao
@@ -57,6 +83,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.PebbleAccountProvider
@@ -85,6 +112,7 @@ import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.isLegacyForHealth
 import io.rebble.libpebblecommon.permissions.declaredPermissions
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
@@ -95,6 +123,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -301,12 +332,12 @@ fun CommonApp.SettingsButton(
                 connected
             ) {
                 // A plugin's config page is phone-side, so it doesn't need the app synced or a watch.
-                type == AppType.Plugin ||
+                type == AppType.Plugin || hasPlugin ||
                     isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System)
             }
 
         PebbleElevatedButton(
-            text = "Settings",
+            text = stringResource(UtilRes.string.settings),
             onClick = {
                 scope.launch {
                     showSettings(navBarNav, libPebble, topBarParams)
@@ -314,7 +345,7 @@ fun CommonApp.SettingsButton(
             },
             enabled = settingsEnabled,
             icon = Icons.Default.Settings,
-            contentDescription = "Settings",
+            contentDescription = stringResource(UtilRes.string.settings),
             primaryColor = false,
             modifier = Modifier.padding(5.dp),
         )
@@ -324,29 +355,31 @@ fun CommonApp.SettingsButton(
 @Composable
 fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
     if (!isCompatible) {
+        val incompatibleText = stringResource(Res.string.locker_not_compatible)
         IconButton(
             modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
             onClick = {
-                topBarParams.showSnackbar("Not compatible with this watch")
+                topBarParams.showSnackbar(incompatibleText)
             },
         ) {
             Icon(
                 Icons.Filled.Block,
-                contentDescription = "Not compatible with this watch",
+                contentDescription = incompatibleText,
                 modifier = Modifier.fillMaxSize(),
                 tint = coreOrange,
             )
         }
     } else if (!isNativelyCompatible) {
+        val scaledText = stringResource(Res.string.locker_not_natively_compatible)
         IconButton(
             modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
             onClick = {
-                topBarParams.showSnackbar("Not natively compatible with this watch, but can be scaled")
+                topBarParams.showSnackbar(scaledText)
             },
         ) {
             Icon(
                 Icons.Filled.AspectRatio,
-                contentDescription = "Not natively compatible with this watch, but can be scaled",
+                contentDescription = scaledText,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -365,10 +398,9 @@ fun WatchType.modelDescription() = when (this) {
 
 @Composable
 fun lastConnectedWatch(): KnownPebbleDevice? {
-    val libPebble = rememberLibPebble()
-    val watches by libPebble.watches.collectAsState()
+    val watches = rememberWatches()
     val lastConnectedWatch = remember(watches) {
-        watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
+        watches.orEmpty().sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
             .firstOrNull()
     }
     return lastConnectedWatch
@@ -434,6 +466,7 @@ data class CommonApp(
     val sourceLink: String?,
     val appstoreSource: AppstoreSource?,
     val capabilities: List<AppCapability>,
+    val hasPlugin: Boolean = false,
 )
 
 interface CommonAppTypeLocal {
@@ -524,6 +557,7 @@ fun LockerWrapper.asCommonApp(
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
         capabilities = properties.capabilities,
+        hasPlugin = this is LockerWrapper.NormalApp && hasPlugin,
     )
 }
 
@@ -603,6 +637,7 @@ fun StoreApplication.asCommonApp(
         categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
         capabilities = AppCapability.fromString(capabilities),
+        hasPlugin = plugin != null,
     )
 }
 
@@ -686,6 +721,8 @@ internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
     hasCompanionApp = companions.android != null || companions.ios != null,
     hasAndroidCompanion = companions.android != null,
     pebbleKit2Packages = pebbleKit2Packages,
+    hasHealth = AppCapability.Health.code in capabilities.orEmpty(),
+    legacyForHealth = isLegacyForHealth(hardwarePlatforms.orEmpty().mapNotNull { it.sdkVersion }),
 )
 
 class NativeLockerAddUtil(
@@ -778,11 +815,11 @@ class AppReplacements(
         val (installed, installedSourceUrl) = installedElsewhere(libPebble, firestoreLocker, uuid, newSource?.url) ?: return null
         val installedSource = appstoreSourceDao.getAllSources().first().firstOrNull { it.url == installedSourceUrl }
         val installedFrom = when (installedSourceUrl) {
-            null -> SIDELOADED
-            UNKNOWN_SOURCE -> "an app store"
+            null -> getString(Res.string.locker_sideloaded_file)
+            UNKNOWN_SOURCE -> getString(Res.string.locker_unknown_app_store)
             else -> installedSource?.title ?: installedSourceUrl
         }
-        return ReplacedApp(uuid, installed.properties.title, installedSource, installedFrom, newSource?.title ?: SIDELOADED)
+        return ReplacedApp(uuid, installed.properties.title, installedSource, installedFrom, newSource?.title ?: getString(Res.string.locker_sideloaded_file))
     }
 
     /**
@@ -799,9 +836,9 @@ class AppReplacements(
         then: suspend () -> Unit,
     ) {
         GlobalScope.launch {
-            snackbars.showSnackbar("Removing ${replaced.title}")
+            snackbars.showSnackbar(getString(Res.string.locker_removing_app, replaced.title))
             if (!nativeLockerAddUtil.removeFromLocker(replaced.installedSource, replaced.uuid)) {
-                snackbars.showSnackbar("Couldn't remove ${replaced.title}")
+                snackbars.showSnackbar(getString(Res.string.locker_remove_app_failed, replaced.title))
                 onFailed()
                 return@launch
             }
@@ -813,7 +850,6 @@ class AppReplacements(
 }
 
 private const val UNKNOWN_SOURCE = ""
-private const val SIDELOADED = "a sideloaded file"
 
 /** The installed [uuid] and the URL of its store, if it came from somewhere other than [newSourceUrl] (null: a sideload). */
 private suspend fun installedElsewhere(
@@ -870,16 +906,16 @@ fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
     pebblekitVersion = pebblekitVersion,
 )
 
-fun AppType.myCollectionName(): String = when (this) {
-    AppType.Watchface -> "My Watchfaces"
-    AppType.Watchapp -> "My Apps"
-    AppType.Plugin -> "My Plugins"
+fun AppType.myCollectionName(): StringResource = when (this) {
+    AppType.Watchface -> Res.string.locker_my_watchfaces
+    AppType.Watchapp -> Res.string.locker_my_apps
+    AppType.Plugin -> Res.string.locker_my_plugins
 }
 
-fun AppType.shortName(): String = when (this) {
-    AppType.Watchface -> "Faces"
-    AppType.Watchapp -> "Apps"
-    AppType.Plugin -> "Plugins"
+fun AppType.shortName(): StringResource = when (this) {
+    AppType.Watchface -> Res.string.faces
+    AppType.Watchapp -> Res.string.apps
+    AppType.Plugin -> Res.string.locker_plugins
 }
 
 private var hasShownScrollHint = false
@@ -890,13 +926,7 @@ fun AppsFilterRow(
     sharedLockerViewModel: SharedLockerViewModel,
     showWatchfaceOrderSetting: Boolean,
 ) {
-    val config by rememberLibPebble().config.collectAsState()
-    val tabTypes = AppType.entries.filter { it != AppType.Plugin || config.watchConfig.enablePlugins }
-    LaunchedEffect(tabTypes) {
-        if (selectedType != null && selectedType.value !in tabTypes) {
-            selectedType.value = AppType.Watchface
-        }
-    }
+    val tabTypes = AppType.entries
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
         if (!hasShownScrollHint && scrollState.maxValue > 0) {
@@ -918,68 +948,69 @@ fun AppsFilterRow(
             )
         }
     }
-    Box(
-        modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 12.dp, end = 12.dp)
+    Column(
+        modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 12.dp, end = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        if (selectedType != null) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth().height(37.dp),
+            ) {
+                tabTypes.forEachIndexed { index, appType ->
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = tabTypes.size
+                        ),
+                        selected = selectedType.value == appType,
+                        onClick = { selectedType.value = appType },
+                        icon = { },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(0.dp)
+                            ) {
+                                Icon(
+                                    appType.icon(),
+                                    contentDescription = stringResource(appType.shortName()),
+                                    modifier = Modifier.size(22.dp).padding(0.dp)
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Text(
+                                    stringResource(appType.shortName()),
+                                    lineHeight = 13.sp,
+                                    modifier = Modifier.padding(0.dp),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = LocalTextStyle.current.fontSize),
+                                )
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(0.dp)
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier.horizontalScroll(scrollState),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val height = 37.dp
-            if (selectedType != null) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.height(height).padding(0.dp),
-                ) {
-                    tabTypes.forEachIndexed { index, appType ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = tabTypes.size
-                            ),
-                            selected = selectedType.value == appType,
-                            onClick = { selectedType.value = appType },
-                            icon = { },
-                            label = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(0.dp)
-                                ) {
-                                    Icon(
-                                        appType.icon(),
-                                        contentDescription = appType.shortName(),
-                                        modifier = Modifier.size(22.dp).padding(0.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text(
-                                        appType.shortName(),
-                                        lineHeight = 13.sp,
-                                        modifier = Modifier.padding(0.dp),
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                            modifier = Modifier.padding(0.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
             if (sharedLockerViewModel.watchType.value.performsScaling()) {
-                val shortName = sharedLockerViewModel.watchType.value.shortName()
+                val madeForText = stringResource(Res.string.locker_made_for, sharedLockerViewModel.watchType.value.shortName())
                 FilterChip(
                     selected = !sharedLockerViewModel.showScaled.value,
                     onClick = {
                         sharedLockerViewModel.showScaled.value =
                             !sharedLockerViewModel.showScaled.value
                     },
-                    label = { Text("Made for $shortName") },
+                    label = { Text(madeForText) },
                     modifier = Modifier.padding(horizontal = 4.dp),
                     leadingIcon = if (!sharedLockerViewModel.showScaled.value) {
                         {
                             Icon(
                                 imageVector = Icons.Filled.Done,
-                                contentDescription = "Made for $shortName",
+                                contentDescription = madeForText,
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }
@@ -996,12 +1027,12 @@ fun AppsFilterRow(
                 Box(modifier = Modifier.padding(horizontal = 4.dp)) {
                     FilterChip(
                         onClick = { orderExpanded.value = !orderExpanded.value },
-                        label = { Text("Order") },
+                        label = { Text(stringResource(Res.string.locker_order)) },
                         selected = false,
                         leadingIcon = {
                             Icon(
                                 imageVector = selectedOrderMode.icon,
-                                contentDescription = selectedOrderMode.description,
+                                contentDescription = stringResource(selectedOrderMode.description),
                             )
                         },
                     )
@@ -1023,18 +1054,18 @@ fun AppsFilterRow(
                                     )
                                     orderExpanded.value = false
                                 },
-                                text = { Text(mode.description) },
+                                text = { Text(stringResource(mode.description)) },
                                 trailingIcon = {
                                     Icon(
                                             imageVector = mode.icon,
-                                            contentDescription = mode.description,
+                                            contentDescription = stringResource(mode.description),
                                         )
                                 },
                                 leadingIcon = if (mode == selectedOrderMode) {
                                     {
                                         Icon(
                                             imageVector = Icons.Filled.Done,
-                                            contentDescription = "Selected",
+                                            contentDescription = stringResource(Res.string.locker_selected),
                                             tint = MaterialTheme.colorScheme.primary,
                                         )
                                     }
@@ -1064,7 +1095,7 @@ fun AppsFilterRow(
                                     {
                                         Icon(
                                             imageVector = Icons.Filled.Done,
-                                            contentDescription = "Selected",
+                                            contentDescription = stringResource(Res.string.locker_selected),
                                             tint = MaterialTheme.colorScheme.primary,
                                         )
                                     }
@@ -1080,13 +1111,13 @@ fun AppsFilterRow(
                     sharedLockerViewModel.showIncompatible.value =
                         !sharedLockerViewModel.showIncompatible.value
                 },
-                label = { Text("Show Incompatible") },
+                label = { Text(stringResource(Res.string.locker_show_incompatible)) },
                 modifier = Modifier.padding(horizontal = 4.dp),
                 leadingIcon = if (sharedLockerViewModel.showIncompatible.value) {
                     {
                         Icon(
                             imageVector = Icons.Filled.Done,
-                            contentDescription = "Show Incompatible",
+                            contentDescription = stringResource(Res.string.locker_show_incompatible),
                             modifier = Modifier.size(FilterChipDefaults.IconSize)
                         )
                     }
@@ -1101,10 +1132,10 @@ fun AppsFilterRow(
 enum class WatchfaceFilterMode(
     val orderWatchfacesByLastUsed: Boolean,
     val icon: ImageVector,
-    val description: String,
+    val description: StringResource,
 ) {
-    MostRecent(true, Icons.Default.Schedule, "Order by recently used"),
-    Manual(false, Icons.Default.Reorder, "Order manually"),
+    MostRecent(true, Icons.Default.Schedule, Res.string.locker_order_recently_used),
+    Manual(false, Icons.Default.Reorder, Res.string.locker_order_manually),
     ;
 
     companion object {

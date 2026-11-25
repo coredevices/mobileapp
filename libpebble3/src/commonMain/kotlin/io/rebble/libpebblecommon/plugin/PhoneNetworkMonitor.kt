@@ -7,22 +7,22 @@ import kotlinx.coroutines.flow.Flow
  * hardware, or a refused permission — which is not the same as [CellGenerations.NONE] or false,
  * both of which mean "connected to nothing".
  */
-expect class PhoneNetworkMonitor {
+public expect class PhoneNetworkMonitor {
     /**
      * Which cellular generation the phone's radio is on, one of [CellGenerations]. Says nothing
      * about whether data is going over it — see [connection] for that.
      */
-    val cellGeneration: Flow<String?>
+    public val cellGeneration: Flow<String?>
 
     /** What the phone's current route out actually uses, one of [Connections]. */
-    val connection: Flow<String?>
+    public val connection: Flow<String?>
 }
 
 /** How the phone is reaching the internet, if it is. */
-object Connections {
-    const val NONE = "None"
-    const val WIFI = "Wi-Fi"
-    const val CELLULAR = "Cellular"
+public object Connections {
+    public const val NONE: String = "None"
+    public const val WIFI: String = "Wi-Fi"
+    public const val CELLULAR: String = "Cellular"
 }
 
 /** The vocabulary both platforms report in, since a watchface may well match on it. */

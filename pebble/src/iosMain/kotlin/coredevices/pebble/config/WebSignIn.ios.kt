@@ -33,6 +33,12 @@ import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 import kotlin.coroutines.resume
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.web_sign_in_title
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import org.jetbrains.compose.resources.getString
 
 // The sign-in WebView gets its own non-persistent data store, which is always available.
 internal actual fun webSignInSupported(): Boolean = true
@@ -42,13 +48,20 @@ internal actual suspend fun performWebSignIn(
     uiContext: PlatformUiContext,
     request: WebSignInRequest,
 ): Map<String, String>? = mutex.withLock {
-    withContext(Dispatchers.Main) { capture(uiContext, request) }
+    val labels = WebSignInLabels(
+        title = getString(Res.string.web_sign_in_title, request.domain),
+        cancel = getString(UtilRes.string.cancel),
+        back = getString(UtilRes.string.back),
+    )
+    withContext(Dispatchers.Main) { capture(uiContext, request, labels) }
 }
 
 private val mutex = Mutex()
 
+private class WebSignInLabels(val title: String, val cancel: String, val back: String)
+
 @OptIn(ExperimentalForeignApi::class)
-private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequest): Map<String, String>? =
+private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequest, labels: WebSignInLabels): Map<String, String>? =
     suspendCancellableCoroutine { continuation ->
         var completed = false
         lateinit var navigationController: UINavigationController
@@ -102,12 +115,12 @@ private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequ
 
         val content = UIViewController(nibName = null, bundle = null).apply {
             view = webView
-            title = "Sign in to ${request.domain}"
+            title = labels.title
             // Set on the VC's own navigationItem, not navigationBar.topItem, which is nil until
             // the bar lays out — a full-screen modal with no Cancel would trap the user.
             navigationItem.leftBarButtonItem = UIBarButtonItem(
                 primaryAction = UIAction.actionWithTitle(
-                    title = "Cancel",
+                    title = labels.cancel,
                     image = null,
                     identifier = null,
                     handler = { finish(null) },
@@ -144,16 +157,16 @@ private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequ
                 pages.add(popup)
                 val popupContent = UIViewController(nibName = null, bundle = null).apply {
                     view = popup
-                    title = "Sign in to ${request.domain}"
+                    title = labels.title
                     navigationItem.leftBarButtonItem = UIBarButtonItem(
                         primaryAction = UIAction.actionWithTitle(
-                            title = "Back", image = null, identifier = null,
+                            title = labels.back, image = null, identifier = null,
                             handler = { closePopup(popup) },
                         ),
                     )
                     navigationItem.rightBarButtonItem = UIBarButtonItem(
                         primaryAction = UIAction.actionWithTitle(
-                            title = "Cancel", image = null, identifier = null,
+                            title = labels.cancel, image = null, identifier = null,
                             handler = { finish(null) },
                         ),
                     )

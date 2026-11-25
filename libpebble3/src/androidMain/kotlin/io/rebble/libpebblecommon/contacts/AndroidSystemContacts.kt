@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 
-class AndroidSystemContacts(
+internal class AndroidSystemContacts(
     private val appContext: AppContext,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val contentResolver: ContentResolver,

@@ -18,9 +18,8 @@ class RecordingProcessingTaskRepository(
     suspend fun getLatestButtonSequenceForTransfer(transferId: Long): String? =
         dao.getLatestButtonSequenceForTransfer(transferId)
 
-    /** True when the recording came from a ring click's agent command rather than typing. */
-    suspend fun isGestureCommandRecording(recordingId: Long): Boolean =
-        dao.isGestureCommandRecording(recordingId)
+    suspend fun getTextButtonSequence(recordingId: Long): String? =
+        dao.getTextButtonSequence(recordingId)
 
     private fun RecordingProcessingTask.toEntity(): RecordingProcessingTaskEntity {
         when (task) {

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.sample
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
-class MissedCallSyncer(
+internal class MissedCallSyncer(
     private val timelinePinDao: TimelinePinRealDao,
     private val timeProvider: TimeProvider,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,

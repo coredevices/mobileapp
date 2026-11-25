@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okio.ArrayIndexOutOfBoundsException
 
-class Mtu(private val blePlatformConfig: BlePlatformConfig) {
+internal class Mtu(private val blePlatformConfig: BlePlatformConfig) {
     private val logger = Logger.withTag("Mtu")
     private val _mtu = MutableStateFlow(DEFAULT_MTU)
     val mtu: StateFlow<Int> = _mtu.asStateFlow()
@@ -33,7 +33,7 @@ class Mtu(private val blePlatformConfig: BlePlatformConfig) {
     }
 }
 
-fun ByteArray.toUShortLittleEndian(): UShort? = try {
+internal fun ByteArray.toUShortLittleEndian(): UShort? = try {
     toUByteArray().getUShortAt(0, littleEndian = true)
 } catch (e: ArrayIndexOutOfBoundsException) {
     Logger.w("toUShortLittleEndian", e)

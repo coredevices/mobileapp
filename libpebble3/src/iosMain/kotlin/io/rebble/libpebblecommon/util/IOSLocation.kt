@@ -10,7 +10,7 @@ import platform.CoreLocation.kCLLocationAccuracyHundredMeters
 import platform.Foundation.NSError
 import platform.darwin.NSObject
 
-class IOSLocation(
+internal class IOSLocation(
     private val locationCallback: (CLLocation?) -> Unit,
     private val authorizationCallback: (Boolean) -> Unit,
     private val errorCallback: (NSError?) -> Unit,

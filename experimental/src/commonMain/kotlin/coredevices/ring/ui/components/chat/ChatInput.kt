@@ -8,7 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -50,16 +50,30 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.feed_clear
+import coreapp.ring.generated.resources.feed_dismiss_keyboard
+import coreapp.ring.generated.resources.feed_hold_to_record
+import coreapp.ring.generated.resources.feed_recording_in_progress
+import coreapp.ring.generated.resources.feed_send
+import coreapp.ring.generated.resources.feed_send_as_click_hold
+import coreapp.ring.generated.resources.feed_stop
+import coreapp.ring.generated.resources.feed_type_or_hold_to_record
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Pebble Index compose bar — outlined pill text field + separate red mic
  * circle on the right. Mirrors the JSX prototype's `ComposeBar`. Holding
  * the mic kicks the existing audio-record path; in `isRecording` mode the
  * pill gets replaced by an animated waveform with Stop / Cancel buttons.
+ * Tapping send routes typed text like Hold & Talk; long-pressing it routes like Click & Hold.
  */
 @Composable
 fun ChatInput(
@@ -68,7 +82,7 @@ fun ChatInput(
     onMicClick: () -> Unit = {},
     onStopClick: () -> Unit = {},
     onCancelClick: () -> Unit = {},
-    onTextSubmit: ((String) -> Unit)? = null
+    onTextSubmit: ((String, RingGesture) -> Unit)? = null
 ) {
     val colors = IndexTheme.colors
     var inputText by remember { mutableStateOf("") }
@@ -83,10 +97,10 @@ fun ChatInput(
         focusManager.clearFocus()
     }
 
-    fun submitText() {
+    fun submitText(gesture: RingGesture = RingGesture.Hold) {
         val text = inputText.trim()
         if (text.isEmpty()) return
-        onTextSubmit?.invoke(text)
+        onTextSubmit?.invoke(text, gesture)
         inputText = ""
     }
 
@@ -115,7 +129,7 @@ fun ChatInput(
                         value = inputText,
                         enabled = onTextSubmit != null,
                         onValueChange = { inputText = it },
-                        onSubmit = ::submitText,
+                        onSubmit = { submitText() },
                         onFocusChanged = { isFocused = it },
                     )
                 }
@@ -127,7 +141,14 @@ fun ChatInput(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(colors.primary)
-                    .clickable {
+                    .combinedClickable(
+                        onLongClick = if (hasText) {
+                            { submitText(RingGesture.ClickHold) }
+                        } else {
+                            null
+                        },
+                        onLongClickLabel = if (hasText) stringResource(Res.string.feed_send_as_click_hold) else null,
+                    ) {
                         when {
                             hasText -> submitText()
                             showDismissKeyboard -> dismissKeyboard()
@@ -143,9 +164,9 @@ fun ChatInput(
                         else -> Icons.Filled.Mic
                     },
                     contentDescription = when {
-                        hasText -> "Send"
-                        showDismissKeyboard -> "Dismiss keyboard"
-                        else -> "Hold to record"
+                        hasText -> stringResource(Res.string.feed_send)
+                        showDismissKeyboard -> stringResource(Res.string.feed_dismiss_keyboard)
+                        else -> stringResource(Res.string.feed_hold_to_record)
                     },
                     tint = colors.onPrimary,
                     modifier = Modifier.size(20.dp),
@@ -187,7 +208,7 @@ private fun TextPill(
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
-                        "Type or hold to record…",
+                        stringResource(Res.string.feed_type_or_hold_to_record),
                         color = colors.onSurfaceVariant,
                         fontSize = 15.sp,
                     )
@@ -197,7 +218,7 @@ private fun TextPill(
         )
         if (value.isNotEmpty()) {
             IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Filled.Close, "Clear", tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Close, stringResource(Res.string.feed_clear), tint = colors.onSurfaceVariant, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -227,7 +248,7 @@ private fun RecordingIndicator(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onCancel) {
-            Icon(Icons.Filled.Close, "Cancel", tint = colors.error)
+            Icon(Icons.Filled.Close, stringResource(UtilRes.string.cancel), tint = colors.error)
         }
 
         Row(
@@ -236,7 +257,7 @@ private fun RecordingIndicator(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Recording",
+                stringResource(Res.string.feed_recording_in_progress),
                 color = colors.error,
                 fontSize = 13.sp,
             )
@@ -258,7 +279,7 @@ private fun RecordingIndicator(
         }
 
         IconButton(onClick = onStop) {
-            Icon(Icons.Filled.Stop, "Stop", tint = colors.error)
+            Icon(Icons.Filled.Stop, stringResource(Res.string.feed_stop), tint = colors.error)
         }
     }
 }

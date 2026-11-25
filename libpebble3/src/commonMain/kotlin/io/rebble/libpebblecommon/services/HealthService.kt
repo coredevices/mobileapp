@@ -38,7 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  * - Steps: "highest step count wins" strategy
  * - Phone database is source of truth during reconciliation
  */
-class HealthService(
+internal class HealthService(
     private val protocolHandler: PebbleProtocolHandler,
     private val healthDao: HealthDao,
 ) : ProtocolService, Health {

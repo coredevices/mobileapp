@@ -26,8 +26,10 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOG
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.web.withTimeoutOr
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -44,7 +46,7 @@ import kotlin.uuid.toJavaUuid
 private fun getService(appContext: AppContext): BluetoothManager? =
     appContext.context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+internal actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
     return try {
         val callback = GattServerCallback(bleConfigFlow)
         getService(appContext)?.openGattServer(appContext.context, callback)?.let {
@@ -57,7 +59,7 @@ actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, 
     }
 }
 
-data class RegisteredDevice(
+internal data class RegisteredDevice(
     val dataChannel: SendChannel<ByteArray>,
     val device: BluetoothDevice,
     val notificationsEnabled: Boolean,
@@ -65,7 +67,7 @@ data class RegisteredDevice(
     val mutex: Mutex = Mutex(),
 )
 
-class GattServerCallback(
+internal class GattServerCallback(
     private val bleConfigFlow: BleConfigFlow,
 ) : BluetoothGattServerCallback() {
     private val logger = Logger.withTag("GattServerCallback")
@@ -92,7 +94,7 @@ class GattServerCallback(
     }
 
     private val _serviceAdded = MutableSharedFlow<ServerServiceAdded?>()
-    val serviceAdded = _serviceAdded.asSharedFlow()
+    val serviceAdded: SharedFlow<ServerServiceAdded?> = _serviceAdded.asSharedFlow()
 
     override fun onServiceAdded(status: Int, service: BluetoothGattService) {
         logger.d("onServiceAdded: ${service.uuid}")
@@ -102,7 +104,7 @@ class GattServerCallback(
     }
 
     private val _characteristicReadRequest = MutableStateFlow<RawCharacteristicReadRequest?>(null)
-    val characteristicReadRequest = _characteristicReadRequest.asSharedFlow()
+    val characteristicReadRequest: SharedFlow<GattServerCallback.RawCharacteristicReadRequest?> = _characteristicReadRequest.asSharedFlow()
 
     data class RawCharacteristicReadRequest(
         val device: BluetoothDevice,
@@ -191,7 +193,7 @@ class GattServerCallback(
     }
 }
 
-actual class GattServer(
+internal actual class GattServer(
     val server: BluetoothGattServer,
     val callback: GattServerCallback,
     val cbTimeout: Long = 8000,
@@ -199,7 +201,7 @@ actual class GattServer(
     private val logger = Logger.withTag("GattServer")
     private var consecutiveSendTimeouts = 0
 
-    actual val characteristicReadRequest = callback.characteristicReadRequest.filterNotNull().map {
+    actual val characteristicReadRequest: Flow<ServerCharacteristicReadRequest> = callback.characteristicReadRequest.filterNotNull().map {
         ServerCharacteristicReadRequest(
             deviceId = it.device.address.asPebbleBleIdentifier(),
             uuid = it.characteristic.uuid.asUuid(),
@@ -394,6 +396,11 @@ actual class GattServer(
     actual fun wasRestoredWithSubscribedCentral(): Boolean {
         return false
     }
+
+    actual fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean =
+        callback.registeredDevices.any { (mac, device) ->
+            mac != identifier.macAddress && device.notificationsEnabled
+        }
 
     actual fun initServer() {
     }

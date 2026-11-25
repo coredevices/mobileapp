@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
+import kotlinx.io.IOException
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.io.buffered
@@ -60,15 +61,13 @@ interface RecordingStorage {
     suspend fun exportRecording(id: String, useOriginalAudio: Boolean = false): Path
 
     /**
-     * Open a sink for writing recording data, storing temporarily in cache
-     * until [persistRecording] is called
+     * Open a sink for writing recording data, kept in persistent storage until uploaded
      * @param id unique identifier for the recording, cannot contain characters that are invalid in file names
      */
     suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink
 
     /**
-     * Open a sink for writing the original raw version of a recording, storing temporarily in cache
-     * until [persistRecording] is called
+     * Open a sink for writing the original raw version of a recording, kept in persistent storage until uploaded
      * @param id unique identifier for the recording, cannot contain characters that are invalid in file names
      */
     suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink
@@ -79,11 +78,14 @@ interface RecordingStorage {
     suspend fun openRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo>
 
     /**
-     * Open a source for reading recording data only if it already exists in cache,
+     * Open a source for reading recording data only if it already exists locally,
      * without attempting to download from Firebase Storage.
      * Usually prefer [openRecordingSource].
      */
     suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo>?
+
+    /** Size in bytes of a recording's local copy, or null if there is none. */
+    suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Long?
 
     /**
      * Stages a completed recording for upload and queues it with the offline-tolerant syncer,
@@ -126,7 +128,7 @@ interface RecordingStorage {
     fun recordingExists(id: String): Boolean
 
     /**
-     * Delete all cached recording metadata from the database.
+     * Delete all cached recording metadata from the database, along with recordings not yet uploaded.
      */
     suspend fun deleteAllCachedMetadata()
 
@@ -172,6 +174,7 @@ class RealRecordingStorage(
 
     private val m4aEncoder = M4aEncoder()
     private val m4aDecoder = M4aDecoder()
+    private val files = RecordingFiles(getRecordingsCacheDirectory(), getRecordingsDataDirectory())
     init {
         ensureDirectories() // Ensure full paths created on first access
     }
@@ -203,19 +206,20 @@ class RealRecordingStorage(
     override suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink = withContext(Dispatchers.IO) {
         val metadata = CachedRecordingMetadata(id, sampleRate, mimeType)
         cachedMetadataDao.insertOrReplace(metadata)
-        return@withContext SystemFileSystem.sink(Path(getRecordingsCacheDirectory(), id)).buffered()
+        return@withContext SystemFileSystem.sink(files.persistentPath(id)).buffered()
     }
 
     override suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink = withContext(Dispatchers.IO) {
         val metadata = CachedRecordingMetadata("$id-original", sampleRate, mimeType)
         cachedMetadataDao.insertOrReplace(metadata)
-        return@withContext SystemFileSystem.sink(Path(getRecordingsCacheDirectory(), "$id-original")).buffered()
+        return@withContext SystemFileSystem.sink(files.persistentPath("$id-original")).buffered()
     }
 
     private suspend fun getOrDownloadCachedRecording(id: String): Pair<Path, RecordingStorage.RecordingSourceInfo> {
-        val cachedPath = Path(getRecordingsCacheDirectory(), id)
+        val cachedPath = files.cachePath(id)
+        val localPath = files.localPath(id)
         var cachedMetadata = cachedMetadataDao.get(id)
-        return if (!SystemFileSystem.exists(cachedPath) || cachedMetadata == null) { // Not in cache, download
+        return if (localPath == null || cachedMetadata == null) { // No local copy, download
             logger.d { "Downloading recording $id" }
             val path = "recordings/${Firebase.auth.currentUser!!.uid}/$id"
             val ref = Firebase.storage.reference(path)
@@ -272,9 +276,9 @@ class RealRecordingStorage(
             val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
             Pair(cachedPath, RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
         } else {
-            logger.d { "Recording $id found in cache" }
-            val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
-            Pair(cachedPath, RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
+            logger.d { "Recording $id found locally" }
+            val size = SystemFileSystem.metadataOrNull(localPath)?.size ?: error("Failed to get size of local recording $id")
+            Pair(localPath, RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
         }
     }
 
@@ -300,14 +304,17 @@ class RealRecordingStorage(
 
     override suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Pair<Source, RecordingStorage.RecordingSourceInfo>? = withContext(Dispatchers.IO) {
         val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
-        val cachedPath = Path(getRecordingsCacheDirectory(), id)
         val cachedMetadata = cachedMetadataDao.get(id)
             ?: return@withContext null
-        if (!SystemFileSystem.exists(cachedPath)) {
-            return@withContext null
-        }
-        val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
-        return@withContext Pair(SystemFileSystem.source(cachedPath).buffered(), RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
+        val localPath = files.localPath(id)
+            ?: return@withContext null
+        val size = SystemFileSystem.metadataOrNull(localPath)?.size ?: error("Failed to get size of local recording $id")
+        return@withContext Pair(SystemFileSystem.source(localPath).buffered(), RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
+    }
+
+    override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = withContext(Dispatchers.IO) {
+        val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
+        files.localPath(id)?.let { SystemFileSystem.metadataOrNull(it)?.size }
     }
 
     override suspend fun persistRecording(id: String) = withContext(Dispatchers.IO) {
@@ -330,17 +337,21 @@ class RealRecordingStorage(
                 logger.d { "Upload of $idToMove already pending, not staging again" }
                 continue
             }
-            val source = Path(getRecordingsCacheDirectory(), idToMove)
             val cachedMetadata = cachedMetadataDao.get(idToMove)
                 ?: error("Cached metadata for recording $idToMove not found")
-            require(SystemFileSystem.exists(source)) {
-                "Recording $idToMove does not exist in cache"
+            val source = requireNotNull(files.localPath(idToMove)) {
+                "Recording $idToMove does not exist locally"
             }
 
+            val samples = readPcmFile(source)
+            if (samples.isEmpty()) {
+                logger.w { "Recording $idToMove is empty, not staging for upload" }
+                continue
+            }
             val staged = stageUpload(
                 id = idToMove,
                 sampleRate = cachedMetadata.sampleRate,
-                samples = readPcmFile(source),
+                samples = samples,
                 encryptionKey = encryptionKey,
             )
             logger.d { "Queueing staged upload ${staged.id}" }
@@ -445,6 +456,11 @@ class RealRecordingStorage(
             throw RecoverableTaskException("Upload of ${upload.id} failed: ${e.message}", e)
         }
         SystemFileSystem.delete(path)
+        try {
+            files.moveToCache(upload.id)
+        } catch (e: IOException) {
+            logger.w(e) { "Failed to move uploaded recording ${upload.id} to cache" }
+        }
     }
 
     override fun deleteStagedRecording(id: String) {
@@ -452,8 +468,7 @@ class RealRecordingStorage(
     }
 
     override fun deleteRecording(id: String) {
-        val source = Path(getRecordingsDataDirectory(), id)
-        SystemFileSystem.delete(source)
+        files.deletePersistent(id)
     }
 
     override fun deleteRecordingFromCache(id: String) {
@@ -467,6 +482,7 @@ class RealRecordingStorage(
     }
 
     override suspend fun deleteAllCachedMetadata() {
+        cachedMetadataDao.getAllIds().forEach { files.deletePersistent(it) }
         cachedMetadataDao.deleteAll()
         logger.i { "Deleted all cached recording metadata" }
     }

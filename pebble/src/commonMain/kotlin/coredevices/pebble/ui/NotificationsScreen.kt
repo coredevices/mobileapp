@@ -49,34 +49,49 @@ import kotlin.time.Clock
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.notif_tab_contacts
+import coreapp.pebble.generated.resources.notif_sort_name
+import coreapp.pebble.generated.resources.notif_sort_recent
+import coreapp.pebble.generated.resources.notif_sort_count
+import coreapp.pebble.generated.resources.notif_filter_all
+import coreapp.pebble.generated.resources.notif_filter_enabled
+import coreapp.pebble.generated.resources.notif_filter_disabled
+import coreapp.pebble.generated.resources.notif_details
+import coreapp.pebble.generated.resources.notif_app_icon_description
+import coreapp.pebble.generated.resources.apps
+import coreapp.pebble.generated.resources.notifications
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 class NotificationScreenViewModel : ViewModel() {
     val tab = mutableStateOf(NotificationTab.Apps)
 }
 
-enum class NotificationTab(val title: String) {
-    Apps("Apps"),
-    Contacts("Contacts"),
+enum class NotificationTab(val title: StringResource) {
+    Apps(Res.string.apps),
+    Contacts(Res.string.notif_tab_contacts),
 //    Rules("Rules"),
 //    History("History"),
 }
 
-enum class NotificationAppSort {
-    Name,
-    Recent,
-    Count,
+enum class NotificationAppSort(val label: StringResource) {
+    Name(Res.string.notif_sort_name),
+    Recent(Res.string.notif_sort_recent),
+    Count(Res.string.notif_sort_count),
 }
 
-enum class EnabledFilter(val label: String) {
-    All("All"),
-    EnabledOnly("Enabled"),
-    DisabledOnly("Disabled"),
+enum class EnabledFilter(val label: StringResource) {
+    All(Res.string.notif_filter_all),
+    EnabledOnly(Res.string.notif_filter_enabled),
+    DisabledOnly(Res.string.notif_filter_disabled),
 }
 
 @Composable
 fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     LaunchedEffect(Unit) {
-        topBarParams.title("Notifications")
+        topBarParams.title(getString(Res.string.notifications))
         topBarParams.actions {}
     }
 
@@ -106,7 +121,7 @@ fun NotificationsScreenContent(topBarParams: TopBarParams, nav: NavBarNav) {
                                 ),
                                 onClick = { viewModel.tab.value = tab },
                                 selected = viewModel.tab.value == tab,
-                                label = { Text(tab.title) },
+                                label = { Text(stringResource(tab.title)) },
                                 icon = {},
                             )
                         }
@@ -201,7 +216,7 @@ fun NotificationAppCard(
                 if (clickable) {
                     Icon(
                         Icons.Default.MoreHoriz,
-                        "Details",
+                        stringResource(Res.string.notif_details),
                         modifier = Modifier.padding(start = 4.dp, end = 10.dp)
                     )
                 }
@@ -235,7 +250,7 @@ fun AppIconImage(
     showBadge: Boolean,
 ) {
     val app = entry.app
-    val contentDescription = remember(app.packageName) { "${app.name} icon" }
+    val contentDescription = stringResource(Res.string.notif_app_icon_description, app.name)
     when (platform) {
         // iOS: load from web service
         Platform.IOS -> {

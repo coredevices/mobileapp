@@ -37,12 +37,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_backup_encryption_key
+import coreapp.ring.generated.resources.settings_encryption_confirm_saved
+import coreapp.ring.generated.resources.settings_encryption_copy_key
+import coreapp.ring.generated.resources.settings_encryption_generate_key
+import coreapp.ring.generated.resources.settings_encryption_import_qr
+import coreapp.ring.generated.resources.settings_encryption_key_backup_description
+import coreapp.ring.generated.resources.settings_encryption_key_backup_title
+import coreapp.ring.generated.resources.settings_encryption_not_backed_up_message
+import coreapp.ring.generated.resources.settings_encryption_not_backed_up_title
+import coreapp.ring.generated.resources.settings_encryption_not_backed_up_warning
+import coreapp.ring.generated.resources.settings_encryption_restore
+import coreapp.ring.generated.resources.settings_encryption_setup_generating
+import coreapp.ring.generated.resources.settings_encryption_setup_paste
+import coreapp.ring.generated.resources.settings_encryption_setup_prompt
+import coreapp.ring.generated.resources.settings_encryption_setup_qr_saved
+import coreapp.ring.generated.resources.settings_encryption_setup_restoring
+import coreapp.ring.generated.resources.settings_encryption_setup_save_safe
+import coreapp.ring.generated.resources.settings_encryption_setup_saved
+import coreapp.ring.generated.resources.settings_encryption_setup_title
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.done
+import coreapp.util.generated.resources.retry
 import coredevices.ring.encryption.EncryptionSetupState
 import coredevices.ring.ui.components.QrCodeImage
 import coredevices.ring.ui.viewmodel.EncryptionViewModel
 import coredevices.ui.dismissKeyboardOnTapOutside
 import coredevices.util.rememberUiContext
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import coreapp.util.generated.resources.Res as UtilRes
 
 /**
  * The "key not backed up" warning and generated-key QR/backup sheet,
@@ -58,26 +83,26 @@ fun EncryptionKeyResultDialogs(viewModel: EncryptionViewModel = koinViewModel())
         AlertDialog(
             onDismissRequest = { viewModel.dismissKeyNotBackedUpDialog() },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red) },
-            title = { Text("Encryption key not backed up") },
+            title = { Text(stringResource(Res.string.settings_encryption_not_backed_up_title)) },
             text = {
                 Text(
                     buildAnnotatedString {
-                        append("You're attempting to enable backup encryption without a confirmed keychain backup of your key, ")
-                        append("please ensure you've saved your key either via QR code or copied it to your clipboard and saved it elsewhere.\n\n")
+                        append(stringResource(Res.string.settings_encryption_not_backed_up_message))
+                        append("\n\n")
                         withStyle(SpanStyle(color = Color.Red, fontWeight = FontWeight.Bold)) {
-                            append("If you lose this key, you will not be able to sync or restore anything from backups and will have to start fresh.")
+                            append(stringResource(Res.string.settings_encryption_not_backed_up_warning))
                         }
                     }
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmEnableEncryption() }) {
-                    Text("I confirm, my key is saved elsewhere")
+                    Text(stringResource(Res.string.settings_encryption_confirm_saved))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissKeyNotBackedUpDialog() }) {
-                    Text("Cancel")
+                    Text(stringResource(UtilRes.string.cancel))
                 }
             }
         )
@@ -85,7 +110,7 @@ fun EncryptionKeyResultDialogs(viewModel: EncryptionViewModel = koinViewModel())
     if (generatedKey != null) {
         AlertDialog(
             onDismissRequest = { viewModel.clearGeneratedKey() },
-            title = { Text("Encryption Key Backup") },
+            title = { Text(stringResource(Res.string.settings_encryption_key_backup_title)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,7 +118,7 @@ fun EncryptionKeyResultDialogs(viewModel: EncryptionViewModel = koinViewModel())
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "Save this key securely. You will need it to decrypt your backups.",
+                        stringResource(Res.string.settings_encryption_key_backup_description),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Box(
@@ -111,12 +136,12 @@ fun EncryptionKeyResultDialogs(viewModel: EncryptionViewModel = koinViewModel())
                 TextButton(onClick = {
                     clipboardManager.setText(AnnotatedString(generatedKey!!))
                 }) {
-                    Text("Copy Key")
+                    Text(stringResource(Res.string.settings_encryption_copy_key))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.clearGeneratedKey() }) {
-                    Text("Done")
+                    Text(stringResource(UtilRes.string.done))
                 }
             }
         )
@@ -140,21 +165,18 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
     AlertDialog(
         onDismissRequest = { viewModel.cancelEncryptionSetup() },
         modifier = Modifier.dismissKeyboardOnTapOutside(),
-        title = { Text("Set up backup encryption") },
+        title = { Text(stringResource(Res.string.settings_encryption_setup_title)) },
         text = {
             when (val s = current) {
                 EncryptionSetupState.Hidden -> {}
-                EncryptionSetupState.PromptGenerate -> Text(
-                    "Generate an encryption key so only you can read your backups. " +
-                        "You'll save a copy so you can restore on another device."
-                )
+                EncryptionSetupState.PromptGenerate -> Text(stringResource(Res.string.settings_encryption_setup_prompt))
 
                 EncryptionSetupState.Generating -> Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Generating your key and saving it to your password manager…")
+                    Text(stringResource(Res.string.settings_encryption_setup_generating))
                 }
 
                 is EncryptionSetupState.ShowKey -> Column(
@@ -163,16 +185,11 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        buildString {
-                            append("Saved to your password manager. ")
-                            if (s.qrSavedToPhotos) {
-                                append("A QR code of your key was also saved to your photos. ")
-                            }
-                            append(
-                                "Save this key somewhere safe too — you'll need it to " +
-                                    "restore your backups and it can't be recovered."
-                            )
-                        },
+                        listOfNotNull(
+                            stringResource(Res.string.settings_encryption_setup_saved),
+                            stringResource(Res.string.settings_encryption_setup_qr_saved).takeIf { s.qrSavedToPhotos },
+                            stringResource(Res.string.settings_encryption_setup_save_safe),
+                        ).joinToString(" "),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -185,23 +202,19 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Looking for your key in your password manager…")
+                    Text(stringResource(Res.string.settings_encryption_setup_restoring))
                 }
 
                 is EncryptionSetupState.PasteKey -> Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val focusManager = LocalFocusManager.current
-                    Text(
-                        "Your key was generated on another device and isn't in this " +
-                            "password manager. Paste your backup key, or import the " +
-                            "QR code saved in your photos."
-                    )
+                    Text(stringResource(Res.string.settings_encryption_setup_paste))
                     OutlinedTextField(
                         value = pasted,
                         onValueChange = { pasted = it },
                         singleLine = true,
-                        label = { Text("Encryption key") },
+                        label = { Text(stringResource(Res.string.settings_backup_encryption_key)) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.fillMaxWidth()
@@ -209,7 +222,7 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
                     TextButton(
                         enabled = uiContext != null,
                         onClick = { uiContext?.let { viewModel.restoreFromQrPhoto(it) } }
-                    ) { Text("Import QR code from photos") }
+                    ) { Text(stringResource(Res.string.settings_encryption_import_qr)) }
                     s.error?.let {
                         Text(
                             it,
@@ -230,21 +243,21 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
                 EncryptionSetupState.PromptGenerate -> TextButton(
                     enabled = uiContext != null,
                     onClick = { uiContext?.let { viewModel.generateKeyForSetup(it) } }
-                ) { Text("Generate Key") }
+                ) { Text(stringResource(Res.string.settings_encryption_generate_key)) }
 
                 is EncryptionSetupState.ShowKey -> TextButton(
                     onClick = { viewModel.completeEncryptionSetup() }
-                ) { Text("Done") }
+                ) { Text(stringResource(UtilRes.string.done)) }
 
                 is EncryptionSetupState.PasteKey -> TextButton(
                     enabled = pasted.isNotBlank(),
                     onClick = { viewModel.restoreFromPastedKey(pasted) }
-                ) { Text("Restore") }
+                ) { Text(stringResource(Res.string.settings_encryption_restore)) }
 
                 is EncryptionSetupState.Failed -> TextButton(
                     enabled = uiContext != null,
                     onClick = { uiContext?.let { viewModel.generateKeyForSetup(it) } }
-                ) { Text("Retry") }
+                ) { Text(stringResource(UtilRes.string.retry)) }
 
                 else -> {}
             }
@@ -253,7 +266,7 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
             when (val s = current) {
                 is EncryptionSetupState.ShowKey -> TextButton(
                     onClick = { clipboardManager.setText(AnnotatedString(s.keyBase64)) }
-                ) { Text("Copy Key") }
+                ) { Text(stringResource(Res.string.settings_encryption_copy_key)) }
 
                 EncryptionSetupState.Generating,
                 EncryptionSetupState.Restoring,
@@ -261,7 +274,7 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
 
                 else -> TextButton(
                     onClick = { viewModel.cancelEncryptionSetup() }
-                ) { Text("Cancel") }
+                ) { Text(stringResource(UtilRes.string.cancel)) }
             }
         }
     )

@@ -4,18 +4,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlin.uuid.Uuid
 
 /** `navigator.geolocation` for a [JsEngine], as PKJS has it. Install [GEOLOCATION_JS] after it. */
-class EngineGeolocation(
+internal class EngineGeolocation(
     scope: CoroutineScope,
     eval: suspend (String) -> Unit,
     appUuid: Uuid,
     prompt: Boolean,
 ) : GeolocationInterface(scope, eval, appUuid, prompt), JsEngineInterface, AutoCloseable {
-    override val name = "_PebbleGeo"
-    override val methods = listOf("getCurrentPosition", "watchPosition", "clearWatch", "getRequestCallbackID", "getWatchCallbackID")
+    override val name: String = "_PebbleGeo"
+    override val methods: List<String> = listOf("getCurrentPosition", "watchPosition", "clearWatch", "getRequestCallbackID", "getWatchCallbackID")
 
     override fun dispatch(method: String, args: List<Any?>): Any? = dispatchCall(method, args)
 
-    override fun close() = clearAllWatches()
+    override fun close(): Unit = clearAllWatches()
 }
 
 internal const val GEOLOCATION_JS = """

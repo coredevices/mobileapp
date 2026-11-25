@@ -16,7 +16,7 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 
 @Entity
-data class KnownWatchItem(
+internal data class KnownWatchItem(
     @PrimaryKey val transportIdentifier: String,
     val transportType: TransportType,
     val name: String,
@@ -31,19 +31,19 @@ data class KnownWatchItem(
     val capabilities: Set<ProtocolCapsFlag>? = null,
 )
 
-enum class TransportType {
+internal enum class TransportType {
     BluetoothLe,
     BluetoothClassic,
     Socket,
 }
 
-fun KnownWatchItem.identifier(): PebbleIdentifier = when (transportType) {
+internal fun KnownWatchItem.identifier(): PebbleIdentifier = when (transportType) {
     BluetoothLe -> transportIdentifier.asPebbleBleIdentifier()
     BluetoothClassic -> transportIdentifier.asPebbleBtClassicIdentifier()
     Socket -> PebbleSocketIdentifier(transportIdentifier)
 }
 
-fun PebbleIdentifier.type(): TransportType = when (this) {
+internal fun PebbleIdentifier.type(): TransportType = when (this) {
     is PebbleBleIdentifier -> BluetoothLe
     is PebbleBtClassicIdentifier -> BluetoothClassic
     is PebbleSocketIdentifier -> Socket

@@ -15,6 +15,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -34,10 +35,10 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import kotlin.uuid.Uuid
 
-class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKoinComponent {
-    companion object {
+public class LibPebbleNotificationListener internal constructor() : NotificationListenerService(), LibPebbleKoinComponent {
+    public companion object {
         private val logger = Logger.withTag("LibPebbleNotificationListener")
-        fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
+        public fun componentName(context: Context): ComponentName = ComponentName(context, LibPebbleNotificationListener::class.java)
     }
 
     private var warnedAboutNotificationchannelsPermission = false
@@ -59,7 +60,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     private val privateLogger: PrivateLogger by inject()
 
-    fun cancelNotification(itemId: Uuid) {
+    internal fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return
         cancelNotification(sbn.key)
     }
@@ -75,6 +76,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         // running because it has a notification listener...). Don't do anything here that shouldn't
         // be done twice.
         logger.d { "onListenerConnected() ($this)" }
+        // e.g. process started in backup restricted mode, where MainApplication.onCreate doesn't run
+        if (!LibPebble3.isCreated) {
+            logger.w { "onListenerConnected: LibPebble not created; ignoring" }
+            return
+        }
         notificationHandler.onServiceBound()
         connection.setService(this)
 
@@ -90,6 +96,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     override fun onListenerDisconnected() {
         logger.d { "onListenerDisconnected() ($this)" }
+        if (!LibPebble3.isCreated) return
         connection.setService(null)
         notificationListenerScope.cancel()
         connection.onListenerDisconnected()
@@ -101,7 +108,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         channel: NotificationChannel,
         modificationType: Int,
     ) {
-        notificationHandler.onChannelChanged()
+        if (!LibPebble3.isCreated) return
+        notificationHandler.onChannelChanged(pkg)
     }
 
     override fun onNotificationChannelGroupModified(
@@ -110,7 +118,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         group: NotificationChannelGroup,
         modificationType: Int,
     ) {
-        notificationHandler.onChannelChanged()
+        if (!LibPebble3.isCreated) return
+        notificationHandler.onChannelChanged(pkg)
     }
 
     private data class MutableGroup(
@@ -119,7 +128,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         val channels: MutableList<ChannelItem>,
     )
 
-    fun getChannelsForApp(packageName: String): List<ChannelGroup> {
+    internal fun getChannelsForApp(packageName: String): List<ChannelGroup> {
         try {
             val user = Process.myUserHandle()
             val groups = getNotificationChannelGroups(packageName, user)
@@ -171,7 +180,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     /** Whether Android found something like a one-time code in [key]'s notification. */
-    fun hasSensitiveContent(key: String): Boolean {
+    internal fun hasSensitiveContent(key: String): Boolean {
         val method = hasSensitiveContentMethod ?: return false
         val ranking = Ranking()
         return runCatching { currentRanking?.getRanking(key, ranking) == true && method.invoke(ranking) == true }
@@ -179,6 +188,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!LibPebble3.isCreated) return
         // Before any filtering: the shade holds everything, not just what we forward to the watch.
         connection.onShadeChanged()
 
@@ -200,6 +210,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         rankingMap: RankingMap,
         reason: Int
     ) {
+        if (!LibPebble3.isCreated) return
         connection.onShadeChanged()
 
         // Dialers re-post the incoming call notification under the same key without CATEGORY_CALL once answered.
@@ -238,7 +249,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         }
     }
 
-    fun isNotificationFilteredByDoNotDisturb(statusBarNotification: StatusBarNotification): Boolean {
+    internal fun isNotificationFilteredByDoNotDisturb(statusBarNotification: StatusBarNotification): Boolean {
         val rankingMap = getCurrentRanking() ?: return false
 
         val ranking = Ranking()
@@ -246,7 +257,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
                 !ranking.matchesInterruptionFilter()
     }
 
-    fun isBindingAlive(): Boolean = try {
+    internal fun isBindingAlive(): Boolean = try {
         getActiveNotifications()
         true
     } catch (e: SecurityException) {

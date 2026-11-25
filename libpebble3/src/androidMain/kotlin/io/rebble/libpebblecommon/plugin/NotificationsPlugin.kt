@@ -32,12 +32,12 @@ import kotlin.uuid.Uuid
  * This is the shade, not what we forwarded to the watch — a notification the user has muted for
  * the watch is still in it, and one they swipe away leaves it.
  */
-class NotificationsPlugin(
+internal class NotificationsPlugin(
     private val connection: AndroidPebbleNotificationListenerConnection,
     private val notificationAppDao: NotificationAppRealDao,
     private val appContext: AppContext,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.NOTIFICATIONS
     override val name: String = "Notifications"
     override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
@@ -63,6 +63,7 @@ class NotificationsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         val iconSize = iconPixelSize
@@ -160,11 +161,11 @@ class NotificationsPlugin(
     private inline fun <reified T> encode(value: T): JsonElement = Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "notifications"
-        const val ITEM_NOTIFICATION = "notification"
-        const val PROPERTY_BODY = "body"
-        const val PROPERTY_APP = "app"
-        const val PROPERTY_APP_ICON = "app_icon"
+        const val CATEGORY: String = "notifications"
+        const val ITEM_NOTIFICATION: String = "notification"
+        const val PROPERTY_BODY: String = "body"
+        const val PROPERTY_APP: String = "app"
+        const val PROPERTY_APP_ICON: String = "app_icon"
 
         private const val MAX_ICON_CACHE_CHARS = 256 * 1024
 

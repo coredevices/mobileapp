@@ -9,7 +9,7 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.hasPebbleKit2Companion
 import io.rebble.libpebblecommon.pebblekit.classic.PebbleKitClassic
 import io.rebble.libpebblecommon.pebblekit.two.PebbleKit2
 
-actual fun createPlatformSpecificCompanionAppControl(
+internal actual fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
     appInfo: PbwAppInfo,
     pkjsRunning: Boolean,

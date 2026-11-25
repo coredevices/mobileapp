@@ -29,7 +29,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * ```
  */
 @Serializable(with = PluginPermissionSerializer::class)
-data class PluginPermission(
+public data class PluginPermission(
     val name: String,
     val parameters: Map<String, List<String>> = emptyMap(),
     /** Set for a permission another plugin defines. */
@@ -66,32 +66,37 @@ internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
     }
 }
 
-object PluginPermissions {
-    const val INTERNET = "Internet"
-    const val LOCAL_NETWORK = "LocalNetwork"
+public object PluginPermissions {
+    public const val INTERNET: String = "Internet"
+    public const val LOCAL_NETWORK: String = "LocalNetwork"
     /** Legacy apps only. */
-    const val GLOBAL_INTERNET = "GlobalInternet"
-    const val LOCATION = "Location"
-    const val WATCH_MICROPHONE = "WatchMicrophone"
-    const val NOTIFICATIONS = "Notifications"
-    const val CALENDAR = "Calendar"
-    const val CONTACTS = "Contacts"
-    const val TIMELINE = "Timeline"
-    const val SHOW_NOTIFICATIONS = "ShowNotifications"
-    const val READ_WATCH_SETTINGS = "ReadWatchSettings"
-    const val WRITE_WATCH_SETTINGS = "WriteWatchSettings"
-    const val READ_MUSIC = "ReadMusic"
-    const val CONTROL_MUSIC = "ControlMusic"
-    const val READ_APPS = "ReadApps"
-    const val LAUNCH_APPS = "LaunchApps"
-    const val FIND_MY_PHONE = "FindMyPhone"
-    const val READ_FILES = "ReadFiles"
-    const val WRITE_FILES = "WriteFiles"
-    const val LEGACY_PEBBLEKIT = "LegacyPebbleKit"
-    const val PEBBLEKIT_2 = "PebbleKit2"
+    public const val GLOBAL_INTERNET: String = "GlobalInternet"
+    public const val LOCATION: String = "Location"
+    public const val WATCH_MICROPHONE: String = "WatchMicrophone"
+    public const val HEALTH: String = "Health"
+    public const val NOTIFICATIONS: String = "Notifications"
+    public const val CALENDAR: String = "Calendar"
+    public const val CONTACTS: String = "Contacts"
+    public const val TIMELINE: String = "Timeline"
+    public const val SHOW_NOTIFICATIONS: String = "ShowNotifications"
+    public const val READ_WATCH_SETTINGS: String = "ReadWatchSettings"
+    public const val WRITE_WATCH_SETTINGS: String = "WriteWatchSettings"
+    public const val READ_MUSIC: String = "ReadMusic"
+    public const val CONTROL_MUSIC: String = "ControlMusic"
+    public const val READ_APPS: String = "ReadApps"
+    public const val LAUNCH_APPS: String = "LaunchApps"
+    public const val FIND_MY_PHONE: String = "FindMyPhone"
+    public const val SET_INDEX_ALARMS: String = "SetIndexAlarms"
+    public const val SEND_MESSAGES_BEEPER: String = "SendMessagesBeeper"
+    public const val WRITE_INDEX_NOTES: String = "WriteIndexNotes"
+    public const val WRITE_INDEX_REMINDERS: String = "WriteIndexReminders"
+    public const val READ_FILES: String = "ReadFiles"
+    public const val WRITE_FILES: String = "WriteFiles"
+    public const val LEGACY_PEBBLEKIT: String = "LegacyPebbleKit"
+    public const val PEBBLEKIT_2: String = "PebbleKit2"
 
-    const val PARAM_DOMAINS = "domains"
-    const val PARAM_PACKAGES = "packages"
+    internal const val PARAM_DOMAINS: String = "domains"
+    internal const val PARAM_PACKAGES: String = "packages"
 }
 
 /**
@@ -99,10 +104,10 @@ object PluginPermissions {
  * the root of the data it serves — nobody grants `Calendar` to the calendar — so the permission
  * it is named after is a requirement of whoever reads it, not of the plugin.
  */
-fun requiredOfCaller(source: SourceDeclaration): Set<String> =
+internal fun requiredOfCaller(source: SourceDeclaration): Set<String> =
     source.callerPermissions.flatMap { it.keys() }.toSet()
 
-fun requiredOfCaller(action: ActionDeclaration): Set<String> =
+internal fun requiredOfCaller(action: ActionDeclaration): Set<String> =
     action.callerPermissions.flatMap { it.keys() }.toSet()
 
 /**

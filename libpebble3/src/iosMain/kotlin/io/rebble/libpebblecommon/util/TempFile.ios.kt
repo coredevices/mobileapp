@@ -7,7 +7,7 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 
-actual fun getTempFilePath(
+public actual fun getTempFilePath(
     appContext: AppContext,
     name: String,
     subdir: String?,

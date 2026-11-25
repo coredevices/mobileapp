@@ -14,7 +14,7 @@ import okio.Path.Companion.toPath
 import okio.SYSTEM
 import okio.openZip
 
-object DiskUtil {
+internal object DiskUtil {
     private const val MANIFEST_FILENAME = "manifest.json"
     private val pbzJson = Json {
         ignoreUnknownKeys = true

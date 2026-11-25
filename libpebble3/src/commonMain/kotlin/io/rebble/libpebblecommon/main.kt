@@ -2,6 +2,6 @@ package io.rebble.libpebblecommon
 
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 
-expect fun getPlatform(): PhoneAppVersion.OSType
+internal expect fun getPlatform(): PhoneAppVersion.OSType
 
-expect fun performPlatformSpecificInit()
+internal expect fun performPlatformSpecificInit()

@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.database.dao.ValueParams
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
@@ -35,8 +36,9 @@ import kotlin.time.Instant
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
-data class NotificationAppItem(
+public data class NotificationAppItem internal constructor(
     val packageName: String,
     val name: String,
     val muteState: MuteState,
@@ -144,11 +146,11 @@ data class NotificationAppItem(
     override fun recordHashCode(): Int = hashCode()
 }
 
-fun NotificationAppItem.everNotified(): Boolean =
+public fun NotificationAppItem.everNotified(): Boolean =
     lastNotified.instant.epochSeconds > Instant.DISTANT_PAST.epochSeconds
 
 @Serializable
-enum class MuteState(val value: UByte) {
+public enum class MuteState(public val value: UByte) {
     Always(127u),
     Weekends(65u),
     Weekdays(62u),
@@ -156,14 +158,14 @@ enum class MuteState(val value: UByte) {
     Exempt(1u), // Not support on watch (only use for android things)
     ;
 
-    companion object {
-        fun fromValue(value: UByte): MuteState = entries.firstOrNull { it.value == value } ?: Never
+    public companion object {
+        public fun fromValue(value: UByte): MuteState = entries.firstOrNull { it.value == value } ?: Never
     }
 }
 
 @Immutable
 @Serializable
-data class ChannelGroup(
+public data class ChannelGroup(
     val id: String,
     val name: String?,
     val channels: List<ChannelItem>,
@@ -171,30 +173,30 @@ data class ChannelGroup(
 
 @Immutable
 @Serializable
-data class ChannelItem(
+public data class ChannelItem internal constructor(
     val id: String,
     val name: String,
     val muteState: MuteState,
     val vibrationPattern: List<UInt>? = null,
 )
 
-class NotificationAppBlobItem(
+internal class NotificationAppBlobItem(
     flags: UInt = 0u,
     attributes: List<Attribute> = emptyList(),
     actions: List<TimelineItem.Action> = emptyList()
 ) : StructMappable() {
-    val flags = SUInt(m, flags, endianness = Endian.Little)
-    val attrCount = SUByte(m, attributes.size.toUByte())
-    val actionCount = SUByte(m, actions.size.toUByte())
-    val attributes = SFixedList(m, attrCount.get().toInt(), attributes) {
+    val flags: SUInt = SUInt(m, flags, endianness = Endian.Little)
+    val attrCount: SUByte = SUByte(m, attributes.size.toUByte())
+    val actionCount: SUByte = SUByte(m, actions.size.toUByte())
+    val attributes: SFixedList<TimelineItem.Attribute> = SFixedList(m, attrCount.get().toInt(), attributes) {
         Attribute(0u, ubyteArrayOf())
     }.apply {
         linkWithCount(attrCount)
     }
-    val actions = SFixedList(m, actionCount.get().toInt(), actions) {
+    val actions: SFixedList<TimelineItem.Action> = SFixedList(m, actionCount.get().toInt(), actions) {
         TimelineItem.Action(
             0u,
-            TimelineItem.Action.Type.Empty,
+            TimelineActionType.Empty,
             emptyList()
         )
     }.apply {
@@ -204,7 +206,7 @@ class NotificationAppBlobItem(
 
 private val logger = Logger.withTag("NotificationAppItem")
 
-fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
+internal fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
     try {
         val packageName = key.asByteArray().decodeToString()
         val item = NotificationAppBlobItem().apply { fromBytes(DataBuffer(value)) }

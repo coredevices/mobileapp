@@ -16,11 +16,12 @@ import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlin.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
-class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
+internal class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
     private val scope = CoroutineScope(Dispatchers.Default)
     companion object {
         private val logger = Logger.withTag(AndroidSystemCallLog::class.simpleName!!)
@@ -108,7 +109,7 @@ class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
         return missedCalls
     }
 
-    override fun registerForMissedCallChanges() = callbackFlow {
+    override fun registerForMissedCallChanges(): Flow<Unit> = callbackFlow {
         val observer = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 if (selfChange) return

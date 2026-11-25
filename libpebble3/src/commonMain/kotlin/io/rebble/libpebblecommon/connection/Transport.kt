@@ -3,27 +3,27 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.database.entity.TransportType
 import io.rebble.libpebblecommon.database.entity.type
 
-interface PebbleIdentifier {
-    val asString: String
+public interface PebbleIdentifier {
+    public val asString: String
 }
 
 // mac address on android, uuid on ios etc
-expect class PebbleBleIdentifier : PebbleIdentifier {
+public expect class PebbleBleIdentifier : PebbleIdentifier {
     override val asString: String
 }
 
-expect fun String.asPebbleBleIdentifier(): PebbleBleIdentifier
+internal expect fun String.asPebbleBleIdentifier(): PebbleBleIdentifier
 
 // Bluetooth Classic identifier — Android-only in practice (iOS Pebble has no BT Classic).
 // The actual on Android wraps a MAC address; iOS/JVM are stubs that must compile but are
 // unreachable at runtime.
-expect class PebbleBtClassicIdentifier : PebbleIdentifier {
+internal expect class PebbleBtClassicIdentifier : PebbleIdentifier {
     override val asString: String
 }
 
-expect fun String.asPebbleBtClassicIdentifier(): PebbleBtClassicIdentifier
+internal expect fun String.asPebbleBtClassicIdentifier(): PebbleBtClassicIdentifier
 
-data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
+public data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
     override val asString: String = address
 }
 
@@ -32,13 +32,13 @@ data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
 // expect/actual identifiers can't extend one — so an exhaustive `when (this)` isn't available.
 
 /** Socket watches are emulators reached over TCP, so the Bluetooth adapter is irrelevant to them. */
-fun PebbleIdentifier.requiresBluetooth(): Boolean = when (type()) {
+internal fun PebbleIdentifier.requiresBluetooth(): Boolean = when (type()) {
     TransportType.BluetoothLe, TransportType.BluetoothClassic -> true
     TransportType.Socket -> false
 }
 
 /** The emulator has no recovery firmware slot, so it must not be treated as missing one. */
-fun PebbleIdentifier.canHaveRecoveryFirmware(): Boolean = when (type()) {
+internal fun PebbleIdentifier.canHaveRecoveryFirmware(): Boolean = when (type()) {
     TransportType.BluetoothLe, TransportType.BluetoothClassic -> true
     TransportType.Socket -> false
 }
@@ -47,10 +47,10 @@ fun PebbleIdentifier.canHaveRecoveryFirmware(): Boolean = when (type()) {
  * Whether the watch sends a phone-app-version request that negotiation should wait for. The
  * emulator only sends it once at boot with nobody attached, so the phone must not wait.
  */
-fun PebbleIdentifier.sendsAppVersionRequest(): Boolean = when (type()) {
+internal fun PebbleIdentifier.sendsAppVersionRequest(): Boolean = when (type()) {
     TransportType.BluetoothLe, TransportType.BluetoothClassic -> true
     TransportType.Socket -> false
 }
 
-fun PebbleSocketIdentifier.displayName(): String =
+internal fun PebbleSocketIdentifier.displayName(): String =
     "QEMU ${address.substringBefore(':').substringAfterLast('.')}"

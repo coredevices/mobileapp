@@ -3,8 +3,20 @@
 package coredevices.ring.ui.viewmodel
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.object_kind_action_log
+import coreapp.ring.generated.resources.object_kind_answer
+import coreapp.ring.generated.resources.object_kind_calendar_event
+import coreapp.ring.generated.resources.object_kind_checklist
+import coreapp.ring.generated.resources.object_kind_delegated
+import coreapp.ring.generated.resources.object_kind_list
+import coreapp.ring.generated.resources.object_kind_message
+import coreapp.ring.generated.resources.object_kind_note
+import coreapp.ring.generated.resources.object_kind_reminder
+import coreapp.ring.generated.resources.object_kind_scheduled
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
@@ -15,6 +27,7 @@ import coredevices.ring.data.entity.room.indexfeed.metadataForKind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.reminders.todoComparator
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
@@ -37,6 +50,7 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Backs [coredevices.ring.ui.screens.indexfeed.ObjectDetail]. Handles either an
@@ -183,14 +197,17 @@ class ObjectDetailViewModel(
 
     fun toggleDone() {
         val s = state.value as? UiState.ItemView ?: return
-        val it = s.item
+        val id = s.item.firestoreId
         // appScope: back-navigation right after the tap must not cancel the write.
         appScope.launch {
-            val updated = it.toDocument().copy(
-                done = !it.done,
-                updatedAt = Clock.System.now(),
-            )
-            itemRepo.setItem(it.firestoreId, updated)
+            childWriteMutex.withLock {
+                val it = itemRepo.getById(id) ?: return@launch
+                val updated = it.toDocument().copy(
+                    done = !it.done,
+                    updatedAt = Clock.System.now(),
+                )
+                itemRepo.setItem(id, updated)
+            }
         }
     }
 
@@ -368,7 +385,7 @@ class ObjectDetailViewModel(
         parentListIds: List<String>? = null,
     ) {
         val s = state.value as? UiState.ItemView ?: return
-        val it = s.item
+        val id = s.item.firestoreId
         // appScope, not viewModelScope: patchItem is the always-edit auto-save,
         // flushed from the screen's onDispose when the user navigates back. That
         // dispose coincides with this per-screen ViewModel being cleared and
@@ -376,26 +393,29 @@ class ObjectDetailViewModel(
         // before it commits and the edit would be silently lost. appScope is the
         // app-lifetime LibIndex scope, so the write always completes.
         appScope.launch {
-            val nextKind = kind ?: it.kind
-            val nextDueAt = when (dueAt) {
-                DueAtChange.NoChange -> it.dueAt
-                is DueAtChange.Set -> dueAt.value
+            childWriteMutex.withLock {
+                val it = itemRepo.getById(id) ?: return@launch
+                val nextKind = kind ?: it.kind
+                val nextDueAt = when (dueAt) {
+                    DueAtChange.NoChange -> it.dueAt
+                    is DueAtChange.Set -> dueAt.value
+                }
+                val nextParents = normalizeParentLists(
+                    kind = nextKind,
+                    requestedParents = parentListIds,
+                    currentParents = it.parentListIds(),
+                )
+                val updated = it.toDocument().copy(
+                    createdAt = createdAt ?: it.createdAt,
+                    title = (title ?: it.title).trim().ifBlank { it.title },
+                    body = body ?: it.body,
+                    metadata = metadataForKind(nextKind, existing = it.metadata),
+                    dueAt = nextDueAt,
+                    parentListIds = nextParents,
+                    updatedAt = Clock.System.now(),
+                )
+                itemRepo.setItem(id, updated)
             }
-            val nextParents = normalizeParentLists(
-                kind = nextKind,
-                requestedParents = parentListIds,
-                currentParents = it.parentListIds(),
-            )
-            val updated = it.toDocument().copy(
-                createdAt = createdAt ?: it.createdAt,
-                title = (title ?: it.title).trim().ifBlank { it.title },
-                body = body ?: it.body,
-                metadata = metadataForKind(nextKind, existing = it.metadata),
-                dueAt = nextDueAt,
-                parentListIds = nextParents,
-                updatedAt = Clock.System.now(),
-            )
-            itemRepo.setItem(it.firestoreId, updated)
         }
     }
 
@@ -502,17 +522,18 @@ class ObjectDetailViewModel(
     }
 }
 
+@Composable
 internal fun kindLabel(kind: String): String = when (kind) {
-    "reminder" -> "Reminder"
-    "scheduled" -> "Scheduled"
-    "checklist" -> "Checklist"
-    "note" -> "Note"
-    "answer" -> "Answer"
-    "message" -> "Message"
-    "action_log" -> "Action"
-    "calendar_event" -> "Event"
-    "delegated" -> "Sent"
-    "list" -> "List"
+    "reminder" -> stringResource(Res.string.object_kind_reminder)
+    "scheduled" -> stringResource(Res.string.object_kind_scheduled)
+    "checklist" -> stringResource(Res.string.object_kind_checklist)
+    "note" -> stringResource(Res.string.object_kind_note)
+    "answer" -> stringResource(Res.string.object_kind_answer)
+    "message" -> stringResource(Res.string.object_kind_message)
+    "action_log" -> stringResource(Res.string.object_kind_action_log)
+    "calendar_event" -> stringResource(Res.string.object_kind_calendar_event)
+    "delegated" -> stringResource(Res.string.object_kind_delegated)
+    "list" -> stringResource(Res.string.object_kind_list)
     else -> kind.replaceFirstChar { it.uppercase() }
 }
 
@@ -535,29 +556,4 @@ internal fun normalizeParentLists(
         .filter { it != LIST_TODOS_ID }
         .distinct()
         .ifEmpty { listOf(LIST_NOTES_SELF_ID) }
-}
-
-private fun todoComparator(): Comparator<CachedItem> {
-    val nowMs = Clock.System.now().toEpochMilliseconds()
-    val urgentCutoffMs = nowMs + 24L * 60L * 60L * 1000L
-    return compareBy<CachedItem> { task ->
-        val dueMs = task.dueAt?.toEpochMilliseconds()
-        when {
-            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
-            dueMs != null && dueMs <= nowMs -> 1
-            dueMs == null -> 2
-            else -> 3
-        }
-    }
-        .thenBy { task ->
-            val dueMs = task.dueAt?.toEpochMilliseconds()
-            when {
-                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
-                dueMs != null && dueMs <= nowMs -> -dueMs
-                dueMs == null -> Long.MAX_VALUE
-                else -> dueMs
-            }
-        }
-        .thenBy { it.createdAt.toEpochMilliseconds() }
-        .thenBy { it.title.lowercase() }
 }

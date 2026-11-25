@@ -14,7 +14,7 @@ import kotlinx.coroutines.CoroutineScope
  * This is the seam an engine swap goes through. [JsRunner] does not use it yet — PKJS binds its
  * interfaces per platform, so moving it over means unifying that binding first.
  */
-expect class JsEngine(
+internal expect class JsEngine(
     appContext: AppContext,
     scope: CoroutineScope,
     name: String,
@@ -34,7 +34,7 @@ expect class JsEngine(
  * Arguments are normalised to what JavaScriptCore hands over — `Double` for every number,
  * `String`, `Boolean`, or null — so one implementation serves both platforms.
  */
-interface JsEngineInterface {
+internal interface JsEngineInterface {
     val name: String
     val methods: List<String>
     fun dispatch(method: String, args: List<Any?>): Any?

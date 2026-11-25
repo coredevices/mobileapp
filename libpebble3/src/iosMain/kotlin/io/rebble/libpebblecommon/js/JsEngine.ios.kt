@@ -9,7 +9,7 @@ import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
 import platform.JavaScriptCore.JSContext
 
-actual class JsEngine actual constructor(
+internal actual class JsEngine actual constructor(
     appContext: AppContext,
     scope: CoroutineScope,
     private val name: String,
@@ -22,7 +22,7 @@ actual class JsEngine actual constructor(
     private var jsContext: JSContext? = null
     private var dispatcherRef: StableRef<*>? = null
 
-    actual suspend fun start() = withContext(threadContext) {
+    actual suspend fun start(): Unit = withContext(threadContext) {
         val context = JSContext()
         context.setExceptionHandler { _, exception ->
             logger.e { "JS exception: ${exception?.toString()}" }

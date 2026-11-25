@@ -1,8 +1,8 @@
 package coredevices.ring.agent.builtin_servlets.messaging
 
-import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
-import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.pebble_plugin.BuiltInServletPlugin
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import coredevices.ring.database.Preferences
 import coredevices.ring.isBeeperAvailable
 import coredevices.util.Permission
@@ -11,36 +11,43 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.uuid.Uuid
 
-object MessagingServlet: BuiltInMcpIntegration(
-    name = "builtin_messaging",
+val MESSAGING_PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000002")
+
+const val MESSAGING_SERVLET_NAME = "builtin_messaging"
+
+object MessagingServlet : BuiltInServletPlugin(
+    name = MESSAGING_SERVLET_NAME,
     tools = listOf(
         SendBeeperMessageTool(),
-    )
+    ),
+    pluginUuid = MESSAGING_PLUGIN_UUID,
+    pluginName = "Beeper (Index)",
+    description = "Send instant messages to the user's approved contacts through Beeper.",
+    callerPermission = PluginPermissions.SEND_MESSAGES_BEEPER,
 ), KoinComponent {
-    private val logger by lazy { Logger.withTag("MessagingServlet") }
     private val prefs: Preferences by inject()
     override suspend fun getDisabledTools(): List<String> {
-        val approvedContacts = prefs.approvedBeeperContacts.value
-        return if (approvedContacts.isEmpty()) {
-            logger.d { "No approved contacts for messaging tools, disabling them." }
-            listOf(SendBeeperMessageToolConstants.TOOL_NAME)
-        } else {
-            emptyList()
-        }
+        val canMessage = prefs.approvedBeeperContacts.value.isNotEmpty() || prefs.beeperMessageAnyone.value
+        return if (canMessage) emptyList() else listOf(SendBeeperMessageToolConstants.TOOL_NAME)
     }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
-        return if (prefs.approvedBeeperContacts.value.isNotEmpty()) {
-            buildString {
-                appendLine(super.getExtraContext(sessionContext))
+        val approved = prefs.approvedBeeperContacts.value
+        val messageAnyone = prefs.beeperMessageAnyone.value
+        if (approved.isEmpty() && !messageAnyone) return super.getExtraContext(sessionContext)
+        return buildString {
+            appendLine(super.getExtraContext(sessionContext))
+            if (approved.isNotEmpty()) {
                 appendLine("Approved contacts for ${SendBeeperMessageToolConstants.TOOL_NAME}:")
-                prefs.approvedBeeperContacts.value.forEach { contact ->
+                approved.forEach { contact ->
                     appendLine("- ${contact.name} ${contact.nickname?.let { "(Nickname: $it)" } ?: ""}".trim())
                 }
             }
-        } else {
-            super.getExtraContext(sessionContext)
+            if (messageAnyone) {
+                appendLine("Messages to anyone other than the approved contacts are held for the user to confirm before sending.")
+            }
         }
     }
 }

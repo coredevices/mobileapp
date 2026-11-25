@@ -4,7 +4,7 @@ import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import kotlinx.coroutines.flow.MutableStateFlow
 
-class IosLegacyPhoneReceiver : LegacyPhoneReceiver {
+internal class IosLegacyPhoneReceiver : LegacyPhoneReceiver {
     override fun init(currentCall: MutableStateFlow<Call?>) {
     }
 }

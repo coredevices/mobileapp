@@ -28,13 +28,13 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-data class TimestampedPosition(
+internal data class TimestampedPosition(
     val timestamp: Instant,
     val positionMs: Long,
     val rate: Float,
 )
 
-data class PlaybackStateData(
+internal data class PlaybackStateData(
     val state: PlaybackState,
     val trackPosMs: UInt,
     val playbackRatePct: UInt,
@@ -43,7 +43,7 @@ data class PlaybackStateData(
     val skipSeeksWithinTrack: Boolean,
 ) {
     companion object {
-        val DEFAULT = PlaybackStateData(
+        val DEFAULT: PlaybackStateData = PlaybackStateData(
             state = PlaybackState.Paused,
             trackPosMs = 0u,
             playbackRatePct = 0u,
@@ -54,7 +54,7 @@ data class PlaybackStateData(
     }
 }
 
-class MusicControlManager(
+internal class MusicControlManager(
     private val watchScope: ConnectionCoroutineScope,
     private val musicControlService: MusicService,
     private val imagingService: ImagingService,

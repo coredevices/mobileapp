@@ -104,6 +104,7 @@ kotlin {
                 implementation(libs.koin.compose)
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
+                implementation(libs.firebase.crashlytics)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.client.encoding)
@@ -199,7 +200,7 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL_ENG", "parakeet-tdt-0.6b-v2")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v2.1.0")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", libs.versions.cactus.lm.weights.get())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v2.2.2")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_ENG_WEIGHTS_VERSION", "v2.2.2")
     }

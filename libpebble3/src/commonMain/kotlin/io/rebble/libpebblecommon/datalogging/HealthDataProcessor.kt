@@ -31,7 +31,7 @@ import kotlin.uuid.Uuid
  * All received health data is processed immediately to prevent data loss.
  * Battery optimization is handled by throttling sync REQUESTS, not data reception.
  */
-class HealthDataProcessor(
+internal class HealthDataProcessor(
     private val scope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
@@ -56,7 +56,7 @@ class HealthDataProcessor(
         private const val HEALTH_OVERLAY_TAG: UInt = 84u
         private const val HEALTH_HR_TAG: UInt = 85u
 
-        val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG)
+        val HEALTH_TAGS: Set<UInt> = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG)
     }
 
     fun handleSessionOpen(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
@@ -233,13 +233,13 @@ class HealthDataProcessor(
     }
 }
 
-data class HealthSession(
+internal data class HealthSession(
     val tag: UInt,
     val appUuid: Uuid,
     val itemSize: UShort,
 )
 
-data class PendingDataItem(
+internal data class PendingDataItem(
     val payload: ByteArray,
     val itemsLeft: UInt,
 )

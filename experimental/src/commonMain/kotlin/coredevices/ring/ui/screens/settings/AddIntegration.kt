@@ -42,7 +42,61 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_integration_add
+import coreapp.ring.generated.resources.settings_integration_calendar
+import coreapp.ring.generated.resources.settings_integration_calendar_blocked
+import coreapp.ring.generated.resources.settings_integration_calendar_connected
+import coreapp.ring.generated.resources.settings_integration_calendar_description
+import coreapp.ring.generated.resources.settings_integration_calendar_not_granted
+import coreapp.ring.generated.resources.settings_integration_error
+import coreapp.ring.generated.resources.settings_integration_gtasks_description
+import coreapp.ring.generated.resources.settings_integration_notes
+import coreapp.ring.generated.resources.settings_integration_notion_description
+import coreapp.ring.generated.resources.settings_integration_notion_no_page
+import coreapp.ring.generated.resources.settings_integration_obsidian_change
+import coreapp.ring.generated.resources.settings_integration_obsidian_default_vault
+import coreapp.ring.generated.resources.settings_integration_obsidian_description
+import coreapp.ring.generated.resources.settings_integration_obsidian_existing_note
+import coreapp.ring.generated.resources.settings_integration_obsidian_existing_note_description
+import coreapp.ring.generated.resources.settings_integration_obsidian_extra_tag
+import coreapp.ring.generated.resources.settings_integration_obsidian_extra_tag_help
+import coreapp.ring.generated.resources.settings_integration_obsidian_extra_tag_placeholder
+import coreapp.ring.generated.resources.settings_integration_obsidian_how_saved
+import coreapp.ring.generated.resources.settings_integration_obsidian_main_note
+import coreapp.ring.generated.resources.settings_integration_obsidian_main_note_description
+import coreapp.ring.generated.resources.settings_integration_obsidian_main_note_help
+import coreapp.ring.generated.resources.settings_integration_obsidian_no_folder
+import coreapp.ring.generated.resources.settings_integration_obsidian_note_path
+import coreapp.ring.generated.resources.settings_integration_obsidian_note_path_help
+import coreapp.ring.generated.resources.settings_integration_obsidian_note_path_placeholder
+import coreapp.ring.generated.resources.settings_integration_obsidian_pick_folder
+import coreapp.ring.generated.resources.settings_integration_obsidian_picking
+import coreapp.ring.generated.resources.settings_integration_obsidian_separate_file
+import coreapp.ring.generated.resources.settings_integration_obsidian_separate_file_description
+import coreapp.ring.generated.resources.settings_integration_obsidian_subfolder
+import coreapp.ring.generated.resources.settings_integration_obsidian_subfolder_help
+import coreapp.ring.generated.resources.settings_integration_obsidian_vault_folder
+import coreapp.ring.generated.resources.settings_integration_phone_calendar
+import coreapp.ring.generated.resources.settings_integration_reminders
+import coreapp.ring.generated.resources.settings_integration_sign_in_cancelled
+import coreapp.ring.generated.resources.settings_integration_sign_in_error
+import coreapp.ring.generated.resources.settings_integration_sign_in_error_multiline
+import coreapp.ring.generated.resources.settings_integration_signed_in
+import coreapp.ring.generated.resources.settings_integration_tasker_connected
+import coreapp.ring.generated.resources.settings_integration_tasker_description
+import coreapp.ring.generated.resources.settings_integration_tasker_not_installed
+import coreapp.ring.generated.resources.settings_integration_tasker_receive
+import coreapp.ring.generated.resources.settings_integration_tasker_step1
+import coreapp.ring.generated.resources.settings_integration_tasker_step2
+import coreapp.ring.generated.resources.settings_integration_tasker_step3
+import coreapp.ring.generated.resources.settings_integration_unknown_error
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.connect
+import coreapp.util.generated.resources.done
+import coreapp.util.generated.resources.save
+import coreapp.util.generated.resources.sign_in
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
@@ -63,9 +117,11 @@ import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import coreapp.util.generated.resources.Res as UtilRes
 
 @Composable
 fun AddIntegration(coreNav: CoreNav) {
@@ -81,12 +137,12 @@ fun AddIntegration(coreNav: CoreNav) {
                     ) {
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(coreapp.util.generated.resources.Res.string.back)
+                            contentDescription = stringResource(UtilRes.string.back)
                         )
                     }
                 },
                 title = {
-                    Text("Add integration")
+                    Text(stringResource(Res.string.settings_integration_add))
                 },
                 actions = {
                     BugReportButton(
@@ -130,8 +186,8 @@ fun AddIntegration(coreNav: CoreNav) {
             }
             item {
                 ListItem(
-                    headlineContent = { Text(PHONE_CALENDAR_TITLE) },
-                    supportingContent = { Text("Calendar") },
+                    headlineContent = { Text(stringResource(Res.string.settings_integration_phone_calendar)) },
+                    supportingContent = { Text(stringResource(Res.string.settings_integration_calendar)) },
                     modifier = Modifier.clickable {
                         dialog = {
                             PhoneCalendarDialog(
@@ -163,10 +219,10 @@ private fun Item(provider: IntegrationProvider, onClick: () -> Unit) {
         supportingContent = { Text(
             buildList {
                 if (provider.supportsReminders) {
-                    add("Reminders")
+                    add(stringResource(Res.string.settings_integration_reminders))
                 }
                 if (provider.supportsNotes) {
-                    add("Notes")
+                    add(stringResource(Res.string.settings_integration_notes))
                 }
             }.joinToString()
         ) },
@@ -180,8 +236,6 @@ private sealed class SignInState {
     data object Success : SignInState()
     data class Error(val message: String) : SignInState()
 }
-
-const val PHONE_CALENDAR_TITLE = "Phone Calendar"
 
 /**
  * Connects the opt-in Phone Calendar integration: "connecting" means granting calendar
@@ -202,10 +256,10 @@ fun PhoneCalendarDialog(
 
     M3Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(PHONE_CALENDAR_TITLE) },
+        title = { Text(stringResource(Res.string.settings_integration_phone_calendar)) },
         buttons = {
             TextButton(onClick = { if (state is SignInState.Success) onConnected() else onDismiss() }) {
-                Text(if (state is SignInState.Success) "Done" else "Cancel")
+                Text(stringResource(if (state is SignInState.Success) UtilRes.string.done else UtilRes.string.cancel))
             }
             if (state !is SignInState.Success) {
                 Spacer(Modifier.width(8.dp))
@@ -226,28 +280,21 @@ fun PhoneCalendarDialog(
                                     // The system won't show the prompt again; send the user to
                                     // app settings to grant it manually.
                                     permissionRequester.openPermissionsScreen(ctx)
-                                    SignInState.Error(
-                                        "Calendar access is blocked. Allow calendar access for the app in system settings, then try again."
-                                    )
+                                    SignInState.Error(getString(Res.string.settings_integration_calendar_blocked))
                                 }
-                                else -> SignInState.Error(
-                                    "Calendar access was not granted. Index can only add events to your calendar with this permission."
-                                )
+                                else -> SignInState.Error(getString(Res.string.settings_integration_calendar_not_granted))
                             }
                         }
                     }
                 ) {
-                    Text("Connect")
+                    Text(stringResource(UtilRes.string.connect))
                 }
             }
         }
     ) {
         when (val s = state) {
             is SignInState.Idle -> {
-                Text(
-                    "Connect your phone's calendar so Index can add events when you ask. " +
-                        "This grants the app calendar access."
-                )
+                Text(stringResource(Res.string.settings_integration_calendar_description))
             }
             is SignInState.SigningIn -> {
                 Box(
@@ -258,7 +305,7 @@ fun PhoneCalendarDialog(
                 }
             }
             is SignInState.Success -> {
-                Text("Phone Calendar connected.")
+                Text(stringResource(Res.string.settings_integration_calendar_connected))
             }
             is SignInState.Error -> {
                 Text(s.message, color = MaterialTheme.colorScheme.error)
@@ -281,7 +328,7 @@ fun GTasksDialog(
         title = { Text("Google Tasks") },
         buttons = {
             TextButton(onClick = onDismiss) {
-                Text(if (state is SignInState.Success) "Done" else "Cancel")
+                Text(stringResource(if (state is SignInState.Success) UtilRes.string.done else UtilRes.string.cancel))
             }
             if (state !is SignInState.Success) {
                 Spacer(Modifier.width(8.dp))
@@ -294,23 +341,23 @@ fun GTasksDialog(
                                 if (integration.signIn(uiContext)) {
                                     SignInState.Success
                                 } else {
-                                    SignInState.Error("Sign in was cancelled.")
+                                    SignInState.Error(getString(Res.string.settings_integration_sign_in_cancelled))
                                 }
                             } catch (e: Throwable) {
                                 Logger.w("AddIntegration", e) { "Error during Google Tasks sign in: ${e.message}" }
-                                SignInState.Error(e.message ?: "Unknown error")
+                                SignInState.Error(e.message ?: getString(Res.string.settings_integration_unknown_error))
                             }
                         }
                     }
                 ) {
-                    Text("Sign In")
+                    Text(stringResource(UtilRes.string.sign_in))
                 }
             }
         }
     ) {
         when (val s = state) {
             is SignInState.Idle -> {
-                Text("Sign in with Google to sync reminders to Google Tasks.")
+                Text(stringResource(Res.string.settings_integration_gtasks_description))
             }
             is SignInState.SigningIn -> {
                 Box(
@@ -321,11 +368,11 @@ fun GTasksDialog(
                 }
             }
             is SignInState.Success -> {
-                Text("Successfully signed in.")
+                Text(stringResource(Res.string.settings_integration_signed_in))
             }
             is SignInState.Error -> {
                 Text(
-                    "Error signing in: ${s.message}",
+                    stringResource(Res.string.settings_integration_sign_in_error, s.message),
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -354,14 +401,14 @@ fun NotionDialog(
                         } catch (e: Throwable) {
                             Logger.w("NotionDialog", e) { "Error during Notion unlink: ${e.message}" }
                         }
-                        SignInState.Error("No page found for notes. Please give access to a single page in Notion for your notes.")
+                        SignInState.Error(getString(Res.string.settings_integration_notion_no_page))
                     }
                 } else {
-                    SignInState.Error("Sign in was cancelled.")
+                    SignInState.Error(getString(Res.string.settings_integration_sign_in_cancelled))
                 }
             } catch (e: Throwable) {
                 Logger.w("AddIntegration", e) { "Error during Notion sign in: ${e.message}" }
-                SignInState.Error(e.message ?: "Unknown error")
+                SignInState.Error(e.message ?: getString(Res.string.settings_integration_unknown_error))
             }
         }
     }
@@ -375,21 +422,21 @@ fun NotionDialog(
         title = { Text("Notion") },
         buttons = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
             Spacer(Modifier.width(8.dp))
             TextButton(
                 enabled = state !is SignInState.SigningIn,
                 onClick = ::onSignIn
             ) {
-                Text("Sign In")
+                Text(stringResource(UtilRes.string.sign_in))
             }
         }
     ) {
         Column {
             when (val s = state) {
                 is SignInState.Idle -> {
-                    Text("Sign in to send notes to Notion.")
+                    Text(stringResource(Res.string.settings_integration_notion_description))
                 }
                 is SignInState.SigningIn -> {
                     Box(
@@ -401,7 +448,7 @@ fun NotionDialog(
                 }
                 is SignInState.Error -> {
                     Text(
-                        "Error signing in:\n${s.message}",
+                        stringResource(Res.string.settings_integration_sign_in_error_multiline, s.message),
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -423,9 +470,10 @@ fun ObsidianDialog(
     val scope = rememberCoroutineScope()
 
     val alreadyConfigured = remember { integration.hasVault() }
+    val defaultVaultName = stringResource(Res.string.settings_integration_obsidian_default_vault)
 
     var picking by remember { mutableStateOf(false) }
-    var vaultName by remember { mutableStateOf(if (alreadyConfigured) integration.vaultDisplayName() ?: "Obsidian vault" else null) }
+    var vaultName by remember { mutableStateOf(if (alreadyConfigured) integration.vaultDisplayName() ?: defaultVaultName else null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     var mode by remember { mutableStateOf(if (alreadyConfigured) integration.currentMode() else ObsidianMode.TIMESTAMPED_FILES) }
@@ -445,15 +493,15 @@ fun ObsidianDialog(
         scope.launch {
             try {
                 if (integration.signIn(uiContext)) {
-                    vaultName = integration.vaultDisplayName() ?: "Obsidian vault"
+                    vaultName = integration.vaultDisplayName() ?: defaultVaultName
                     notes = integration.listNotes()
                     notePath = ""
                 } else {
-                    error = "No folder selected."
+                    error = getString(Res.string.settings_integration_obsidian_no_folder)
                 }
             } catch (e: Throwable) {
                 Logger.w("ObsidianDialog", e) { "Vault pick failed: ${e.message}" }
-                error = e.message ?: "Unknown error"
+                error = e.message ?: getString(Res.string.settings_integration_unknown_error)
             } finally {
                 picking = false
             }
@@ -464,7 +512,7 @@ fun ObsidianDialog(
         onDismissRequest = onDismiss,
         title = { Text("Obsidian") },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             if (vaultName != null) {
                 Spacer(Modifier.width(8.dp))
                 val canSave = mode != ObsidianMode.NAMED_NOTE || notePath.isNotBlank()
@@ -484,18 +532,25 @@ fun ObsidianDialog(
                             onDismiss()
                         }
                     }
-                ) { Text("Save") }
+                ) { Text(stringResource(UtilRes.string.save)) }
             }
         }
     ) {
         Column {
             if (vaultName == null) {
-                Text("Pick your Obsidian vault folder. Notes will be written there as Markdown files.")
+                Text(stringResource(Res.string.settings_integration_obsidian_description))
                 Spacer(Modifier.width(8.dp))
                 TextButton(
                     enabled = !picking,
                     onClick = ::pickFolder,
-                ) { Text(if (picking) "Picking…" else "Pick vault folder") }
+                ) {
+                    Text(
+                        stringResource(
+                            if (picking) Res.string.settings_integration_obsidian_picking
+                            else Res.string.settings_integration_obsidian_pick_folder
+                        )
+                    )
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -503,7 +558,7 @@ fun ObsidianDialog(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "VAULT FOLDER",
+                            stringResource(Res.string.settings_integration_obsidian_vault_folder),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -512,11 +567,18 @@ fun ObsidianDialog(
                     TextButton(
                         enabled = !picking,
                         onClick = ::pickFolder,
-                    ) { Text(if (picking) "Picking…" else "Change") }
+                    ) {
+                        Text(
+                            stringResource(
+                                if (picking) Res.string.settings_integration_obsidian_picking
+                                else Res.string.settings_integration_obsidian_change
+                            )
+                        )
+                    }
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "How should each note be saved?",
+                    stringResource(Res.string.settings_integration_obsidian_how_saved),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -534,7 +596,7 @@ fun ObsidianDialog(
             }
             if (error != null) {
                 Text(
-                    "Error: $error",
+                    stringResource(Res.string.settings_integration_error, error ?: ""),
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
@@ -558,18 +620,18 @@ private fun ObsidianModeSelector(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         ModeOption(
-            title = "A separate file for each note",
-            description = "Saved as its own timestamped file",
+            title = stringResource(Res.string.settings_integration_obsidian_separate_file),
+            description = stringResource(Res.string.settings_integration_obsidian_separate_file_description),
             selected = mode == ObsidianMode.TIMESTAMPED_FILES,
         ) { onModeChange(ObsidianMode.TIMESTAMPED_FILES) }
         ModeOption(
-            title = "Add to one main note",
-            description = "Everything is appended to Pebble Index.md",
+            title = stringResource(Res.string.settings_integration_obsidian_main_note),
+            description = stringResource(Res.string.settings_integration_obsidian_main_note_description),
             selected = mode == ObsidianMode.MAIN_NOTE,
         ) { onModeChange(ObsidianMode.MAIN_NOTE) }
         ModeOption(
-            title = "Add to an existing note",
-            description = "Append to a note you choose",
+            title = stringResource(Res.string.settings_integration_obsidian_existing_note),
+            description = stringResource(Res.string.settings_integration_obsidian_existing_note_description),
             selected = mode == ObsidianMode.NAMED_NOTE,
         ) { onModeChange(ObsidianMode.NAMED_NOTE) }
 
@@ -580,9 +642,9 @@ private fun ObsidianModeSelector(
                 OutlinedTextField(
                     value = subfolder,
                     onValueChange = onSubfolderChange,
-                    label = { Text("Subfolder") },
+                    label = { Text(stringResource(Res.string.settings_integration_obsidian_subfolder)) },
                     placeholder = { Text(ObsidianPreferences.DEFAULT_SUBFOLDER) },
-                    supportingText = { Text("A folder inside your vault. Created if it doesn't exist.") },
+                    supportingText = { Text(stringResource(Res.string.settings_integration_obsidian_subfolder_help)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -590,9 +652,9 @@ private fun ObsidianModeSelector(
                 OutlinedTextField(
                     value = customTag,
                     onValueChange = onCustomTagChange,
-                    label = { Text("Extra tag (optional)") },
-                    placeholder = { Text("fleeting") },
-                    supportingText = { Text("Added to each new note's frontmatter alongside #index.") },
+                    label = { Text(stringResource(Res.string.settings_integration_obsidian_extra_tag)) },
+                    placeholder = { Text(stringResource(Res.string.settings_integration_obsidian_extra_tag_placeholder)) },
+                    supportingText = { Text(stringResource(Res.string.settings_integration_obsidian_extra_tag_help)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -606,7 +668,7 @@ private fun ObsidianModeSelector(
             }
             ObsidianMode.MAIN_NOTE -> {
                 Text(
-                    "Creates Pebble Index.md in your vault if it doesn't exist yet.",
+                    stringResource(Res.string.settings_integration_obsidian_main_note_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -658,9 +720,9 @@ private fun NotePathField(
                 onNotePathChange(it)
                 expanded = true
             },
-            label = { Text("Note to append to") },
-            placeholder = { Text("Inbox/Index notes") },
-            supportingText = { Text("Path inside your vault, subfolders allowed. Created if it doesn't exist.") },
+            label = { Text(stringResource(Res.string.settings_integration_obsidian_note_path)) },
+            placeholder = { Text(stringResource(Res.string.settings_integration_obsidian_note_path_placeholder)) },
+            supportingText = { Text(stringResource(Res.string.settings_integration_obsidian_note_path_help)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -695,7 +757,7 @@ fun TaskerDialog(
         title = { Text("Tasker") },
         buttons = {
             TextButton(onClick = onDismiss) {
-                Text(if (state is SignInState.Success) "Done" else "Cancel")
+                Text(stringResource(if (state is SignInState.Success) UtilRes.string.done else UtilRes.string.cancel))
             }
             if (state !is SignInState.Success) {
                 Spacer(Modifier.width(8.dp))
@@ -709,16 +771,16 @@ fun TaskerDialog(
                                 if (client.signIn(uiContext)) {
                                     SignInState.Success
                                 } else {
-                                    SignInState.Error("Tasker is not installed. Install Tasker, then try again.")
+                                    SignInState.Error(getString(Res.string.settings_integration_tasker_not_installed))
                                 }
                             } catch (e: Throwable) {
                                 Logger.w("AddIntegration", e) { "Error connecting Tasker: ${e.message}" }
-                                SignInState.Error(e.message ?: "Unknown error")
+                                SignInState.Error(e.message ?: getString(Res.string.settings_integration_unknown_error))
                             }
                         }
                     }
                 ) {
-                    Text("Connect")
+                    Text(stringResource(UtilRes.string.connect))
                 }
             }
         }
@@ -726,17 +788,11 @@ fun TaskerDialog(
         when (val s = state) {
             is SignInState.Idle -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Sends your notes and reminders to Tasker as a shared intent " +
-                            "(text/plain), so you can route them to any app or action."
-                    )
-                    Text("To receive them, in Tasker:", fontWeight = FontWeight.Bold)
-                    Text("1.  Add a profile, pick Event → Received Share.")
-                    Text("2.  Attach a task — your text arrives in the %rs_text variable.")
-                    Text(
-                        "3.  Optional: limit it to this app with %rs_package_name = " +
-                            "coredevices.coreapp."
-                    )
+                    Text(stringResource(Res.string.settings_integration_tasker_description))
+                    Text(stringResource(Res.string.settings_integration_tasker_receive), fontWeight = FontWeight.Bold)
+                    Text(stringResource(Res.string.settings_integration_tasker_step1))
+                    Text(stringResource(Res.string.settings_integration_tasker_step2))
+                    Text(stringResource(Res.string.settings_integration_tasker_step3))
                 }
             }
             is SignInState.SigningIn -> {
@@ -748,11 +804,11 @@ fun TaskerDialog(
                 }
             }
             is SignInState.Success -> {
-                Text("Tasker connected. Choose it for notes or reminders in Index settings.")
+                Text(stringResource(Res.string.settings_integration_tasker_connected))
             }
             is SignInState.Error -> {
                 Text(
-                    "Error: ${s.message}",
+                    stringResource(Res.string.settings_integration_error, s.message),
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()

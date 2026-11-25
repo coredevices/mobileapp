@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -46,7 +47,6 @@ interface UsersDao {
     suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int)
     suspend fun updateEncryptionInfo(info: EncryptionInfo) {}
     suspend fun updatePermissionSettings(policy: String, askLegacyApps: Boolean) {}
-    suspend fun clearPermissionSettings() {}
     /** Sign out of Firebase. Must be used instead of calling Firebase.auth.signOut() directly. */
     suspend fun signOut()
     fun init()
@@ -128,7 +128,8 @@ class UsersDaoImpl(
                                         try {
                                             logger.i { "Attempting silent re-auth (trigger=$trigger)" }
                                             val success = try {
-                                                silentSignIn.attempt()
+                                                withTimeoutOrNull(SILENT_REAUTH_TIMEOUT) { silentSignIn.attempt() }
+                                                    ?: false.also { logger.w { "Silent re-auth timed out" } }
                                             } catch (e: CancellationException) {
                                                 throw e
                                             } catch (e: Exception) {
@@ -337,10 +338,6 @@ class UsersDaoImpl(
         userDoc?.update(mapOf("permission_policy" to policy, "ask_legacy_apps_for_permissions" to askLegacyApps))
     }
 
-    override suspend fun clearPermissionSettings() {
-        userDoc?.update(mapOf("permission_policy" to null, "ask_legacy_apps_for_permissions" to null))
-    }
-
     override suspend fun signOut() {
         explicitSignOut = true
         // Restoring the anonymous session that replaces this one must not silently re-auth
@@ -369,6 +366,7 @@ internal const val GOOGLE_PROVIDER_ID = "google.com"
 // Give Firebase's own restoration ~6s (attempts 1-2) before trying silent re-auth.
 internal const val SILENT_REAUTH_MIN_WAIT_ATTEMPT = 3
 internal const val SILENT_REAUTH_MAX_ATTEMPTS = 5
+private val SILENT_REAUTH_TIMEOUT = 30.seconds
 // ~6 minutes of waiting given the 2s-doubling-to-1m backoff.
 internal const val AUTH_RESTORE_MAX_ATTEMPTS = 10
 

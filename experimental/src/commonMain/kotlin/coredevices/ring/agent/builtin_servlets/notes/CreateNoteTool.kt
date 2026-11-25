@@ -7,69 +7,48 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
-import coredevices.ring.agent.builtin_servlets.destinationProperty
-import coredevices.ring.agent.builtin_servlets.withoutDestination
+import coredevices.ring.agent.builtin_servlets.NOTE_DESTINATION_DESCRIPTION
 import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.externalDestination
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 
 class CreateNoteTool(private val providers: IntegrationProviderRepository) : BuiltInMcpTool(
-    definition = DEFINITION,
-    localDefinition = DEFINITION.withoutDestination(),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
 ), KoinComponent {
 
     companion object {
         const val TOOL_NAME = "create_note"
         const val TOOL_DESCRIPTION = "Save a note, idea, or thought for later. Use when the user wants to jot down or note something, or remember a fact or piece of information. Not for 'remember to do something' requests - those are reminders."
         private val logger = Logger.withTag("CreateNoteTool")
-        private val DEFINITION = Tool(
-            name = TOOL_NAME,
-            description = TOOL_DESCRIPTION,
-            inputSchema = ToolSchema(
-                properties = JsonObject(
-                    mapOf(
-                        "text" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The text of the note, usually a direct quote from the user"
-                            ).toJson()
-                        ),
-                        DESTINATION_ARG to destinationProperty("note"),
-                    )
-                ),
-                required = listOf("text")
-            ),
-            outputSchema = ToolSchema(
-                properties = JsonObject(
-                    mapOf(
-                        "note_id" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The unique identifier of the created note"
-                            ).toJson()
-                        )
-                    )
-                ),
-                required = emptyList()
-            )
-        )
     }
 
+    @ToolDefinition(
+        servlet = NoteServlet.NAME,
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        output = CreateNoteResult::class,
+    )
     @Serializable
-    data class CreateNoteArgs(val text: String, val automatic: Boolean = false, val destination: String? = null)
+    data class CreateNoteArgs(
+        @ToolParam("The text of the note, usually a direct quote from the user")
+        val text: String,
+        val automatic: Boolean = false,
+        @ToolParam(NOTE_DESTINATION_DESCRIPTION)
+        val destination: String? = null,
+    )
     @Serializable
     data class CreateNoteResult(
         @EncodeDefault(EncodeDefault.Mode.NEVER)
         @SerialName("note_id")
+        @ToolParam("The unique identifier of the created note")
         val noteId: String? = null
     )
 

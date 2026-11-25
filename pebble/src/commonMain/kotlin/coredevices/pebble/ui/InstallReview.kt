@@ -14,10 +14,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CloudUpload
@@ -28,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhonelinkRing
 import androidx.compose.material.icons.filled.Notifications
@@ -94,22 +99,111 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.install_review_allow_all
+import coreapp.pebble.generated.resources.install_review_allow_all_required
+import coreapp.pebble.generated.resources.install_review_allowed_automatically_count
+import coreapp.pebble.generated.resources.install_review_automatic_cant_send_data
+import coreapp.pebble.generated.resources.install_review_automatic_settings_allow
+import coreapp.pebble.generated.resources.install_review_it_wants_to
+import coreapp.pebble.generated.resources.install_review_optional_subtitle
+import coreapp.pebble.generated.resources.install_review_replace
+import coreapp.pebble.generated.resources.install_review_replace_message
+import coreapp.pebble.generated.resources.install_review_replace_title
+import coreapp.pebble.generated.resources.install_review_title
+import coreapp.pebble.generated.resources.plugin_collapse
+import coreapp.pebble.generated.resources.plugin_expand
+import coreapp.pebble.generated.resources.plugin_permission_allow
+import coreapp.pebble.generated.resources.plugin_permission_allowed_automatically
+import coreapp.pebble.generated.resources.plugin_permission_allowed_automatically_used
+import coreapp.pebble.generated.resources.plugin_permission_an_app
+import coreapp.pebble.generated.resources.plugin_permission_deny
+import coreapp.pebble.generated.resources.plugin_permission_exfiltrating
+import coreapp.pebble.generated.resources.plugin_permission_exfiltrating_global_internet
+import coreapp.pebble.generated.resources.plugin_permission_exfiltrating_limited
+import coreapp.pebble.generated.resources.plugin_permission_exfiltrating_pebblekit
+import coreapp.pebble.generated.resources.plugin_permission_health_not_enforced
+import coreapp.pebble.generated.resources.plugin_permission_health_not_enforced_explanation
+import coreapp.pebble.generated.resources.plugin_permission_label_beeper_messages
+import coreapp.pebble.generated.resources.plugin_permission_label_calendar
+import coreapp.pebble.generated.resources.plugin_permission_label_contacts
+import coreapp.pebble.generated.resources.plugin_permission_label_control_music
+import coreapp.pebble.generated.resources.plugin_permission_label_find_my_phone
+import coreapp.pebble.generated.resources.plugin_permission_label_global_internet
+import coreapp.pebble.generated.resources.plugin_permission_label_health
+import coreapp.pebble.generated.resources.plugin_permission_label_index_alarms
+import coreapp.pebble.generated.resources.plugin_permission_label_index_notes
+import coreapp.pebble.generated.resources.plugin_permission_label_index_reminders
+import coreapp.pebble.generated.resources.plugin_permission_label_internet
+import coreapp.pebble.generated.resources.plugin_permission_label_internet_domain
+import coreapp.pebble.generated.resources.plugin_permission_label_launch_apps
+import coreapp.pebble.generated.resources.plugin_permission_label_legacy_pebblekit
+import coreapp.pebble.generated.resources.plugin_permission_label_local_network
+import coreapp.pebble.generated.resources.plugin_permission_label_location
+import coreapp.pebble.generated.resources.plugin_permission_label_notifications
+import coreapp.pebble.generated.resources.plugin_permission_label_notifications_from
+import coreapp.pebble.generated.resources.plugin_permission_label_pebblekit_2
+import coreapp.pebble.generated.resources.plugin_permission_label_plugin_defined
+import coreapp.pebble.generated.resources.plugin_permission_label_read_apps
+import coreapp.pebble.generated.resources.plugin_permission_label_read_files
+import coreapp.pebble.generated.resources.plugin_permission_label_read_files_scope
+import coreapp.pebble.generated.resources.plugin_permission_label_read_music
+import coreapp.pebble.generated.resources.plugin_permission_label_read_watch_settings
+import coreapp.pebble.generated.resources.plugin_permission_label_show_notifications
+import coreapp.pebble.generated.resources.plugin_permission_label_timeline
+import coreapp.pebble.generated.resources.plugin_permission_label_watch_microphone
+import coreapp.pebble.generated.resources.plugin_permission_label_write_files
+import coreapp.pebble.generated.resources.plugin_permission_label_write_files_scope
+import coreapp.pebble.generated.resources.plugin_permission_label_write_watch_settings
+import coreapp.pebble.generated.resources.plugin_permission_list_and
+import coreapp.pebble.generated.resources.plugin_permission_not_used_yet
+import coreapp.pebble.generated.resources.plugin_permission_optional
+import coreapp.pebble.generated.resources.plugin_permission_request
+import coreapp.pebble.generated.resources.plugin_permission_required
+import coreapp.pebble.generated.resources.plugin_permission_review
+import coreapp.pebble.generated.resources.plugin_permission_sensitive
+import coreapp.pebble.generated.resources.plugin_permission_sensitive_explanation
+import coreapp.pebble.generated.resources.plugin_permission_used
+import coreapp.pebble.generated.resources.plugin_permission_why
+import coreapp.pebble.generated.resources.plugin_permission_why_title
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_health
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_internet
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_location
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_notifications
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_phone_apps
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_access_timeline
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_asks
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_explanation
+import coreapp.pebble.generated.resources.plugin_permissions_legacy_has_access
+import coreapp.pebble.generated.resources.plugin_permissions_none
+import coreapp.pebble.generated.resources.plugin_permissions_not_installed
+import coreapp.pebble.generated.resources.plugin_permissions_title
+import coreapp.pebble.generated.resources.plugin_permissions_title_legacy
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.install
+import coreapp.util.generated.resources.ok
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.StringResource
 
 @Composable
 fun ReplaceAppDialog(replaced: ReplacedApp, onAnswer: (replace: Boolean) -> Unit) {
     AlertDialog(
         onDismissRequest = { onAnswer(false) },
-        title = { Text("Replace ${replaced.title}?") },
+        title = { Text(stringResource(Res.string.install_review_replace_title, replaced.title)) },
         text = {
             Text(
-                "${replaced.title} is installed from ${replaced.installedFrom}. This copy is from " +
-                    "${replaced.newFrom}, and may not be from the same developer.\n\n" +
-                    "Replacing it erases everything the installed app has stored, including its settings, " +
-                    "sign-ins and permissions, on this phone and on connected watches."
+                stringResource(
+                    Res.string.install_review_replace_message,
+                    replaced.title,
+                    replaced.installedFrom,
+                    replaced.newFrom,
+                )
             )
         },
-        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text("Replace") } },
-        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text(stringResource(Res.string.install_review_replace)) } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text(stringResource(UtilRes.string.cancel)) } },
     )
 }
 
@@ -127,7 +221,7 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
         // The default width leaves a permission row too little room.
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.padding(horizontal = 16.dp),
-        title = { Text("Install ${review.appName}?") },
+        title = { Text(stringResource(Res.string.install_review_title, review.appName)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -168,16 +262,21 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                 if (review.describesRequired) {
                     val (required, optional) = toReview.partition(review::isRequired)
                     if (required.isNotEmpty()) {
-                        Group("Required", required, automatic = false)
-                        if (optional.isNotEmpty()) AllowAll("Allow all required", required)
+                        Group(stringResource(Res.string.plugin_permission_required), required, automatic = false)
+                        if (optional.isNotEmpty()) AllowAll(stringResource(Res.string.install_review_allow_all_required), required)
                     }
                     if (optional.isNotEmpty()) {
-                        Group("Optional", optional, automatic = false, subtitle = "Decide now, or when ${review.appName} first uses them.")
+                        Group(
+                            stringResource(Res.string.plugin_permission_optional),
+                            optional,
+                            automatic = false,
+                            subtitle = stringResource(Res.string.install_review_optional_subtitle, review.appName),
+                        )
                     }
                 } else if (toReview.isNotEmpty()) {
-                    Group("It wants to", toReview, automatic = false)
+                    Group(stringResource(Res.string.install_review_it_wants_to), toReview, automatic = false)
                 }
-                if (toReview.isNotEmpty()) AllowAll("Allow all", toReview)
+                if (toReview.isNotEmpty()) AllowAll(stringResource(Res.string.install_review_allow_all), toReview)
                 if (review.automatic.isNotEmpty()) {
                     var expanded by remember(review) { mutableStateOf(false) }
                     Column {
@@ -186,14 +285,14 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                             modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(start = 4.dp),
                         ) {
                             Text(
-                                "Allowed automatically (${review.automatic.size})",
+                                stringResource(Res.string.install_review_allowed_automatically_count, review.automatic.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.weight(1f),
                             )
                             Icon(
                                 if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                contentDescription = if (expanded) "Collapse" else "Expand",
+                                contentDescription = stringResource(if (expanded) Res.string.plugin_collapse else Res.string.plugin_expand),
                             )
                         }
                         if (expanded) {
@@ -201,7 +300,7 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                                 null,
                                 review.automatic.requiredFirst(defined, { it }, review::isRequired),
                                 automatic = true,
-                                subtitle = automaticExplanation(review.appName, policy),
+                                subtitle = stringResource(automaticExplanation(policy, review.automatic), review.appName),
                             )
                         }
                     }
@@ -215,17 +314,16 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                     onAnswer((review.toReview + review.automatic).mapNotNull { key -> decisionOf(key)?.let { key to it } }.toMap())
                 },
                 enabled = review.toReview.filter(review::needsAnswer).all { decisionOf(it) != null },
-            ) { Text("Install") }
+            ) { Text(stringResource(UtilRes.string.install)) }
         },
-        dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text(stringResource(UtilRes.string.cancel)) } },
     )
 }
 
-private fun automaticExplanation(appName: String, policy: PermissionPolicy) = when (policy) {
-    PermissionPolicy.NeverAsk ->
-        "You don't need to do anything here: your settings allow these. Deny any you'd rather $appName didn't use."
-    else ->
-        "You don't need to do anything here. $appName can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use."
+// Health can also be allowed because the app was built before the SDK checked it.
+private fun automaticExplanation(policy: PermissionPolicy, keys: List<String>) = when {
+    policy == PermissionPolicy.NeverAsk || PluginPermissions.HEALTH in keys -> Res.string.install_review_automatic_settings_allow
+    else -> Res.string.install_review_automatic_cant_send_data
 }
 
 /** The label shares its line with the control; the reason and [status] get the width below it. */
@@ -262,10 +360,27 @@ internal fun PermissionRow(
                 if (required) RequiredTag()
                 when (permissionKind(key, defined)) {
                     PermissionKind.Exfiltrating ->
-                        KindInfo(Icons.Outlined.Info, "Sends data off your phone", exfiltratingExplanation(key))
+                        KindInfo(
+                            Icons.Outlined.Info,
+                            stringResource(Res.string.plugin_permission_exfiltrating),
+                            stringResource(exfiltratingExplanation(key)),
+                        )
                     PermissionKind.Dangerous ->
-                        KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
+                        KindInfo(
+                            Icons.Filled.Warning,
+                            stringResource(Res.string.plugin_permission_sensitive),
+                            stringResource(Res.string.plugin_permission_sensitive_explanation),
+                        )
                     else -> {}
+                }
+                if (permissionOf(key) == PluginPermissions.HEALTH) {
+                    lastConnectedWatch()?.takeUnless { enforcesHealth(it.runningFwVersion) }?.let { watch ->
+                        KindInfo(
+                            Icons.Filled.Warning,
+                            stringResource(Res.string.plugin_permission_health_not_enforced, watch.displayName()),
+                            stringResource(Res.string.plugin_permission_health_not_enforced_explanation, watch.displayName()),
+                        )
+                    }
                 }
             }
             control()
@@ -298,7 +413,7 @@ internal fun PermissionRow(
 @Composable
 private fun RequiredTag() {
     Text(
-        "Required",
+        stringResource(Res.string.plugin_permission_required),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 6.dp)
@@ -342,7 +457,7 @@ internal fun ReasonInfoButton(title: String, reason: String, modifier: Modifier 
 private fun ReasonIcon(title: String, modifier: Modifier) {
     Icon(
         Icons.AutoMirrored.Outlined.HelpOutline,
-        contentDescription = "Why $title",
+        contentDescription = stringResource(Res.string.plugin_permission_why_title, title),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,
     )
@@ -354,8 +469,16 @@ private fun ReasonDialog(title: String, reason: String, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(reason, modifier = Modifier.verticalScroll(rememberScrollState())) },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.ok)) } },
     )
+}
+
+private val FIRMWARE_MAJOR_MINOR = Regex("v?(\\d+)\\.(\\d+)")
+
+/** Broadly, the watches that can run newer firmware. */
+private fun enforcesHealth(firmware: String): Boolean {
+    val (major, minor) = FIRMWARE_MAJOR_MINOR.find(firmware)?.destructured ?: return true
+    return major.toInt() > 4 || (major.toInt() == 4 && minor.toInt() >= 40)
 }
 
 @Composable
@@ -372,7 +495,7 @@ private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
             onDismissRequest = { explaining = false },
             title = { Text(title) },
             text = { Text(explanation) },
-            confirmButton = { TextButton(onClick = { explaining = false }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { explaining = false }) { Text(stringResource(UtilRes.string.ok)) } },
         )
     }
 }
@@ -395,11 +518,9 @@ internal fun <T> List<T>.requiredFirst(
 ) = sortedWith(compareByDescending<T> { required(it) }.thenBy { kindRank(key(it), defined) })
 
 private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
-    PluginPermissions.GLOBAL_INTERNET ->
-        "Allow this app to connect to any site on the internet, because it was built before the permissions system was created."
-    PluginPermissions.LEGACY_PEBBLEKIT, PluginPermissions.PEBBLEKIT_2 ->
-        "This allows the app to send data to its phone app, which can send it anywhere."
-    else -> "This allows the app to send data off your device - limited to the specified location"
+    PluginPermissions.GLOBAL_INTERNET -> Res.string.plugin_permission_exfiltrating_global_internet
+    PluginPermissions.LEGACY_PEBBLEKIT, PluginPermissions.PEBBLEKIT_2 -> Res.string.plugin_permission_exfiltrating_pebblekit
+    else -> Res.string.plugin_permission_exfiltrating_limited
 }
 
 private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermission>): ImageVector = when (permissionOf(key)) {
@@ -407,6 +528,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.LOCAL_NETWORK -> Icons.Filled.Router
     PluginPermissions.LOCATION -> Icons.Filled.LocationOn
     PluginPermissions.WATCH_MICROPHONE -> Icons.Filled.Mic
+    PluginPermissions.HEALTH -> Icons.Filled.MonitorHeart
     PluginPermissions.NOTIFICATIONS -> Icons.Filled.Notifications
     PluginPermissions.CALENDAR -> Icons.Filled.CalendarMonth
     PluginPermissions.CONTACTS -> Icons.Filled.Contacts
@@ -416,37 +538,60 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
     PluginPermissions.READ_APPS, PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
     PluginPermissions.FIND_MY_PHONE -> Icons.Filled.PhonelinkRing
+    PluginPermissions.SET_INDEX_ALARMS -> Icons.Filled.Alarm
+    PluginPermissions.SEND_MESSAGES_BEEPER -> Icons.AutoMirrored.Filled.Message
+    PluginPermissions.WRITE_INDEX_NOTES -> Icons.AutoMirrored.Filled.Note
+    PluginPermissions.WRITE_INDEX_REMINDERS -> Icons.Filled.Checklist
     PluginPermissions.READ_FILES, PluginPermissions.WRITE_FILES -> Icons.Filled.Folder
     PluginPermissions.LEGACY_PEBBLEKIT -> Icons.Filled.Campaign
     PluginPermissions.PEBBLEKIT_2 -> Icons.Filled.SwapHoriz
     else -> if (permissionKind(key, defined) == PermissionKind.Exfiltrating) Icons.Filled.CloudUpload else Icons.Filled.Extension
 }
 
-/** Completes "<app> wants to". */
-fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>): String = when (permissionOf(key)) {
-    PluginPermissions.INTERNET -> domainOf(key)?.let { "Connect to $it" } ?: "Connect to any website"
-    PluginPermissions.LOCAL_NETWORK -> "Connect to devices on your local network"
-    PluginPermissions.GLOBAL_INTERNET -> "Connect to any website or local device"
-    PluginPermissions.LOCATION -> "Use your location"
-    PluginPermissions.WATCH_MICROPHONE -> "Use your watch microphone"
-    PluginPermissions.NOTIFICATIONS -> packageOf(key)?.let { "Read your notifications from $it" } ?: "Read all your notifications"
-    PluginPermissions.CALENDAR -> "Read your calendar"
-    PluginPermissions.CONTACTS -> "Read your contacts"
-    PluginPermissions.TIMELINE -> "Add pins to your timeline"
-    PluginPermissions.SHOW_NOTIFICATIONS -> "Show notifications on your watch"
-    PluginPermissions.READ_WATCH_SETTINGS -> "Read your watch settings"
-    PluginPermissions.WRITE_WATCH_SETTINGS -> "Change your watch settings"
-    PluginPermissions.READ_MUSIC -> "See what music is playing"
-    PluginPermissions.CONTROL_MUSIC -> "Control music playback"
-    PluginPermissions.READ_APPS -> "See which apps and watchfaces you have"
-    PluginPermissions.LAUNCH_APPS -> "Launch apps on your watch"
-    PluginPermissions.FIND_MY_PHONE -> "Ring your phone to find it"
-    PluginPermissions.READ_FILES -> fileScopeOf(key)?.let { "Read '${fileScopeLabel(it)}' in device storage" } ?: "Read files from device storage you permit"
-    PluginPermissions.WRITE_FILES -> fileScopeOf(key)?.let { "Read & write to '${fileScopeLabel(it)}' in device storage" } ?: "Read & write to files in device storage you permit"
-    PluginPermissions.LEGACY_PEBBLEKIT -> "Broadcast messages to every app on your phone (legacy PebbleKit)"
-    PluginPermissions.PEBBLEKIT_2 -> "Exchange messages with ${packageOf(key)}"
-    else -> defined[key]?.let { "${it.label} (via ${it.pluginName})" } ?: key
+private class PermissionLabel(val resource: StringResource, vararg val args: Any)
+
+/** Null when [key] is unknown, which is then shown as is. */
+private fun permissionLabelResource(key: String, defined: Map<String, PluginDefinedPermission>): PermissionLabel? = when (permissionOf(key)) {
+    PluginPermissions.INTERNET -> domainOf(key)?.let { PermissionLabel(Res.string.plugin_permission_label_internet_domain, it) }
+        ?: PermissionLabel(Res.string.plugin_permission_label_internet)
+    PluginPermissions.LOCAL_NETWORK -> PermissionLabel(Res.string.plugin_permission_label_local_network)
+    PluginPermissions.GLOBAL_INTERNET -> PermissionLabel(Res.string.plugin_permission_label_global_internet)
+    PluginPermissions.LOCATION -> PermissionLabel(Res.string.plugin_permission_label_location)
+    PluginPermissions.WATCH_MICROPHONE -> PermissionLabel(Res.string.plugin_permission_label_watch_microphone)
+    PluginPermissions.HEALTH -> PermissionLabel(Res.string.plugin_permission_label_health)
+    PluginPermissions.NOTIFICATIONS -> packageOf(key)?.let { PermissionLabel(Res.string.plugin_permission_label_notifications_from, it) }
+        ?: PermissionLabel(Res.string.plugin_permission_label_notifications)
+    PluginPermissions.CALENDAR -> PermissionLabel(Res.string.plugin_permission_label_calendar)
+    PluginPermissions.CONTACTS -> PermissionLabel(Res.string.plugin_permission_label_contacts)
+    PluginPermissions.TIMELINE -> PermissionLabel(Res.string.plugin_permission_label_timeline)
+    PluginPermissions.SHOW_NOTIFICATIONS -> PermissionLabel(Res.string.plugin_permission_label_show_notifications)
+    PluginPermissions.READ_WATCH_SETTINGS -> PermissionLabel(Res.string.plugin_permission_label_read_watch_settings)
+    PluginPermissions.WRITE_WATCH_SETTINGS -> PermissionLabel(Res.string.plugin_permission_label_write_watch_settings)
+    PluginPermissions.READ_MUSIC -> PermissionLabel(Res.string.plugin_permission_label_read_music)
+    PluginPermissions.CONTROL_MUSIC -> PermissionLabel(Res.string.plugin_permission_label_control_music)
+    PluginPermissions.READ_APPS -> PermissionLabel(Res.string.plugin_permission_label_read_apps)
+    PluginPermissions.LAUNCH_APPS -> PermissionLabel(Res.string.plugin_permission_label_launch_apps)
+    PluginPermissions.FIND_MY_PHONE -> PermissionLabel(Res.string.plugin_permission_label_find_my_phone)
+    PluginPermissions.SET_INDEX_ALARMS -> PermissionLabel(Res.string.plugin_permission_label_index_alarms)
+    PluginPermissions.SEND_MESSAGES_BEEPER -> PermissionLabel(Res.string.plugin_permission_label_beeper_messages)
+    PluginPermissions.WRITE_INDEX_NOTES -> PermissionLabel(Res.string.plugin_permission_label_index_notes)
+    PluginPermissions.WRITE_INDEX_REMINDERS -> PermissionLabel(Res.string.plugin_permission_label_index_reminders)
+    PluginPermissions.READ_FILES -> fileScopeOf(key)?.let { PermissionLabel(Res.string.plugin_permission_label_read_files_scope, fileScopeLabel(it)) }
+        ?: PermissionLabel(Res.string.plugin_permission_label_read_files)
+    PluginPermissions.WRITE_FILES -> fileScopeOf(key)?.let { PermissionLabel(Res.string.plugin_permission_label_write_files_scope, fileScopeLabel(it)) }
+        ?: PermissionLabel(Res.string.plugin_permission_label_write_files)
+    PluginPermissions.LEGACY_PEBBLEKIT -> PermissionLabel(Res.string.plugin_permission_label_legacy_pebblekit)
+    PluginPermissions.PEBBLEKIT_2 -> PermissionLabel(Res.string.plugin_permission_label_pebblekit_2, packageOf(key).toString())
+    else -> defined[key]?.let { PermissionLabel(Res.string.plugin_permission_label_plugin_defined, it.label, it.pluginName) }
 }
+
+/** Completes "<app> wants to". */
+@Composable
+fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>): String =
+    permissionLabelResource(key, defined)?.let { stringResource(it.resource, *it.args) } ?: key
+
+suspend fun permissionLabelText(key: String, defined: Map<String, PluginDefinedPermission>): String =
+    permissionLabelResource(key, defined)?.let { getString(it.resource, *it.args) } ?: key
 
 /** The tail of a picked entry: `Documents/Notes` out of a SAF uri or an iOS path. */
 internal fun fileScopeLabel(scope: String): String {
@@ -461,10 +606,22 @@ internal fun rememberPluginPermissions(): Map<String, PluginDefinedPermission> {
     return remember { libPebble.pluginPermissions() }.collectAsState(emptyMap()).value
 }
 
-fun requestSummary(keys: List<String>, defined: Map<String, PluginDefinedPermission>): String {
-    val labels = keys.map { permissionLabel(it, defined).replaceFirstChar { c -> c.lowercase() } }
-    return if (labels.size <= 1) labels.joinToString() else labels.dropLast(1).joinToString() + " and " + labels.last()
-}
+private fun String.asRequest() = replaceFirstChar { c -> c.lowercase() }
+
+suspend fun requestLabels(keys: List<String>, defined: Map<String, PluginDefinedPermission>): List<String> =
+    keys.map { permissionLabelText(it, defined).asRequest() }
+
+internal inline fun joinRequests(labels: List<String>, and: (String, String) -> String): String =
+    if (labels.size <= 1) labels.joinToString() else and(labels.dropLast(1).joinToString(), labels.last())
+
+suspend fun requestSummary(keys: List<String>, defined: Map<String, PluginDefinedPermission>): String =
+    joinRequests(requestLabels(keys, defined)) { rest, last -> getString(Res.string.plugin_permission_list_and, rest, last) }
+
+@Composable
+private fun requestSummaryText(keys: List<String>, defined: Map<String, PluginDefinedPermission>): String =
+    joinRequests(keys.map { permissionLabel(it, defined).asRequest() }) { rest, last ->
+        stringResource(Res.string.plugin_permission_list_and, rest, last)
+    }
 
 @Composable
 fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
@@ -488,19 +645,23 @@ fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
             Card(onClick = { onReview(appUuid) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp)) {
                     Text(
-                        "${appName ?: "An app"} wants to ${requestSummary(keys, defined)}",
+                        stringResource(
+                            Res.string.plugin_permission_request,
+                            appName ?: stringResource(Res.string.plugin_permission_an_app),
+                            requestSummaryText(keys, defined),
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    reason?.let { ReasonText(appName ?: "Why", it) }
+                    reason?.let { ReasonText(appName ?: stringResource(Res.string.plugin_permission_why), it) }
                     Row(modifier = Modifier.align(Alignment.End)) {
                         if (keys.size == 1) {
                             fun answer(granted: Boolean) = scope.launch {
                                 libPebble.setPermissionDecisions(appUuid, mapOf(keys.single() to granted))
                             }
-                            TextButton(onClick = { answer(false) }) { Text("Deny") }
-                            TextButton(onClick = { answer(true) }) { Text("Allow") }
+                            TextButton(onClick = { answer(false) }) { Text(stringResource(Res.string.plugin_permission_deny)) }
+                            TextButton(onClick = { answer(true) }) { Text(stringResource(Res.string.plugin_permission_allow)) }
                         } else {
-                            TextButton(onClick = { onReview(appUuid) }) { Text("Review") }
+                            TextButton(onClick = { onReview(appUuid) }) { Text(stringResource(Res.string.plugin_permission_review)) }
                         }
                     }
                 }
@@ -510,10 +671,8 @@ fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
 }
 
 @Composable
-fun AppPermissionsSection(appUuid: Uuid) {
+fun AppPermissionsSection(appUuid: Uuid, collapsible: Boolean = true) {
     val libPebble = rememberLibPebble()
-    val config by libPebble.config.collectAsState()
-    if (!config.watchConfig.enablePlugins) return
     val defined = rememberPluginPermissions()
     // Null while loading.
     val loaded by remember(appUuid) {
@@ -537,10 +696,12 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val statuses = (loaded ?: return).statuses
     if (statuses.isNullOrEmpty()) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+            Text(stringResource(Res.string.plugin_permissions_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
             Text(
-                if (statuses == null) "Shown once the app has been installed on your watch."
-                else "This app doesn't use any permissions.",
+                stringResource(
+                    if (statuses == null) Res.string.plugin_permissions_not_installed
+                    else Res.string.plugin_permissions_none
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -550,13 +711,17 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         // A legacy app's are collapsed, and never hidden while a request waits for an answer.
-        val open = (legacy && statuses.any { it.status == PermissionStatus.Waiting }) || (expandedByUser ?: !legacy)
-        SectionHeader(if (legacy) "Permissions (Legacy App)" else "Permissions", open) { expandedByUser = !open }
-        if (!open) return@Column
+        val title = stringResource(if (legacy) Res.string.plugin_permissions_title_legacy else Res.string.plugin_permissions_title)
+        if (collapsible) {
+            val open = (legacy && statuses.any { it.status == PermissionStatus.Waiting }) || (expandedByUser ?: !legacy)
+            SectionHeader(title, open) { expandedByUser = !open }
+            if (!open) return@Column
+        } else {
+            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+        }
         if (legacy) {
             Text(
-                "Apps built before permissions existed can use these by default. To be asked first, turn on " +
-                    "\"Ask before older apps use permissions\" in Settings.",
+                stringResource(Res.string.plugin_permissions_legacy_explanation),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 4.dp),
@@ -565,10 +730,14 @@ fun AppPermissionsSection(appUuid: Uuid) {
         @Composable
         fun StatusRow(row: AppPermissionStatus, inGroups: Boolean) {
             val lastUsedAtMs = row.lastUsedAtMs
-            val used = if (lastUsedAtMs == null) "Not used yet" else "Used ${relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs))}"
+            val used = if (lastUsedAtMs == null) {
+                stringResource(Res.string.plugin_permission_not_used_yet)
+            } else {
+                stringResource(Res.string.plugin_permission_used, relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs)))
+            }
             val automatic = row.status == PermissionStatus.AllowedAutomatically
             // Grouped, "Allowed automatically" is the group's title.
-            val note = if (automatic && !inGroups) "Allowed automatically · $used" else used
+            val note = if (automatic && !inGroups) stringResource(Res.string.plugin_permission_allowed_automatically_used, used) else used
             val decide = { granted: Boolean ->
                 val decisions = buildMap {
                     put(row.permission, granted)
@@ -613,14 +782,14 @@ fun AppPermissionsSection(appUuid: Uuid) {
             val (required, optional) = asked.partition { it.required == true }
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (required.isNotEmpty()) {
-                    CardGroup("Required", required.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
+                    CardGroup(stringResource(Res.string.plugin_permission_required), required.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
                 }
                 if (optional.isNotEmpty()) {
-                    CardGroup("Optional", optional.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
+                    CardGroup(stringResource(Res.string.plugin_permission_optional), optional.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
                 }
                 if (automatic.isNotEmpty()) {
                     CardGroup(
-                        "Allowed automatically",
+                        stringResource(Res.string.plugin_permission_allowed_automatically),
                         automatic.requiredFirst(defined, { it.permission }, { it.required == true }),
                     ) { StatusRow(it, inGroups = true) }
                 }
@@ -633,7 +802,7 @@ fun AppPermissionsSection(appUuid: Uuid) {
 
 /** A section's title, which collapses and expands it. */
 @Composable
-private fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
+internal fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
@@ -641,7 +810,7 @@ private fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(bottom = 4.dp))
         Icon(
             if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (open) "Collapse" else "Expand",
+            contentDescription = stringResource(if (open) Res.string.plugin_collapse else Res.string.plugin_expand),
         )
     }
 }
@@ -660,7 +829,10 @@ private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Bo
 /** Nothing is selected while [granted] is null, except that an [automatic] grant shows Allow faded. */
 @Composable
 private fun DecisionChoice(granted: Boolean?, enabled: Boolean = true, automatic: Boolean = false, onDecide: (Boolean) -> Unit) {
-    val options = listOf(Triple(false, Icons.Filled.Close, "Deny"), Triple(true, Icons.Filled.Check, "Allow"))
+    val options = listOf(
+        Triple(false, Icons.Filled.Close, stringResource(Res.string.plugin_permission_deny)),
+        Triple(true, Icons.Filled.Check, stringResource(Res.string.plugin_permission_allow)),
+    )
     val implied = granted == null && automatic
     val impliedColors = SegmentedButtonDefaults.colors(
         activeContainerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
@@ -696,14 +868,14 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
     if (keys.isEmpty()) return
     var open by remember(requested) { mutableStateOf(true) }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        SectionHeader("Permissions", open) { open = !open }
+        SectionHeader(stringResource(Res.string.plugin_permissions_title), open) { open = !open }
         if (!open) return@Column
         if (requested.declared == null) {
-            val access = keys.map(::legacyAccessName).distinct().joinToString()
+            val access = keys.map(::legacyAccessName).distinct().map { stringResource(it) }.joinToString()
             val text = if (config.watchConfig.askLegacyAppsForPermissions) {
-                "Built before permissions: asks before using $access"
+                stringResource(Res.string.plugin_permissions_legacy_asks, access)
             } else {
-                "Built before permissions: has access to $access"
+                stringResource(Res.string.plugin_permissions_legacy_has_access, access)
             }
             Text(text, style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -720,8 +892,8 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
             if (declared.describesRequired()) {
                 val (required, optional) = sorted.partition(declared::isRequired)
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (required.isNotEmpty()) CardGroup("Required", required) { ListingRow(it) }
-                    if (optional.isNotEmpty()) CardGroup("Optional", optional) { ListingRow(it) }
+                    if (required.isNotEmpty()) CardGroup(stringResource(Res.string.plugin_permission_required), required) { ListingRow(it) }
+                    if (optional.isNotEmpty()) CardGroup(stringResource(Res.string.plugin_permission_optional), optional) { ListingRow(it) }
                 }
             } else {
                 CardGroup(null, sorted) { ListingRow(it) }
@@ -731,11 +903,12 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
 }
 
 private fun legacyAccessName(key: String) = when (permissionOf(key)) {
-    PluginPermissions.GLOBAL_INTERNET -> "the internet"
-    PluginPermissions.LOCATION -> "location"
-    PluginPermissions.TIMELINE -> "timeline pins"
-    PluginPermissions.SHOW_NOTIFICATIONS -> "watch notifications"
-    else -> "phone apps"
+    PluginPermissions.GLOBAL_INTERNET -> Res.string.plugin_permissions_legacy_access_internet
+    PluginPermissions.LOCATION -> Res.string.plugin_permissions_legacy_access_location
+    PluginPermissions.TIMELINE -> Res.string.plugin_permissions_legacy_access_timeline
+    PluginPermissions.SHOW_NOTIFICATIONS -> Res.string.plugin_permissions_legacy_access_notifications
+    PluginPermissions.HEALTH -> Res.string.plugin_permissions_legacy_access_health
+    else -> Res.string.plugin_permissions_legacy_access_phone_apps
 }
 
 /** A dot for anything waiting for an answer; "!" if something the app needs is among it. */

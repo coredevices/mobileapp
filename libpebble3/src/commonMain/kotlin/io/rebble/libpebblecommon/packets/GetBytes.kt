@@ -7,11 +7,11 @@ import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUInt
 
-sealed class GetBytesOutgoingPacket(command: GetBytesCommand, transactionId: UByte) :
+internal sealed class GetBytesOutgoingPacket(command: GetBytesCommand, transactionId: UByte) :
     PebblePacket(ProtocolEndpoint.GET_BYTES) {
 
-    val command = SUByte(m, command.value)
-    val transactionId = SUByte(m, transactionId)
+    val command: SUByte = SUByte(m, command.value)
+    val transactionId: SUByte = SUByte(m, transactionId)
 }
 
 /**
@@ -20,13 +20,13 @@ sealed class GetBytesOutgoingPacket(command: GetBytesCommand, transactionId: UBy
  *     /** Only return a core dump if it is unread */
  *     public static final byte CMD_ID_REQUEST_NEW_CORE_DUMP = 5;
  */
-enum class GetBytesCommand(val value: UByte) {
+internal enum class GetBytesCommand(val value: UByte) {
     REQUEST_CORE_DUMP(0u),
     REQUEST_PFS_FILE(3u),
     REQUEST_NEW_CORE_DUMP(5u),
 }
 
-class GetBytesCoreDump(unread: Boolean, transactionId: UByte) : GetBytesOutgoingPacket(
+internal class GetBytesCoreDump(unread: Boolean, transactionId: UByte) : GetBytesOutgoingPacket(
     command = when (unread) {
         true -> GetBytesCommand.REQUEST_NEW_CORE_DUMP
         false -> GetBytesCommand.REQUEST_CORE_DUMP
@@ -34,12 +34,12 @@ class GetBytesCoreDump(unread: Boolean, transactionId: UByte) : GetBytesOutgoing
     transactionId = transactionId,
 )
 
-enum class GetBytesResponse(val value: UByte) {
+internal enum class GetBytesResponse(val value: UByte) {
     IMAGE_INFO(1u),
     IMAGE_DATA(2u),
 }
 
-enum class GetBytesError(val code: UByte) {
+internal enum class GetBytesError(val code: UByte) {
     NO_ERROR(0x00u),
     MALFORMED_REQUEST(0x01u),
     ALREADY_IN_PROGRESS(0x02u),
@@ -54,23 +54,23 @@ enum class GetBytesError(val code: UByte) {
     }
 }
 
-sealed class GetBytesInboundMessage : PebblePacket(ProtocolEndpoint.GET_BYTES) {
+internal sealed class GetBytesInboundMessage : PebblePacket(ProtocolEndpoint.GET_BYTES) {
     class GetBytesImageInfo : GetBytesInboundMessage() {
-        val response = SUByte(m)
-        val transactionId = SUByte(m)
-        val errorCode = SUByte(m)
-        val numBytes = SUInt(m)
+        val response: SUByte = SUByte(m)
+        val transactionId: SUByte = SUByte(m)
+        val errorCode: SUByte = SUByte(m)
+        val numBytes: SUInt = SUInt(m)
     }
 
     class GetBytesImageData : GetBytesInboundMessage() {
-        val response = SUByte(m)
-        val transactionId = SUByte(m)
-        val offset = SUInt(m)
-        val data = SBytes(m, allRemainingBytes = true)
+        val response: SUByte = SUByte(m)
+        val transactionId: SUByte = SUByte(m)
+        val offset: SUInt = SUInt(m)
+        val data: SBytes = SBytes(m, allRemainingBytes = true)
     }
 }
 
-fun getBytesIncomingPacketsRegister() {
+internal fun getBytesIncomingPacketsRegister() {
     PacketRegistry.register(
         ProtocolEndpoint.GET_BYTES,
         GetBytesResponse.IMAGE_INFO.value,

@@ -12,24 +12,24 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
 
-expect fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner
+internal expect fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner
 
 /**
  * Must run before anything touches Kable's shared central manager (any scan,
  * [com.juul.kable.Peripheral] creation, or Bluetooth-state collection) — Kable
  * throws if its central has already been initialised.
  */
-expect fun configureKableCentral(stateRestoration: Boolean)
+internal expect fun configureKableCentral(stateRestoration: Boolean)
 
 internal expect fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Advertisement>
 
-fun FilterPredicateBuilder.applyServiceFilter(bleConfig: BleConfig) {
+internal fun FilterPredicateBuilder.applyServiceFilter(bleConfig: BleConfig) {
     if (bleConfig.filterScanResultsByUuid) {
         services = listOf(PAIRING_SERVICE_UUID)
     }
 }
 
-class KableBleScanner(
+internal class KableBleScanner(
     private val bleConfigFlow: BleConfigFlow,
 ) : BleScanner {
     override fun scan(): Flow<BleScanResult> {
@@ -47,4 +47,4 @@ class KableBleScanner(
     }
 }
 
-expect fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier
+public expect fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier

@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.cinterop.StableRef
@@ -39,10 +40,11 @@ import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkGate
 import kotlin.uuid.Uuid
 
-class JavascriptCoreJsRunner(
+internal class JavascriptCoreJsRunner(
     private val appContext: AppContext,
     private val libPebble: LibPebble,
     private val jsTokenUtil: JsTokenUtil,
@@ -60,10 +62,11 @@ class JavascriptCoreJsRunner(
     private val httpClient: HttpClient,
     private val permissions: AppPermissions,
     private val pluginClient: PluginClient,
+    private val dataUsage: DataUsageRecorder,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
-    override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
+    override val networkAccess: NetworkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val interfaces = mutableMapOf<String, JsEngineInterface>()
     private var dispatcherRef: StableRef<*>? = null
     private var navigatorRef: StableRef<JSValue>? = null
@@ -92,9 +95,10 @@ class JavascriptCoreJsRunner(
                 appUuid = Uuid.parse(appInfo.uuid),
                 client = httpClient,
                 networkAccess = networkAccess,
+                dataUsage = dataUsage,
             ),
             JSTimeout(interfacesScope, evalRawFn),
-            WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess),
+            WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess, dataUsage),
             JSCPKJSInterface(this, device, remoteTimelineEmulator, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),

@@ -17,7 +17,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
-abstract class GeolocationInterface(
+internal abstract class GeolocationInterface(
     private val scope: CoroutineScope,
     private val eval: suspend (String) -> Unit,
     private val appUuid: Uuid,
@@ -81,8 +81,8 @@ abstract class GeolocationInterface(
         return decision == PermissionDecision.Granted
     }
 
-    open fun getRequestCallbackID() = getNextRequestID()
-    open fun getWatchCallbackID() = getNextWatchID()
+    open fun getRequestCallbackID(): Int = getNextRequestID()
+    open fun getWatchCallbackID(): Int = getNextWatchID()
 
     open fun getCurrentPosition(
         id: Double,

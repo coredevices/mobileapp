@@ -53,24 +53,27 @@ import coredevices.pebble.weather.WeatherPlugin
 import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.locker.AppType
-import io.rebble.libpebblecommon.plugin.CalendarPlugin
-import io.rebble.libpebblecommon.plugin.MusicPlugin
-import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
-import io.rebble.libpebblecommon.plugin.PlatformPlugins
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
-import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.plugin_built_in
+import coreapp.pebble.generated.resources.plugin_built_in_disabled
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.disable
+import coreapp.util.generated.resources.enable
+import coreapp.util.generated.resources.settings
+import org.jetbrains.compose.resources.stringResource
 
 // Built-in plugins have no pbw, so the UI maps each to an icon rather than reading one from a bundle.
 fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
-    MusicPlugin.BUILT_IN_MUSIC_UUID -> Icons.Filled.MusicNote
-    CalendarPlugin.BUILT_IN_CALENDAR_UUID -> Icons.Filled.CalendarMonth
+    BuiltInPlugins.MUSIC -> Icons.Filled.MusicNote
+    BuiltInPlugins.CALENDAR -> Icons.Filled.CalendarMonth
     WeatherPlugin.BUILT_IN_WEATHER_UUID -> Icons.Filled.Cloud
-    PhoneStatePlugin.BUILT_IN_PHONE_STATE_UUID -> Icons.Filled.Smartphone
-    WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID -> Icons.Filled.Watch
-    WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID -> Icons.Filled.Apps
-    PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID -> Icons.Filled.Notifications
+    BuiltInPlugins.PHONE_STATE -> Icons.Filled.Smartphone
+    BuiltInPlugins.WATCH_SETTINGS -> Icons.Filled.Watch
+    BuiltInPlugins.WATCH_STATE -> Icons.Filled.Apps
+    BuiltInPlugins.NOTIFICATIONS -> Icons.Filled.Notifications
     PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> Icons.Filled.Tune
     else -> AppType.Plugin.icon()
 }
@@ -78,12 +81,10 @@ fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
 fun PluginMetadata.settingsRoute(): NavBarRoute? = when (pluginUuid) {
     WeatherPlugin.BUILT_IN_WEATHER_UUID ->
         PebbleNavBarRoutes.WatchSettingsCategoryRoute(section = Section.Weather.name, topLevelType = TopLevelType.Phone.name)
-    CalendarPlugin.BUILT_IN_CALENDAR_UUID -> PebbleNavBarRoutes.CalendarsRoute
+    BuiltInPlugins.CALENDAR -> PebbleNavBarRoutes.CalendarsRoute
     PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> PebbleNavBarRoutes.ComplicationsRoute
     else -> null
 }
-
-private const val BUILT_IN_DEVELOPER_NAME = "Built-in"
 
 private fun NavBarNav.openNativePlugin(plugin: PluginMetadata) =
     navigateTo(PebbleNavBarRoutes.NativePluginRoute(plugin.pluginUuid.toString()))
@@ -107,7 +108,7 @@ private fun Modifier.greyedOut(disabled: Boolean) = if (disabled) alpha(0.4f) el
 
 /** Stands in for a pbw plugin's square icon, at the same size and shape. */
 @Composable
-private fun BuiltInPluginImage(plugin: PluginMetadata, cornerRadius: Dp, modifier: Modifier) {
+internal fun BuiltInPluginImage(plugin: PluginMetadata, cornerRadius: Dp, modifier: Modifier) {
     BoxWithConstraints(
         modifier = modifier.aspectRatio(1f)
             .clip(RoundedCornerShape(cornerRadius))
@@ -142,7 +143,7 @@ fun NativePluginCard(plugin: PluginMetadata, navBarNav: NavBarNav) {
                 modifier = Modifier.padding(start = 5.dp, end = 5.dp).heightIn(min = 18.dp),
             )
             Text(
-                BUILT_IN_DEVELOPER_NAME,
+                stringResource(Res.string.plugin_built_in),
                 color = Color.Gray,
                 fontSize = 10.sp,
                 lineHeight = 10.sp,
@@ -201,24 +202,24 @@ fun NativePluginScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, uuid: U
             Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 10.dp)) {
                 Text(plugin.name, fontSize = 20.sp)
                 Text(
-                    if (disabled) "$BUILT_IN_DEVELOPER_NAME · Disabled" else BUILT_IN_DEVELOPER_NAME,
+                    stringResource(if (disabled) Res.string.plugin_built_in_disabled else Res.string.plugin_built_in),
                     fontSize = 12.sp,
                     color = Color.Gray,
                 )
                 PebbleElevatedButton(
-                    text = "Settings",
+                    text = stringResource(UtilRes.string.settings),
                     onClick = { settingsRoute?.let { navBarNav.navigateTo(it) } },
                     enabled = settingsRoute != null,
                     icon = Icons.Default.Settings,
-                    contentDescription = "Settings",
+                    contentDescription = stringResource(UtilRes.string.settings),
                     primaryColor = false,
                     modifier = Modifier.padding(5.dp),
                 )
                 PebbleElevatedButton(
-                    text = if (disabled) "Enable" else "Disable",
+                    text = stringResource(if (disabled) UtilRes.string.enable else UtilRes.string.disable),
                     onClick = { libPebble.setBuiltInPluginEnabled(plugin.pluginUuid, disabled) },
                     icon = if (disabled) Icons.Default.PlayArrow else Icons.Default.Block,
-                    contentDescription = if (disabled) "Enable" else "Disable",
+                    contentDescription = stringResource(if (disabled) UtilRes.string.enable else UtilRes.string.disable),
                     primaryColor = false,
                     modifier = Modifier.padding(5.dp),
                 )

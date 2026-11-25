@@ -1,28 +1,22 @@
 package io.rebble.libpebblecommon.plugin
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.locker.AppFileReader
-import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.locker.hasLoadablePlugin
 import io.rebble.libpebblecommon.permissions.resolvePermissions
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
 
 /**
  * Projects the locker into the [PluginRegistry]: an installed pbw whose LockerEntry carries a plugin
- * manifest is registered, and unregistered when the app leaves the locker or plugins are switched
- * off.
+ * manifest is registered, and unregistered when the app leaves the locker.
  */
-class LockerPluginLoader(
+internal class LockerPluginLoader(
     private val registry: PluginRegistry,
-    private val watchConfig: WatchConfigFlow,
     private val scope: LibPebbleCoroutineScope,
     private val lockerEntryDao: LockerEntryRealDao,
     private val appFileReader: AppFileReader,
@@ -31,22 +25,18 @@ class LockerPluginLoader(
     private val logger = Logger.withTag("LockerPluginLoader")
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    /** uuid -> the version registered, so a re-sideload with a changed manifest re-registers. */
-    private val registered = mutableMapOf<Uuid, String>()
+    /** uuid -> the version and manifest hash registered, so a re-sideload with a changed manifest re-registers. */
+    private val registered = mutableMapOf<Uuid, Pair<String, Int>>()
 
     fun init() {
         scope.launch {
-            combine(
-                watchConfig.flow.map { it.watchConfig.enablePlugins }.distinctUntilChanged(),
-                lockerEntryDao.getPluginEntriesFlow(),
-            ) { enabled, rows -> if (enabled) rows else emptyList() }
-                .collect { rows -> reconcile(rows) }
+            lockerEntryDao.getPluginEntriesFlow().collect { rows -> reconcile(rows) }
         }
     }
 
     private fun reconcile(rows: List<LockerEntry>) {
         val wanted = rows.mapNotNull { row ->
-            if (row.pluginManifest == null || isLegacy(row.manifestVersion)) return@mapNotNull null
+            if (!row.hasLoadablePlugin()) return@mapNotNull null
             row.id to row
         }.toMap()
 
@@ -57,7 +47,7 @@ class LockerPluginLoader(
         }
 
         wanted.forEach { (uuid, row) ->
-            if (registered[uuid] == row.version) return@forEach
+            if (registered[uuid] == (row.version to row.pluginManifest.hashCode())) return@forEach
             val manifest = try {
                 json.decodeFromString(PluginManifest.serializer(), row.pluginManifest!!)
                     .resolvePermissions(uuid)
@@ -74,7 +64,7 @@ class LockerPluginLoader(
                     script = { appFileReader.getAppFile(uuid, manifest.script).orEmpty() },
                 )
             )
-            registered[uuid] = row.version
+            registered[uuid] = row.version to row.pluginManifest.hashCode()
             logger.i { "registered plugin ${row.title} ($uuid)" }
         }
     }

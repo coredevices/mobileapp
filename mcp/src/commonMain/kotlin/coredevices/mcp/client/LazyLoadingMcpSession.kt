@@ -11,6 +11,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -162,6 +164,27 @@ internal class ToolCatalog(
 
     fun describe(): String = groups.entries.joinToString("\n") { (group, tools) ->
         "- $group (${tools.size} tools): ${describeGroup(tools)}"
+    }
+
+    /** [describe] as structured data: one object per group with its tool count and sampled tools. */
+    fun toJson(): JsonArray = buildJsonArray {
+        groups.forEach { (group, tools) ->
+            addJsonObject {
+                put("name", group)
+                groupDescription(tools)?.let { put("description", it) }
+                put("tool_count", tools.size)
+                putJsonArray("sample_tools") {
+                    sample(tools).forEach { tool ->
+                        addJsonObject {
+                            put("name", tool.tool.definition.name)
+                            tool.tool.definition.description?.trim()?.takeIf(String::isNotEmpty)?.let {
+                                put("description", shorten(it, sampleDescriptionLength))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun search(keywords: List<String>, limit: Int = SEARCH_RESULT_LIMIT): List<ToolMatch> =

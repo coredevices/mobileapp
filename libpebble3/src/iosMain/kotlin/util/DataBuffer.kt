@@ -23,17 +23,17 @@ import platform.Foundation.dataWithCapacity
 import platform.Foundation.getBytes
 import platform.Foundation.setData
 
-actual class DataBuffer {
+public actual class DataBuffer {
     private val actualBuf: NSMutableData
     private var littleEndian = false
 
     /**
      * Total length of the buffer
      */
-    actual val length: Int
+    public actual val length: Int
         get() = actualBuf.length.toInt()
 
-    actual val remaining: Int
+    public actual val remaining: Int
         get() = actualBuf.length().toInt()-_readPosition
 
     private var _readPosition: Int = 0
@@ -41,14 +41,14 @@ actual class DataBuffer {
     /**
      * Current position in the buffer
      */
-    actual val readPosition: Int
+    public actual val readPosition: Int
         get() = _readPosition
 
-    actual constructor(size: Int) {
+    public actual constructor(size: Int) {
         actualBuf = NSMutableData.dataWithCapacity(castToNativeSize(size))!!
     }
 
-    actual constructor(bytes: UByteArray) {
+    public actual constructor(bytes: UByteArray) {
         actualBuf = NSMutableData()
         memScoped {
             actualBuf.setData(
@@ -71,14 +71,14 @@ actual class DataBuffer {
         }else !isPlatformBigEndian() && !littleEndian
     }
 
-    actual fun putUShort(short: UShort) {
+    public actual fun putUShort(short: UShort) {
         memScoped {
             val pShort = alloc<UShortVar>()
             pShort.value = if (shouldReverse())  reverseOrd(short) else short
             actualBuf.appendBytes(pShort.ptr, castToNativeSize(UShort.SIZE_BYTES))
         }
     }
-    actual fun getUShort(): UShort {
+    public actual fun getUShort(): UShort {
         checkRemaining(UShort.SIZE_BYTES)
         memScoped {
             val pShort = alloc<UShortVar>()
@@ -88,14 +88,14 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putShort(short: Short) {
+    public actual fun putShort(short: Short) {
         memScoped {
             val pShort = alloc<ShortVar>()
             pShort.value = if (shouldReverse()) reverseOrd(short.toUShort()).toShort() else short
             actualBuf.appendBytes(pShort.ptr, castToNativeSize(Short.SIZE_BYTES))
         }
     }
-    actual fun getShort(): Short {
+    public actual fun getShort(): Short {
         checkRemaining(Short.SIZE_BYTES)
         memScoped {
             val pShort = alloc<ShortVar>()
@@ -105,14 +105,14 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putUByte(byte: UByte) {
+    public actual fun putUByte(byte: UByte) {
         memScoped {
             val pByte = alloc<UByteVar>()
             pByte.value = byte
             actualBuf.appendBytes(pByte.ptr, castToNativeSize(UByte.SIZE_BYTES))
         }
     }
-    actual fun getUByte(): UByte {
+    public actual fun getUByte(): UByte {
         checkRemaining(UByte.SIZE_BYTES)
         memScoped {
             val pByte = alloc<UByteVar>()
@@ -122,14 +122,14 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putByte(byte: Byte) {
+    public actual fun putByte(byte: Byte) {
         memScoped {
             val pByte = alloc<ByteVar>()
             pByte.value = byte
             actualBuf.appendBytes(pByte.ptr, castToNativeSize(Byte.SIZE_BYTES))
         }
     }
-    actual fun getByte(): Byte {
+    public actual fun getByte(): Byte {
         checkRemaining(Byte.SIZE_BYTES)
         memScoped {
             val pByte = alloc<ByteVar>()
@@ -139,13 +139,13 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putBytes(bytes: UByteArray) {
+    public actual fun putBytes(bytes: UByteArray) {
         memScoped {
             val pBytes = allocArrayOf(bytes.toByteArray())
             actualBuf.appendBytes(pBytes, castToNativeSize(bytes.size))
         }
     }
-    actual fun getBytes(count: Int): UByteArray {
+    public actual fun getBytes(count: Int): UByteArray {
         checkRemaining(count)
         memScoped {
             val pBytes = allocArray<UByteVar>(count)
@@ -155,20 +155,20 @@ actual class DataBuffer {
         }
     }
 
-    actual fun array(): UByteArray = getBytes(actualBuf.length.toInt())
+    public actual fun array(): UByteArray = getBytes(actualBuf.length.toInt())
 
-    actual fun setEndian(endian: Endian) {
+    public actual fun setEndian(endian: Endian) {
         littleEndian = endian == Endian.Little
     }
 
-    actual fun putUInt(uint: UInt) {
+    public actual fun putUInt(uint: UInt) {
         memScoped {
             val pUInt = alloc<UIntVar>()
             pUInt.value = if (shouldReverse()) reverseOrd(uint) else uint
             actualBuf.appendBytes(pUInt.ptr, castToNativeSize(UInt.SIZE_BYTES))
         }
     }
-    actual fun getUInt(): UInt {
+    public actual fun getUInt(): UInt {
         checkRemaining(UInt.SIZE_BYTES)
         memScoped {
             val pUInt = alloc<UIntVar>()
@@ -178,14 +178,14 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putInt(int: Int) {
+    public actual fun putInt(int: Int) {
         memScoped {
             val pInt = alloc<IntVar>()
             pInt.value = if (shouldReverse()) reverseOrd(int.toUInt()).toInt() else int
             actualBuf.appendBytes(pInt.ptr, castToNativeSize(Int.SIZE_BYTES))
         }
     }
-    actual fun getInt(): Int {
+    public actual fun getInt(): Int {
         checkRemaining(Int.SIZE_BYTES)
         memScoped {
             val pInt = alloc<IntVar>()
@@ -195,14 +195,14 @@ actual class DataBuffer {
         }
     }
 
-    actual fun putULong(ulong: ULong) {
+    public actual fun putULong(ulong: ULong) {
         memScoped {
             val pULong = alloc<ULongVar>()
             pULong.value = if (shouldReverse()) reverseOrd(ulong) else ulong
             actualBuf.appendBytes(pULong.ptr, castToNativeSize(ULong.SIZE_BYTES))
         }
     }
-    actual fun getULong(): ULong {
+    public actual fun getULong(): ULong {
         checkRemaining(ULong.SIZE_BYTES)
         memScoped {
             val pULong = alloc<ULongVar>()
@@ -212,7 +212,7 @@ actual class DataBuffer {
         }
     }
 
-    actual fun rewind() {
+    public actual fun rewind() {
         _readPosition = 0
     }
 }

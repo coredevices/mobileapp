@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonObject
  * host runs the App Store broker flow, and it gets back an access token plus an opaque
  * `broker_refresh` it hands to [refresh].
  */
-interface PluginOAuthApi {
-    suspend fun authorize(pluginUuid: String, connectorSlug: String): JsonObject
-    suspend fun refresh(pluginUuid: String, connectorSlug: String, brokerRefresh: String): JsonObject
+public interface PluginOAuthApi {
+    public suspend fun authorize(pluginUuid: String, connectorSlug: String): JsonObject
+    public suspend fun refresh(pluginUuid: String, connectorSlug: String, brokerRefresh: String): JsonObject
 }

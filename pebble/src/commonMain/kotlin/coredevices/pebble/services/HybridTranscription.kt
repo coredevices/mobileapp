@@ -1,6 +1,6 @@
 package coredevices.pebble.services
 
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.decodeAll
+import io.rebble.libpebblecommon.voice.decodeAll
 import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.STTLanguage
@@ -8,7 +8,7 @@ import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
 import io.ktor.utils.io.CancellationException
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.PEBBLE_FW_TRANSCRIPTION_TIMEOUT
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult

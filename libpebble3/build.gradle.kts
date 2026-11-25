@@ -32,6 +32,7 @@ room {
 val enableIosTarget = System.getProperty("os.name").contains("mac", ignoreCase = true)
 
 kotlin {
+    explicitApi()
     jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
 
     targets.configureEach {

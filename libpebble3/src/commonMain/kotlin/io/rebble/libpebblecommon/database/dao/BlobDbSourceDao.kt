@@ -11,41 +11,41 @@ import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
-interface BlobDbDao<T : BlobDbRecord> {
+public interface BlobDbDao<T : BlobDbRecord> {
     // Compiler will choke on these methods unless they are overridden in each Dao
-    fun dirtyRecordsForWatchInsert(transport: String, timestampMs: Long, insertOnlyAfterMs: Long = -1): Flow<List<T>>
-    fun dirtyRecordsForWatchDelete(transport: String, timestampMs: Long): Flow<List<T>>
-    suspend fun markSyncedToWatch(
+    public fun dirtyRecordsForWatchInsert(transport: String, timestampMs: Long, insertOnlyAfterMs: Long = -1): Flow<List<T>>
+    public fun dirtyRecordsForWatchDelete(transport: String, timestampMs: Long): Flow<List<T>>
+    public suspend fun markSyncedToWatch(
         transport: String,
         item: T,
         hashcode: Int,
     )
-    suspend fun markDeletedFromWatch(
+    public suspend fun markDeletedFromWatch(
         transport: String,
         item: T,
         hashcode: Int,
     )
-    fun existsOnWatch(transport: String, item: T): Flow<Boolean>
-    fun databaseId(): BlobDatabase
+    public fun existsOnWatch(transport: String, item: T): Flow<Boolean>
+    public fun databaseId(): BlobDatabase
     @Upsert
-    suspend fun insertOrReplace(item: T)
+    public suspend fun insertOrReplace(item: T)
     @Upsert
-    suspend fun insertOrReplaceAll(items: List<T>)
-    suspend fun markAllDeletedFromWatch(transport: String)
-    suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus = BlobResponse.BlobStatus.Success
+    public suspend fun insertOrReplaceAll(items: List<T>)
+    public suspend fun markAllDeletedFromWatch(transport: String)
+    public suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus = BlobResponse.BlobStatus.Success
     // TODO decide how to handle records which are synced to watches which haven't been connected
     //  for a while (so that we aren't storing them forever if the watch is never connected again).
-    suspend fun deleteStaleRecords(timestampMs: Long)
-    suspend fun deleteSyncRecordsForDevicesWhichDontExist()
+    public suspend fun deleteStaleRecords(timestampMs: Long)
+    public suspend fun deleteSyncRecordsForDevicesWhichDontExist()
 }
 
-interface BlobDbRecord {
-    val recordHashcode: Int
-    val deleted: Boolean
-    val record: BlobDbItem
+public interface BlobDbRecord {
+    public val recordHashcode: Int
+    public val deleted: Boolean
+    public val record: BlobDbItem
 }
 
-data class ValueParams(
+public data class ValueParams internal constructor(
     val platform: WatchType,
     val capabilities: Set<ProtocolCapsFlag>,
     val firmwareVersion: FirmwareVersion,
@@ -54,10 +54,12 @@ data class ValueParams(
     val libPebbleConfigFlow: LibPebbleConfigFlow,
 )
 
-interface BlobDbItem {
-    fun key(): UByteArray
-    fun value(params: ValueParams): UByteArray?
-    fun recordHashCode(): Int
+public interface BlobDbItem {
+    public fun key(): UByteArray
+    public fun value(params: ValueParams): UByteArray?
+    /** When true, the item is marked synced without being sent to the watch. */
+    public fun skipForWatch(params: ValueParams): Boolean = false
+    public fun recordHashCode(): Int
     /** Only needed for tables which use insert-with-timestamp */
-    fun timestamp(): Instant? = null
+    public fun timestamp(): Instant? = null
 }

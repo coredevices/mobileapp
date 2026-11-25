@@ -22,12 +22,13 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-class PebbleBle(
+internal class PebbleBle(
     private val identifier: PebbleBleIdentifier,
     private val scope: ConnectionCoroutineScope,
     private val gattConnector: GattConnector,
@@ -216,7 +217,7 @@ class PebbleBle(
         gattServerManager.unregisterDevice(identifier)
     }
 
-    override val disconnected = gattConnector.disconnected
+    override val disconnected: Deferred<ConnectionFailureReason> = gattConnector.disconnected
 
     companion object {
         private val CONNECTIVITY_UPDATE_TIMEOUT = 10.seconds
@@ -224,7 +225,7 @@ class PebbleBle(
     }
 }
 
-class PreConnectScanner(
+internal class PreConnectScanner(
     private val bleScanner: BleScanner,
     private val identifier: PebbleBleIdentifier,
 ) {
@@ -249,7 +250,7 @@ class PreConnectScanner(
     }
 }
 
-fun WatchHardwarePlatform?.advertisesWhenNotConnected(): Boolean = when (this?.watchType) {
+internal fun WatchHardwarePlatform?.advertisesWhenNotConnected(): Boolean = when (this?.watchType) {
     WatchType.APLITE -> true
     WatchType.BASALT -> true
     WatchType.CHALK -> true
@@ -260,4 +261,4 @@ fun WatchHardwarePlatform?.advertisesWhenNotConnected(): Boolean = when (this?.w
     null -> false
 }
 
-expect val SERVER_META_RESPONSE: ByteArray
+internal expect val SERVER_META_RESPONSE: ByteArray

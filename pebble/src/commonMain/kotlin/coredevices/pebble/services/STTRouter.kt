@@ -1,13 +1,13 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.decodeAll
+import io.rebble.libpebblecommon.voice.decodeAll
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionException
 import io.ktor.utils.io.CancellationException
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.TranscriptionWord

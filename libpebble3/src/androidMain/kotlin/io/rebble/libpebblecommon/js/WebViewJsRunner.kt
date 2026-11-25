@@ -33,9 +33,11 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CompletableDeferred
@@ -62,7 +64,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 
-class WebViewJsRunner(
+internal class WebViewJsRunner(
     appContext: AppContext,
     private val libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
@@ -80,14 +82,14 @@ class WebViewJsRunner(
     permissions: AppPermissions,
     pluginClient: PluginClient,
     httpClient: HttpClient,
+    private val dataUsage: DataUsageRecorder,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
-        const val API_NAMESPACE = "Pebble"
-        const val PRIVATE_API_NAMESPACE = "_$API_NAMESPACE"
-        const val STARTUP_URL = "file:///android_asset/webview_startup.html"
+        const val API_NAMESPACE: String = "Pebble"
+        const val PRIVATE_API_NAMESPACE: String = "_$API_NAMESPACE"
+        const val STARTUP_URL: String = "file:///android_asset/webview_startup.html"
         private val PAGE_LOAD_TIMEOUT = 15.seconds
-        private val LOCAL_STORAGE_PERSIST_TIMEOUT = 5.seconds
         private val logger = Logger.withTag(WebViewJsRunner::class.simpleName!!)
     }
 
@@ -95,30 +97,23 @@ class WebViewJsRunner(
 
     /** True once the startup page loaded; false if it failed. */
     private val pageLoaded = CompletableDeferred<Boolean>()
-    private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
-    override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
+    override val networkAccess: NetworkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, remoteTimelineEmulator, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient)
-    private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
-        runBlocking(Dispatchers.Main) {
-            webView?.evaluateJavascript(
-                it,
-                null
-            )
-        }
-    }
+    private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext)
     private val geolocationInterface = WebViewGeolocationInterface(scope, this)
+    private val nativeEvals = Channel<String>(Channel.UNLIMITED)
     // The startup page's CSP blocks the WebView's own WebSocket in every frame: this one is gated natively.
-    private val webSocketEvals = Channel<String>(Channel.UNLIMITED)
-    private val webSockets = WebSocketManager(scope, { webSocketEvals.trySend(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess)
-    private var webSocketEvalJob: Job? = null
+    private val webSockets = WebSocketManager(scope, { nativeEvals.trySend(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess, dataUsage)
+    private val xhr = XMLHTTPRequestManager(scope, { nativeEvals.trySend(it) }, httpInterceptorManager, Uuid.parse(appInfo.uuid), httpClient, networkAccess, dataUsage)
+    private var nativeEvalJob: Job? = null
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
             Pair("_localStorage", localStorageInterface),
             Pair("_PebbleGeo", geolocationInterface),
-            Pair(JsEngine.DISPATCH_NAMESPACE, JsEngine.Dispatcher(listOf(webSockets))),
+            Pair(JsEngine.DISPATCH_NAMESPACE, JsEngine.Dispatcher(listOf(webSockets, xhr))),
     )
 
     private val webViewClient = object : WebViewClient() {
@@ -186,6 +181,8 @@ class WebViewJsRunner(
         if (scheme != "http" && scheme != "https") return true
         val verdict = runBlocking { networkAccess.check(url.toString(), wait = false) }
         if (verdict is PluginNetworkVerdict.Denied) logger.w { "Blocked ${url.host}: ${verdict.reason}" }
+        // Bytes unknown: the WebView makes this request itself.
+        if (verdict is PluginNetworkVerdict.Allowed) dataUsage.record(Uuid.parse(appInfo.uuid), url.toString(), 0, 0, requests = 1)
         return verdict is PluginNetworkVerdict.Allowed
     }
 
@@ -276,38 +273,13 @@ class WebViewJsRunner(
         }
     }
 
-    private fun restoreLocalStorage() {
+    /** The pbw's plugin shares the store, so PKJS sees its writes as they happen. */
+    private fun installLocalStorage() {
         runBlocking(Dispatchers.Main) {
-            webView?.evaluateJavascript("""
-                (function() {
-                    window.localStorage.clear();
-                    const localStorageData = JSON.parse(window._localStorage.restoreState());
-                    for (const [key, value] of Object.entries(localStorageData)) {
-                        window.localStorage.setItem(key, value);
-                    }
-                    const originalSetItem = window.localStorage.setItem;
-                    const originalRemoveItem = window.localStorage.removeItem;
-                    const originalClear = window.localStorage.clear;
-                    
-                    ${/* Shim to keep _localStorage in sync with localStorage realtime as best we can (can't handle property accessors) */ ""}
-                    window.localStorage.setItem = function(key, value) {
-                        originalSetItem.call(this, key, value);
-                        window._localStorage.setItem(key, value);
-                    };
-                    window.localStorage.removeItem = function(key) {
-                        originalRemoveItem.call(this, key);
-                        window._localStorage.removeItem(key);
-                    };
-                    window.localStorage.clear = function() {
-                        originalClear.call(this);
-                        window._localStorage.clear();
-                    };
-                })();
-                window.__localStorageShimmed = true;
-            """.trimIndent()
+            webView?.evaluateJavascript(
+                WebViewJSLocalStorageInterface.INSTALL_JS
             ) {
-                restoreCompleted = true
-                logger.d { "localStorage shimmed" }
+                logger.d { "localStorage installed" }
             }
         }
     }
@@ -317,7 +289,6 @@ class WebViewJsRunner(
         synchronized(initializedLock) {
             check(webView == null) { "WebviewJsRunner already started" }
         }
-        restoreCompleted = false
         try {
             init()
         } catch (e: CancellationException) {
@@ -330,8 +301,8 @@ class WebViewJsRunner(
         }
         check(webView != null) { "WebView not initialized" }
         logger.d { "WebView initialized (provider=${webViewProvider()})" }
-        webSocketEvalJob = scope.launch(Dispatchers.Main) {
-            for (js in webSocketEvals) webView?.evaluateJavascript(js, null)
+        nativeEvalJob = scope.launch(Dispatchers.Main) {
+            for (js in nativeEvals) webView?.evaluateJavascript(js, null)
         }
         loadApp(jsPath.toString())
         // Caller must see this fail, otherwise the session is kept as the current PKJS session
@@ -348,49 +319,16 @@ class WebViewJsRunner(
     private fun webViewProvider(): String = WebView.getCurrentWebViewPackage()
         ?.let { "${it.packageName} ${it.versionName}" } ?: "none"
 
-    private suspend fun persistLocalStorage() {
-        suspendCancellableCoroutine { cont ->
-            webView?.evaluateJavascript("""
-                (function() {
-                    const data = {};
-                    for (let i = 0; i < window.localStorage.length; i++) {
-                        const key = window.localStorage.key(i);
-                        const value = window.localStorage.getItem(key);
-                        data[key] = value;
-                    }
-                    window.localStorage.clear();
-                    window._localStorage.saveState(JSON.stringify(data));
-                })();
-                    """.trimIndent()
-            ) {
-                cont.resume(Unit)
-            }
-        }
-    }
-
     override suspend fun stop() {
         //TODO: Close config screens
         _readyState.value = false
-        webSocketEvalJob?.cancel()
+        nativeEvalJob?.cancel()
         webSockets.close()
+        xhr.close()
         // Run teardown as NonCancellable. stop() is frequently invoked from an already-cancelled
         // connection scope — e.g. on watch disconnect.
         withContext(NonCancellable + Dispatchers.Main) {
             try {
-                // Save final state of localStorage to our scoped storage, to catch any
-                // property-accessor changes (not caught by our shim).
-                // Skip if restoreLocalStorage() never completed: window.localStorage is
-                // still empty and persisting it would clear the user's stored settings
-                // (saveState() does a clear() first). MOB-6881.
-                if (restoreCompleted) {
-                    // evaluateJavascript never calls back if the renderer is gone or wedged, and
-                    // this runs NonCancellable: without a timeout stop() never reaches destroy().
-                    if (withTimeoutOrNull(LOCAL_STORAGE_PERSIST_TIMEOUT) { persistLocalStorage() } == null) {
-                        logger.w { "persistLocalStorage timed out; tearing down anyway" }
-                    }
-                } else {
-                    logger.d { "Skipping persistLocalStorage: restore did not complete" }
-                }
                 interfaces.forEach { (namespace, _) ->
                     webView?.removeJavascriptInterface(namespace)
                 }
@@ -425,7 +363,7 @@ class WebViewJsRunner(
 
     override suspend fun loadAppJs(jsUrl: String) {
         webView?.let { webView ->
-            restoreLocalStorage()
+            installLocalStorage()
 
             if (jsUrl.isBlank() || !jsUrl.endsWith(".js")) {
                 logger.e { "loadUrl passed to loadAppJs empty or invalid" }
@@ -437,6 +375,10 @@ class WebViewJsRunner(
             withContext(Dispatchers.Main) {
                 // The WebView's own defaults to 'blob', which apps written against it expect.
                 webView.evaluateJavascript(webSockets.proxyJs() + WEBSOCKET_JS + "WebSocket._defaultBinaryType = 'blob';", null)
+                if (libPebble.config.value.watchConfig.pkjsRequestsThroughApp) {
+                    // In a block, so evaluating it again can't redeclare the class.
+                    webView.evaluateJavascript(xhr.proxyJs() + "{" + XML_HTTP_REQUEST_JS + "}", null)
+                }
                 webView.evaluateJavascript(
                         """
                             (() => {

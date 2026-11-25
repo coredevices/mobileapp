@@ -38,7 +38,7 @@ private val logger = Logger.withTag("BasicNotificationProcessor")
 private val UNUSABLE_NOTIFICATION_COLORS =
     setOf(0, 0xFF000000.toInt(), 0xFFFFFFFF.toInt())
 
-class BasicNotificationProcessor(
+internal class BasicNotificationProcessor(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val context: AppContext,
     private val contactDao: ContactDao,
@@ -172,7 +172,7 @@ class BasicNotificationProcessor(
     }
 }
 
-const val INDEX_CHANNEL_ID = "ring_debug"
+internal const val INDEX_CHANNEL_ID: String = "ring_debug"
 private fun checkForIndexIcon(sbn: StatusBarNotification, context: Context): TimelineIcon? {
     return if (sbn.packageName == context.packageName && sbn.notification.channelId == INDEX_CHANNEL_ID) {
         TimelineIcon.NewsEvent
@@ -279,7 +279,7 @@ private fun List<Person>.asContacts(context: Context): List<String> = mapNotNull
     }
 }
 
-fun StatusBarNotification.iconForCategory(): TimelineIcon = when (notification.category) {
+internal fun StatusBarNotification.iconForCategory(): TimelineIcon = when (notification.category) {
     Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail
     Notification.CATEGORY_MESSAGE -> TimelineIcon.GenericSms
     Notification.CATEGORY_EVENT -> TimelineIcon.TimelineCalendar

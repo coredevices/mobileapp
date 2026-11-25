@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlin.time.Instant
 
 // Stubbed implementation for iOS, as iOS does not provide a public API to access call logs.
-class IosSystemCallLog: SystemCallLog {
+internal class IosSystemCallLog: SystemCallLog {
     override suspend fun getMissedCalls(start: Instant): List<MissedCall> = emptyList()
 
     override fun registerForMissedCallChanges(): Flow<Unit> = emptyFlow()

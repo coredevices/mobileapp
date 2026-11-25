@@ -19,12 +19,12 @@ import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-class PutBytesService(
+internal class PutBytesService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
-    val receivedMessages = Channel<PutBytesResponse>(Channel.BUFFERED)
-    val progressUpdates = Channel<PutBytesProgress>(Channel.BUFFERED)
+    val receivedMessages: Channel<PutBytesResponse> = Channel<PutBytesResponse>(Channel.BUFFERED)
+    val progressUpdates: Channel<PutBytesService.PutBytesProgress> = Channel<PutBytesProgress>(Channel.BUFFERED)
 
     private val logger = Logger.withTag("PutBytesService")
 
@@ -76,7 +76,7 @@ class PutBytesService(
      * Initializes a PutBytes session on the device for transferring 3.x+ app data
      */
     suspend fun initAppSession(appId: UInt, size: UInt, type: ObjectType): PutBytesResponse =
-        sendAndAwaitAck(PutBytesAppInit(size, type, appId))
+        sendAndAwaitAck(PutBytesAppInit(size, type, appId), timeout = 45.seconds)
 
     /**
      * Sends a chunk of data to the watch

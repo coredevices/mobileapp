@@ -12,13 +12,13 @@ import kotlinx.coroutines.flow.update
  * Each watch's latest firmware update state, kept across reconnections: one that goes through
  * recovery finishes on a later connection than the one it started on.
  */
-class LastFirmwareUpdateStates {
+internal class LastFirmwareUpdateStates internal constructor() {
     private val states = MutableStateFlow<Map<PebbleIdentifier, FirmwareUpdateStatus>>(emptyMap())
 
     fun state(identifier: PebbleIdentifier): Flow<FirmwareUpdateStatus?> =
         states.map { it[identifier] }.distinctUntilChanged()
 
-    fun clear(identifier: PebbleIdentifier) = states.update { it - identifier }
+    fun clear(identifier: PebbleIdentifier): Unit = states.update { it - identifier }
 
     internal fun update(identifier: PebbleIdentifier, state: FirmwareUpdateStatus) =
         states.update { it + (identifier to state) }

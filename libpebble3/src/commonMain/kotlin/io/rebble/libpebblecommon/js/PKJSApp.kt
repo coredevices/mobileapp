@@ -62,14 +62,14 @@ import org.koin.core.parameter.parameterArrayOf
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class PKJSApp(
-    val device: CompanionAppDevice,
+public class PKJSApp internal constructor(
+    public val device: CompanionAppDevice,
     private val jsPath: Path,
-    val appInfo: PbwAppInfo,
-    val lockerEntry: LockerEntry,
+    public val appInfo: PbwAppInfo,
+    internal val lockerEntry: LockerEntry,
     private val connectionScope: ConnectionCoroutineScope,
 ): LibPebbleKoinComponent, CompanionApp, ConfigMessageTarget, AudioStreamTarget {
-    companion object {
+    public companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
         private val CONFIGURATION_URL_TIMEOUT = 10.seconds
     }
@@ -81,8 +81,8 @@ class PKJSApp(
     private val urlOpenRequests = Channel<String>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val _logMessages = Channel<String>(2, BufferOverflow.DROP_OLDEST)
-    val logMessages: ReceiveChannel<String> = _logMessages
-    val sessionIsReady get() = jsRunner?.readyState?.value ?: false
+    internal val logMessages: ReceiveChannel<String> = _logMessages
+    public val sessionIsReady: Boolean get() = jsRunner?.readyState?.value ?: false
 
     private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(1000) {
@@ -96,7 +96,7 @@ class PKJSApp(
         }
     }
 
-    fun debugForceGC() {
+    public fun debugForceGC() {
         jsRunner?.debugForceGC() ?: error("JsRunner not initialized")
     }
 
@@ -173,7 +173,7 @@ class PKJSApp(
         }?.launchIn(scope) ?: error("JsRunner not initialized")
     }
 
-    suspend fun requestConfigurationUrl(): String? {
+    public suspend fun requestConfigurationUrl(): String? {
         if (runningScope == null) {
             logger.e { "Cannot show configuration, PKJSApp is not running" }
             return null
@@ -258,14 +258,14 @@ class PKJSApp(
     /** The PKJS session is already running whenever its config page can be open. */
     override suspend fun onConfigMessage(json: String): String? = jsRunner?.sendConfigMessage(json)
 
-    fun triggerOnWebviewClosed(data: String) {
+    public fun triggerOnWebviewClosed(data: String) {
         runningScope?.launch {
             jsRunner?.signalWebviewClosed(data)
         }
     }
 }
 
-fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
+internal fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
     val data = this.mapKeys {
         val id = it.key
         appKeys.entries.firstOrNull { it.value == id }?.key ?: id

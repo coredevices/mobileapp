@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,9 +57,47 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coredevices.ring.ui.screens.settings.gestureLabel
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.webhook_sheet_add_header
+import coreapp.ring.generated.resources.webhook_sheet_copy_from
+import coreapp.ring.generated.resources.webhook_sheet_header_value
+import coreapp.ring.generated.resources.webhook_sheet_headers
+import coreapp.ring.generated.resources.webhook_sheet_hide_secret
+import coreapp.ring.generated.resources.webhook_sheet_mode_both
+import coreapp.ring.generated.resources.webhook_sheet_mode_recording
+import coreapp.ring.generated.resources.webhook_sheet_mode_transcription
+import coreapp.ring.generated.resources.webhook_sheet_no_runs_click
+import coreapp.ring.generated.resources.webhook_sheet_no_runs_recording
+import coreapp.ring.generated.resources.webhook_sheet_paste_secret
+import coreapp.ring.generated.resources.webhook_sheet_payload
+import coreapp.ring.generated.resources.webhook_sheet_payload_hint
+import coreapp.ring.generated.resources.webhook_sheet_recent_runs
+import coreapp.ring.generated.resources.webhook_sheet_remove
+import coreapp.ring.generated.resources.webhook_sheet_remove_header
+import coreapp.ring.generated.resources.webhook_sheet_saving
+import coreapp.ring.generated.resources.webhook_sheet_secret_hint
+import coreapp.ring.generated.resources.webhook_sheet_secret_required
+import coreapp.ring.generated.resources.webhook_sheet_security
+import coreapp.ring.generated.resources.webhook_sheet_send_json
+import coreapp.ring.generated.resources.webhook_sheet_send_json_hint
+import coreapp.ring.generated.resources.webhook_sheet_send_test
+import coreapp.ring.generated.resources.webhook_sheet_sending
+import coreapp.ring.generated.resources.webhook_sheet_show_secret
+import coreapp.ring.generated.resources.webhook_sheet_sign_requests
+import coreapp.ring.generated.resources.webhook_sheet_sign_requests_hint
+import coreapp.ring.generated.resources.webhook_sheet_signing_secret
+import coreapp.ring.generated.resources.webhook_sheet_title
+import coreapp.ring.generated.resources.webhook_sheet_url
+import coreapp.ring.generated.resources.webhook_sheet_what_to_send
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.loading
+import coreapp.util.generated.resources.name
+import coreapp.util.generated.resources.retry
+import coreapp.util.generated.resources.save
+import coredevices.ring.ui.screens.settings.gestureLabelRes
 import coredevices.util.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +111,7 @@ fun IndexWebhookSheet(
     val headerInputs by viewModel.headerInputs.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
     val clickPayload by viewModel.clickPayloadInput.collectAsState()
+    val sendJson by viewModel.sendJsonInput.collectAsState()
     val signRequests by viewModel.signRequestsInput.collectAsState()
     val signingSecret by viewModel.signingSecretInput.collectAsState()
     val signingSecretLoading by viewModel.signingSecretLoading.collectAsState()
@@ -107,7 +147,7 @@ fun IndexWebhookSheet(
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                "Webhook · ${openFor.gestureLabel}",
+                stringResource(Res.string.webhook_sheet_title, stringResource(openFor.gestureLabelRes)),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -117,7 +157,7 @@ fun IndexWebhookSheet(
                     shape = CircleShape,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text("Copy from ${other.gestureLabel}", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(Res.string.webhook_sheet_copy_from, stringResource(other.gestureLabelRes)), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -129,7 +169,7 @@ fun IndexWebhookSheet(
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 28.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionLabel("Webhook URL")
+                SectionLabel(stringResource(Res.string.webhook_sheet_url))
                 OutlinedTextField(
                     value = urlInput,
                     onValueChange = viewModel::updateUrlInput,
@@ -143,7 +183,7 @@ fun IndexWebhookSheet(
             }
 
             if (isClick) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionLabel("Payload (optional)")
+                SectionLabel(stringResource(Res.string.webhook_sheet_payload))
                 OutlinedTextField(
                     value = clickPayload,
                     onValueChange = viewModel::updateClickPayload,
@@ -154,12 +194,12 @@ fun IndexWebhookSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "Sent as JSON with the click count. Valid JSON is embedded as-is, anything else as text",
+                    stringResource(Res.string.webhook_sheet_payload_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
                 )
             } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("What to send")
+                SectionLabel(stringResource(Res.string.webhook_sheet_what_to_send))
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     IndexWebhookPayloadMode.entries.forEachIndexed { index, mode ->
                         SegmentedButton(
@@ -174,10 +214,25 @@ fun IndexWebhookSheet(
                         }
                     }
                 }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(Res.string.webhook_sheet_send_json), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(Res.string.webhook_sheet_send_json_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = sendJson, onCheckedChange = viewModel::updateSendJson)
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Headers")
+                SectionLabel(stringResource(Res.string.webhook_sheet_headers))
                 headerInputs.forEachIndexed { index, header ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -190,7 +245,7 @@ fun IndexWebhookSheet(
                             singleLine = true,
                             shape = RoundedCornerShape(8.dp),
                             textStyle = MaterialTheme.typography.bodyMedium,
-                            placeholder = { Text("Name", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder = { Text(stringResource(UtilRes.string.name), style = MaterialTheme.typography.bodyMedium) },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = dismissKeyboard,
                             modifier = Modifier.weight(1f),
@@ -201,7 +256,7 @@ fun IndexWebhookSheet(
                             singleLine = true,
                             shape = RoundedCornerShape(8.dp),
                             textStyle = MaterialTheme.typography.bodyMedium,
-                            placeholder = { Text("Value", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder = { Text(stringResource(Res.string.webhook_sheet_header_value), style = MaterialTheme.typography.bodyMedium) },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = dismissKeyboard,
                             modifier = Modifier.weight(1f),
@@ -209,7 +264,7 @@ fun IndexWebhookSheet(
                         IconButton(onClick = { viewModel.removeHeader(index) }) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Remove header",
+                                contentDescription = stringResource(Res.string.webhook_sheet_remove_header),
                                 tint = colors.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -220,21 +275,21 @@ fun IndexWebhookSheet(
                     onClick = viewModel::addHeader,
                     contentPadding = PaddingValues(4.dp),
                 ) {
-                    Text("Add header", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(Res.string.webhook_sheet_add_header), style = MaterialTheme.typography.labelLarge)
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Security")
+                SectionLabel(stringResource(Res.string.webhook_sheet_security))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Sign requests", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(Res.string.webhook_sheet_sign_requests), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Add an HMAC-SHA256 signature",
+                            stringResource(Res.string.webhook_sheet_sign_requests_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.onSurfaceVariant,
                         )
@@ -247,7 +302,7 @@ fun IndexWebhookSheet(
                 }
                 if (signRequests) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SectionLabel("Signing secret")
+                        SectionLabel(stringResource(Res.string.webhook_sheet_signing_secret))
                         OutlinedTextField(
                             value = signingSecret,
                             onValueChange = viewModel::updateSigningSecret,
@@ -255,7 +310,7 @@ fun IndexWebhookSheet(
                             singleLine = true,
                             shape = RoundedCornerShape(8.dp),
                             placeholder = {
-                                Text(if (signingSecretLoading) "Loading…" else "Paste a secret")
+                                Text(if (signingSecretLoading) stringResource(UtilRes.string.loading) else stringResource(Res.string.webhook_sheet_paste_secret))
                             },
                             isError = !signingSecretLoading && signingSecret.isBlank(),
                             visualTransformation = if (revealSigningSecret) {
@@ -272,9 +327,9 @@ fun IndexWebhookSheet(
                                         if (revealSigningSecret) Icons.Default.VisibilityOff
                                         else Icons.Default.Visibility,
                                         contentDescription = if (revealSigningSecret) {
-                                            "Hide signing secret"
+                                            stringResource(Res.string.webhook_sheet_hide_secret)
                                         } else {
-                                            "Show signing secret"
+                                            stringResource(Res.string.webhook_sheet_show_secret)
                                         },
                                     )
                                 }
@@ -288,9 +343,9 @@ fun IndexWebhookSheet(
                         )
                         Text(
                             if (!signingSecretLoading && signingSecret.isBlank()) {
-                                "A signing secret is required"
+                                stringResource(Res.string.webhook_sheet_secret_required)
                             } else {
-                                "Use a unique random secret of at least 32 bytes"
+                                stringResource(Res.string.webhook_sheet_secret_hint)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (!signingSecretLoading && signingSecret.isBlank()) {
@@ -320,12 +375,12 @@ fun IndexWebhookSheet(
                         modifier = Modifier.size(17.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Send test event", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(Res.string.webhook_sheet_send_test), style = MaterialTheme.typography.labelLarge)
                 }
                 Text(
                     text = when (val state = testState) {
                         WebhookTestState.Idle -> ""
-                        WebhookTestState.Sending -> "Sending..."
+                        WebhookTestState.Sending -> stringResource(Res.string.webhook_sheet_sending)
                         is WebhookTestState.Done -> state.label
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -344,7 +399,7 @@ fun IndexWebhookSheet(
                 shape = CircleShape,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
-                Text(if (saving) "Saving…" else "Save")
+                Text(if (saving) stringResource(Res.string.webhook_sheet_saving) else stringResource(UtilRes.string.save))
             }
 
             if (canRemove) {
@@ -352,16 +407,16 @@ fun IndexWebhookSheet(
                     onClick = viewModel::removeCurrentGesture,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Remove webhook", color = colors.error)
+                    Text(stringResource(Res.string.webhook_sheet_remove), color = colors.error)
                 }
             }
 
             Column {
-                SectionLabel("Recent runs", Modifier.padding(bottom = 4.dp))
+                SectionLabel(stringResource(Res.string.webhook_sheet_recent_runs), Modifier.padding(bottom = 4.dp))
                 if (runs.isEmpty()) {
                     Text(
-                        if (isClick) "No runs yet. They'll show up here after your first click."
-                        else "No runs yet. They'll show up here after your first recording.",
+                        if (isClick) stringResource(Res.string.webhook_sheet_no_runs_click)
+                        else stringResource(Res.string.webhook_sheet_no_runs_recording),
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.outline,
                         modifier = Modifier.padding(vertical = 8.dp),
@@ -381,10 +436,13 @@ private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
     val colors = IndexTheme.colors
     val color =
         if (run.ok) colors.onSurfaceVariant else colors.error
+    var expanded by remember(run) { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        modifier = Modifier.fillMaxWidth()
+            .clickable(enabled = !run.ok) { expanded = !expanded }
+            .padding(vertical = 7.dp),
     ) {
         Icon(
             if (run.ok) Icons.Default.CheckCircle else Icons.Default.Error,
@@ -404,7 +462,7 @@ private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
             run.detailLine(),
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = if (expanded) Int.MAX_VALUE else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
@@ -416,7 +474,7 @@ private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
         )
         if (run.retryDeliveryId != null) {
             TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 4.dp)) {
-                Text("Retry")
+                Text(stringResource(UtilRes.string.retry))
             }
         }
     }
@@ -441,8 +499,9 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "${bytes / (1024 * 1024)} MB"
 }
 
+@Composable
 private fun IndexWebhookPayloadMode.segmentLabel(): String = when (this) {
-    IndexWebhookPayloadMode.RecordingOnly -> "Recording"
-    IndexWebhookPayloadMode.TranscriptionOnly -> "Transcription"
-    IndexWebhookPayloadMode.Both -> "Both"
+    IndexWebhookPayloadMode.RecordingOnly -> stringResource(Res.string.webhook_sheet_mode_recording)
+    IndexWebhookPayloadMode.TranscriptionOnly -> stringResource(Res.string.webhook_sheet_mode_transcription)
+    IndexWebhookPayloadMode.Both -> stringResource(Res.string.webhook_sheet_mode_both)
 }

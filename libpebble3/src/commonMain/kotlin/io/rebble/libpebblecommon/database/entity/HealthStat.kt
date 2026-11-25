@@ -15,8 +15,9 @@ import kotlin.time.Clock
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
-data class HealthStat(
+internal data class HealthStat(
     val key: String,
     val payload: ByteArray,
     val lastUpdated: Long = Clock.System.now().toEpochMilliseconds(),

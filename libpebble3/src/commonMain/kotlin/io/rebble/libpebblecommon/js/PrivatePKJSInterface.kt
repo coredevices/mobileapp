@@ -35,7 +35,7 @@ import kotlinx.serialization.json.put
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-abstract class PrivatePKJSInterface(
+internal abstract class PrivatePKJSInterface(
     protected val jsRunner: JsRunner,
     private val device: CompanionAppDevice,
     protected val scope: CoroutineScope,

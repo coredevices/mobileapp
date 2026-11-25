@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.WebSockets
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -87,8 +85,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.LastFirmwareUpdateSt
 import io.rebble.libpebblecommon.connection.endpointmanager.PendingFirmwareInstalls
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
-import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFrameDecoder
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
+import io.rebble.libpebblecommon.voice.SpeexAudioFrameDecoder
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
@@ -120,6 +118,7 @@ import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
+import io.rebble.libpebblecommon.js.createHttpClient
 import io.rebble.libpebblecommon.imaging.ImagingService
 import io.rebble.libpebblecommon.locker.AppFileReader
 import io.rebble.libpebblecommon.locker.Locker
@@ -135,7 +134,10 @@ import io.rebble.libpebblecommon.plugin.JsPluginFactory
 import io.rebble.libpebblecommon.plugin.CalendarPlugin
 import io.rebble.libpebblecommon.plugin.FindMyPhonePlugin
 import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
+import io.rebble.libpebblecommon.permissions.AppDataUsage
+import io.rebble.libpebblecommon.permissions.AppDataUsageApi
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.permissions.InstalledApps
 import io.rebble.libpebblecommon.permissions.LockerInstalledApps
@@ -143,6 +145,9 @@ import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
 import io.rebble.libpebblecommon.plugin.PluginOAuthApi
+import io.rebble.libpebblecommon.plugin.PluginActionLog
+import io.rebble.libpebblecommon.plugin.PluginActionLogApi
+import io.rebble.libpebblecommon.plugin.PluginActionRecorder
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginLogs
 import io.rebble.libpebblecommon.plugin.PluginRegistry
@@ -200,18 +205,18 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
-data class ConnectionScopeProperties(
+internal data class ConnectionScopeProperties(
     val identifier: PebbleIdentifier,
     val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
     val color: WatchColor,
 )
 
-interface ConnectionAnalyticsLogger {
+internal interface ConnectionAnalyticsLogger {
     fun logEvent(name: String, props: Map<String, String>? = null)
 }
 
-class RealConnectionAnalyticsLogger(
+internal class RealConnectionAnalyticsLogger(
     private val connectionProps: ConnectionScopeProperties,
     private val analytics: LibPebbleAnalytics,
 ) : ConnectionAnalyticsLogger {
@@ -223,7 +228,7 @@ class RealConnectionAnalyticsLogger(
     }
 }
 
-fun LibPebbleAnalytics.logWatchEvent(
+internal fun LibPebbleAnalytics.logWatchEvent(
     color: WatchColor,
     name: String,
     props: Map<String, String>? = null,
@@ -237,7 +242,7 @@ fun LibPebbleAnalytics.logWatchEvent(
     )
 }
 
-interface ConnectionScope {
+internal interface ConnectionScope {
     val identifier: PebbleIdentifier
     val pebbleConnector: PebbleConnector
     fun close()
@@ -250,7 +255,7 @@ interface ConnectionScope {
     val languagePackInstaller: LanguagePackInstaller
 }
 
-class RealConnectionScope(
+internal class RealConnectionScope(
     private val koinScope: Scope,
     override val identifier: PebbleIdentifier,
     private val coroutineScope: ConnectionCoroutineScope,
@@ -272,15 +277,15 @@ class RealConnectionScope(
     }
 }
 
-data class PlatformConfig(
+internal data class PlatformConfig(
     val syncNotificationApps: Boolean,
 )
 
-interface ConnectionScopeFactory {
+internal interface ConnectionScopeFactory {
     fun createScope(props: ConnectionScopeProperties): ConnectionScope
 }
 
-class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
+internal class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
     override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
         val scope =
@@ -299,23 +304,23 @@ class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactor
 /**
  * Essentially, GlobalScope for libpebble. Use this everywhere that would otherwise use GlobalScope.
  */
-class LibPebbleCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+internal class LibPebbleCoroutineScope internal constructor(override val coroutineContext: CoroutineContext) : CoroutineScope
 
 /**
  * Per-connection coroutine scope, torn down when the connection ends.
  */
-class ConnectionCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+internal class ConnectionCoroutineScope internal constructor(override val coroutineContext: CoroutineContext) : CoroutineScope
 
 /**
  * Lazy/provider for when we need to get out of a circular dependency.
  */
-class HackyProvider<T>(val getter: () -> T) {
+internal class HackyProvider<T>(val getter: () -> T) {
     fun get(): T = getter()
 }
 
-expect val platformModule: Module
+internal expect val platformModule: Module
 
-val CommonPhoneCapabilities = setOf(
+internal val CommonPhoneCapabilities: Set<ProtocolCapsFlag> = setOf(
     ProtocolCapsFlag.SupportsAppRunStateProtocol,
     ProtocolCapsFlag.SupportsInfiniteLogDump,
 //    ProtocolCapsFlag.SupportsLocalization,
@@ -341,7 +346,7 @@ internal interface LibPebbleKoinComponent : KoinComponent {
     override fun getKoin(): Koin = LibPebbleKoinContext.koin
 }
 
-fun initKoin(
+internal fun initKoin(
     defaultConfig: LibPebbleConfig,
     webServices: WebServices,
     appContext: AppContext,
@@ -383,6 +388,8 @@ fun initKoin(
                 single { get<Database>().calendarDao() }
                 single { get<Database>().healthSettingsDao() } binds arrayOf(HealthSettingsEntryDao::class, HealthSettingsEntryRealDao::class)
                 single { get<Database>().lockerAppPermissionDao() }
+                single { get<Database>().appDataUsageDao() }
+                single { get<Database>().pluginActionLogDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
                 single { get<Database>().vibePatternDao() }
@@ -405,7 +412,7 @@ fun initKoin(
                 singleOf(::Housekeeping)
                 singleOf(::RemoteTimelineEmulator)
                 singleOf(::WeatherManager)
-                singleOf(::HttpInterceptorManager)
+                single { HttpInterceptorManager(get<RemoteTimelineEmulator>(), get<InjectedPKJSHttpInterceptors>(), get()) }
                 singleOf(::RealWatchPrefs) bind WatchPrefs::class
                 singleOf(::WebSyncManager) bind RequestSync::class
                 singleOf(::TimelineApi) bind Timeline::class
@@ -417,6 +424,8 @@ fun initKoin(
                         get(),
                         get(),
                         get(), // lockerPluginLoader
+                        get(),
+                        get(),
                         get(),
                         get(),
                         get(),
@@ -469,7 +478,7 @@ fun initKoin(
                         token = proxyTokenProvider
                     )
                 }
-                single { HttpClient { install(WebSockets) } }
+                single { createHttpClient() }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlin.time.Clock> { kotlin.time.Clock.System }
@@ -495,6 +504,8 @@ fun initKoin(
                 singleOf(::RunningApps)
                 singleOf(::LockerInstalledApps) bind InstalledApps::class
                 singleOf(::AppPermissions)
+                singleOf(::AppDataUsage) binds arrayOf(DataUsageRecorder::class, AppDataUsageApi::class)
+                singleOf(::PluginActionLog) binds arrayOf(PluginActionRecorder::class, PluginActionLogApi::class)
                 singleOf(::PluginClient)
                 single<PluginFileSystem> { platformPluginFileSystem(get(), get()) }
                 singleOf(::PluginFileAccess)
@@ -505,11 +516,11 @@ fun initKoin(
                         { get<AppPermissions>().subjectOf(it) },
                         { app, permission -> get<AppPermissions>().callerKeys(app, permission) },
                         { caller, plugin, request ->
-                            get<PluginClient>().observe(caller, plugin, request.category, request.item, request.properties, request.iconPixelSize)
+                            get<PluginClient>().observe(caller, plugin, request.category, request.item, request.properties, request.iconPixelSize, request.limit)
                         },
                     )
                 }
-                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
+                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
                 singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)
                 singleOf(::PendingFirmwareInstalls)

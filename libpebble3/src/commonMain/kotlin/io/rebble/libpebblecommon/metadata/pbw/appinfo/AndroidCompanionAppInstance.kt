@@ -4,6 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AndroidCompanionAppInstance(
+public data class AndroidCompanionAppInstance internal constructor(
     @SerialName("package") val pkg: String? = null
 )

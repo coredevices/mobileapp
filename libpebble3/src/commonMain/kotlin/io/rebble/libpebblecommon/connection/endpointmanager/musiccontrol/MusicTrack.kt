@@ -5,7 +5,7 @@ import kotlin.time.Duration
 
 private val MAX_LENGTH = 64
 
-data class MusicTrack(
+public data class MusicTrack internal constructor(
     val title: String?,
     val artist: String?,
     val album: String?,
@@ -14,7 +14,7 @@ data class MusicTrack(
     val totalTracks: Int? = null,
 )
 
-fun MusicTrack.toPacket(): MusicControl.UpdateCurrentTrack {
+internal fun MusicTrack.toPacket(): MusicControl.UpdateCurrentTrack {
     return MusicControl.UpdateCurrentTrack(
         title = title?.take(MAX_LENGTH) ?: "",
         artist = artist?.take(MAX_LENGTH) ?: "",

@@ -14,17 +14,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
+internal actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
     return true
 }
 
-actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
+internal actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
     return true
 }
 
 private val logger = Logger.withTag("Pairing.ios")
 
-actual fun getBluetoothDevicePairEvents(
+internal actual fun getBluetoothDevicePairEvents(
     context: AppContext,
     identifier: PebbleBleIdentifier,
     connectivityWatcher: ConnectivityWatcher,
@@ -48,13 +48,13 @@ actual fun getBluetoothDevicePairEvents(
         )
     }
 
-actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean =
+internal actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean =
     throw UnsupportedOperationException("BT Classic not supported on iOS")
 
-actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean =
+internal actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean =
     throw UnsupportedOperationException("BT Classic not supported on iOS")
 
-actual fun getBluetoothClassicDevicePairEvents(
+internal actual fun getBluetoothClassicDevicePairEvents(
     context: AppContext,
     identifier: PebbleBtClassicIdentifier,
 ): Flow<BluetoothClassicDevicePairEvent> =

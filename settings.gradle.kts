@@ -31,6 +31,8 @@ rootProject.name = "libpebbleroot"
 include(":libpebble3")
 include(":blobdbgen")
 include(":blobannotations")
+include(":toolschemagen")
+include(":toolschemaannotations")
 include(":composeApp")
 include(":androidApp")
 include(":pebble")

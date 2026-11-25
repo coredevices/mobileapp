@@ -21,7 +21,7 @@ import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class AppOrderManager(
+internal class AppOrderManager(
     identifier: PebbleIdentifier,
     private val settings: Settings,
     private val lockerDao: LockerEntryRealDao,

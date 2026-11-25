@@ -8,7 +8,7 @@ import io.rebble.libpebblecommon.util.stripBidiIsolates
  * Who the notification is from, so the watch can group its history by conversation: the
  * conversation title when set, otherwise the sender of the newest incoming message.
  */
-fun StatusBarNotification.extractSender(): String? {
+internal fun StatusBarNotification.extractSender(): String? {
     val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification)
         ?: return null
     val user = style.user

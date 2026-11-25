@@ -63,6 +63,37 @@ import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlin.uuid.Uuid
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.weather_refresh
+import coreapp.pebble.generated.resources.weather_title
+import coreapp.pebble.generated.resources.weather_add_location
+import coreapp.pebble.generated.resources.weather_current_location
+import coreapp.pebble.generated.resources.weather_manual_location
+import coreapp.pebble.generated.resources.weather_fixed_location
+import coreapp.pebble.generated.resources.weather_add_weather_location
+import coreapp.pebble.generated.resources.weather_search_location
+import coreapp.pebble.generated.resources.weather_enter_coordinates
+import coreapp.pebble.generated.resources.weather_current_location_description
+import coreapp.pebble.generated.resources.weather_fixed_location_description
+import coreapp.pebble.generated.resources.weather_manual_coordinates
+import coreapp.pebble.generated.resources.weather_manual_coordinates_description
+import coreapp.pebble.generated.resources.weather_latitude
+import coreapp.pebble.generated.resources.weather_latitude_example
+import coreapp.pebble.generated.resources.weather_longitude
+import coreapp.pebble.generated.resources.weather_longitude_example
+import coreapp.pebble.generated.resources.weather_address
+import coreapp.pebble.generated.resources.weather_address_placeholder
+import coreapp.pebble.generated.resources.weather_search_failed
+import coreapp.pebble.generated.resources.weather_type_to_search
+import coreapp.pebble.generated.resources.weather_remove_location
+import coreapp.pebble.generated.resources.weather_remove_location_message
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.add
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.name
+import coreapp.util.generated.resources.remove
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 private const val MAX_WEATHER_LOCATIONS = 5
 private val logger = Logger.withTag("WeatherScreen")
@@ -77,10 +108,10 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             TopBarIconButtonWithToolTip(
                 onClick = { scope.launch { weatherFetcher.fetchWeather(GlobalScope) } },
                 icon = Icons.Filled.Refresh,
-                description = "Refresh Weather",
+                description = stringResource(Res.string.weather_refresh),
             )
         }
-        topBarParams.title("Weather Locations")
+        topBarParams.title(getString(Res.string.weather_title))
     }
     val weatherLocationDao: WeatherLocationDao = koinInject()
     val locations by weatherLocationDao.getAllLocationsFlow().collectAsState(emptyList())
@@ -148,7 +179,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     FloatingActionButton(
                         onClick = { showAddDialog = true }
                     ) {
-                        Icon(Icons.Filled.Add, "Add location")
+                        Icon(Icons.Filled.Add, stringResource(Res.string.weather_add_location))
                     }
                 }
             },
@@ -171,15 +202,15 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 supportingContent = {
                                     Text(
                                         when {
-                                            location.currentLocation -> "Current Location"
-                                            location.manual -> "Manual Location"
-                                            else -> "Fixed Location"
+                                            location.currentLocation -> stringResource(Res.string.weather_current_location)
+                                            location.manual -> stringResource(Res.string.weather_manual_location)
+                                            else -> stringResource(Res.string.weather_fixed_location)
                                         }
                                     )
                                 },
                                 trailingContent = {
                                     IconButton(onClick = { locationToDelete = location }) {
-                                        Icon(Icons.Filled.Delete, "Remove")
+                                        Icon(Icons.Filled.Delete, stringResource(UtilRes.string.remove))
                                     }
                                 }
                             )
@@ -253,20 +284,20 @@ private fun AddWeatherLocationDialog(
         title = {
             Text(
                 when (mode) {
-                    AddLocationMode.Choose -> "Add Weather Location"
-                    AddLocationMode.Search -> "Search Location"
-                    AddLocationMode.Manual -> "Enter Coordinates"
+                    AddLocationMode.Choose -> stringResource(Res.string.weather_add_weather_location)
+                    AddLocationMode.Search -> stringResource(Res.string.weather_search_location)
+                    AddLocationMode.Manual -> stringResource(Res.string.weather_enter_coordinates)
                 }
             )
         },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             if (mode == AddLocationMode.Manual) {
                 Spacer(Modifier.width(8.dp))
                 TextButton(
                     onClick = { addLocation(manualName.trim(), parsedLatitude, parsedLongitude, manual = true) },
                     enabled = manualName.isNotBlank() && parsedLatitude != null && parsedLongitude != null,
-                ) { Text("Add") }
+                ) { Text(stringResource(UtilRes.string.add)) }
             }
         },
     ) {
@@ -275,23 +306,23 @@ private fun AddWeatherLocationDialog(
                 if (allowCurrentLocation) {
                     AddLocationOption(
                         icon = Icons.Default.MyLocation,
-                        title = "Current Location",
-                        description = "Uses your device's location",
+                        title = stringResource(Res.string.weather_current_location),
+                        description = stringResource(Res.string.weather_current_location_description),
                         onClick = { addLocation("Current Location", null, null, currentLocation = true) },
                     )
                 }
                 if (searchAvailable) {
                     AddLocationOption(
                         icon = Icons.Default.LocationOn,
-                        title = "Fixed Location",
-                        description = "Search for a specific address",
+                        title = stringResource(Res.string.weather_fixed_location),
+                        description = stringResource(Res.string.weather_fixed_location_description),
                         onClick = { mode = AddLocationMode.Search },
                     )
                 }
                 AddLocationOption(
                     icon = Icons.Default.EditLocation,
-                    title = "Manual Coordinates",
-                    description = "Enter latitude and longitude",
+                    title = stringResource(Res.string.weather_manual_coordinates),
+                    description = stringResource(Res.string.weather_manual_coordinates_description),
                     onClick = { mode = AddLocationMode.Manual },
                 )
             }
@@ -301,15 +332,15 @@ private fun AddWeatherLocationDialog(
                     value = manualName,
                     onValueChange = { manualName = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Name") },
+                    label = { Text(stringResource(UtilRes.string.name)) },
                     singleLine = true,
                 )
                 OutlinedTextField(
                     value = manualLatitude,
                     onValueChange = { manualLatitude = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Latitude") },
-                    placeholder = { Text("e.g. 51.5074") },
+                    label = { Text(stringResource(Res.string.weather_latitude)) },
+                    placeholder = { Text(stringResource(Res.string.weather_latitude_example)) },
                     isError = manualLatitude.isNotBlank() && parsedLatitude == null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -318,8 +349,8 @@ private fun AddWeatherLocationDialog(
                     value = manualLongitude,
                     onValueChange = { manualLongitude = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Longitude") },
-                    placeholder = { Text("e.g. -0.1278") },
+                    label = { Text(stringResource(Res.string.weather_longitude)) },
+                    placeholder = { Text(stringResource(Res.string.weather_longitude_example)) },
                     isError = manualLongitude.isNotBlank() && parsedLongitude == null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -331,8 +362,8 @@ private fun AddWeatherLocationDialog(
                     value = addressQuery,
                     onValueChange = { addressQuery = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Address") },
-                    placeholder = { Text("Enter city or address") },
+                    label = { Text(stringResource(Res.string.weather_address)) },
+                    placeholder = { Text(stringResource(Res.string.weather_address_placeholder)) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
@@ -375,14 +406,14 @@ private fun AddWeatherLocationDialog(
                     }
                 } else if (searchFailed) {
                     Text(
-                        "Couldn't search for locations. Check your connection and try again.",
+                        stringResource(Res.string.weather_search_failed),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 } else if (addressQuery.length >= 3) {
                     Text(
-                        "Type to search for locations...",
+                        stringResource(Res.string.weather_type_to_search),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 12.dp),
@@ -436,13 +467,13 @@ private fun DeleteLocationConfirmDialog(
 ) {
     M3Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remove Location") },
+        title = { Text(stringResource(Res.string.weather_remove_location)) },
         buttons = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(UtilRes.string.cancel)) }
             Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onConfirm) { Text("Remove") }
+            TextButton(onClick = onConfirm) { Text(stringResource(UtilRes.string.remove)) }
         },
     ) {
-        Text("Are you sure you want to remove \"$locationName\"?")
+        Text(stringResource(Res.string.weather_remove_location_message, locationName))
     }
 }

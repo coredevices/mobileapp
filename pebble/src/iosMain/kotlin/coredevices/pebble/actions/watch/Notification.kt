@@ -7,7 +7,7 @@ import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
 import kotlinx.coroutines.GlobalScope
@@ -24,7 +24,7 @@ fun sendSimpleNotification(libPebble: LibPebble, title: String, body: String) {
             parentId = Uuid.NIL,
             timestamp = Clock.System.now(),
         ) {
-            layout = TimelineItem.Layout.GenericNotification
+            layout = TimelineItemLayout.GenericNotification
             attributes {
                 title { titleText }
                 body { bodyText }
@@ -50,7 +50,7 @@ fun sendDetailedNotification(
             parentId = Uuid.NIL,
             timestamp = Clock.System.now(),
         ) {
-            layout = TimelineItem.Layout.GenericNotification
+            layout = TimelineItemLayout.GenericNotification
             attributes {
                 title { title.ifEmpty { "Notification" } }
                 body { body.ifEmpty { " " } }

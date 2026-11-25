@@ -103,13 +103,27 @@ import coreapp.pebble.generated.resources.health
 import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
 import coreapp.pebble.generated.resources.settings
+import coreapp.pebble.generated.resources.watch_home_change_services_message
+import coreapp.pebble.generated.resources.watch_home_change_services_title
+import coreapp.pebble.generated.resources.watch_home_clear_search
+import coreapp.pebble.generated.resources.watch_home_index_permissions_message
+import coreapp.pebble.generated.resources.watch_home_index_permissions_title
+import coreapp.pebble.generated.resources.watch_home_more
+import coreapp.pebble.generated.resources.watch_home_sideload_firmware_message
+import coreapp.pebble.generated.resources.watch_home_sideload_firmware_title
+import coreapp.util.generated.resources.Res as UtilRes
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.continue_action
+import coreapp.util.generated.resources.install
+import coreapp.util.generated.resources.search
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.ui.M3Dialog
 import coredevices.ui.SecondaryProfileWarningDialog
 import coredevices.util.CoreConfig
@@ -147,10 +161,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
-    it.isFullyConnected()
-}
-
 fun LibIndex.isAnyRingPaired() = rings.value.any { it is KnownIndexDevice }
 
 fun PebbleDevice.isFullyConnected() = this is KnownPebbleDevice && runningFwVersion != UNKNOWN_WATCH_SERIAL_OR_VERSION
@@ -167,11 +177,11 @@ class WatchHomeViewModel(
     /** Null until the bar's tabs are known; then [launchTab]. */
     val selectedTab = mutableStateOf<WatchHomeNavTab?>(null)
 
-    fun launchTab(barTabs: List<WatchHomeNavTab>): WatchHomeNavTab {
+    fun launchTab(barTabs: List<WatchHomeNavTab>, watches: List<PebbleDevice>): WatchHomeNavTab {
         val automatic = when {
             coreConfig.value.startOnFirstNavBarTab -> null
             coreConfig.value.enableIndex && libIndex.isAnyRingPaired() -> WatchHomeNavTab.Index
-            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
+            watches.any { it.isFullyConnected() } -> WatchHomeNavTab.WatchFaces
             else -> WatchHomeNavTab.Watches
         }
         return automatic?.takeIf { it in barTabs } ?: barTabs.first()
@@ -233,6 +243,8 @@ fun WatchHomeScreen(
         val coreConfigHolder: CoreConfigHolder = koinInject()
         val coreConfig by coreConfigHolder.config.collectAsState()
         val healthEnabledValue = viewModel.healthTrackingEnabled.collectAsState()
+        val libPebble = rememberLibPebble()
+        val watches = rememberWatches()
         val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
 
         // Create a SaveableStateHolder to preserve state for each tab
@@ -264,7 +276,7 @@ fun WatchHomeScreen(
             )
         }
         val healthEnabled = healthEnabledValue.value
-        if (healthEnabled == null) {
+        if (healthEnabled == null || watches == null) {
             return
         }
 
@@ -272,7 +284,7 @@ fun WatchHomeScreen(
         val barTabs = WatchHomeNavTab.barTabs(coreConfig, tabs)
         val moreTabs = tabs.drop(barTabs.size)
         val currentTab = viewModel.selectedTab.value?.takeIf { it in tabs }
-            ?: viewModel.launchTab(barTabs).also { viewModel.selectedTab.value = it }
+            ?: viewModel.launchTab(barTabs, watches).also { viewModel.selectedTab.value = it }
         val pebbleNavHostController = navControllers[currentTab]!!
 
         LaunchedEffect(Unit) {
@@ -323,7 +335,6 @@ fun WatchHomeScreen(
             }
         }
         val snackbarHostState = remember { SnackbarHostState() }
-        val libPebble = rememberLibPebble()
         val libIndex = koinInject<LibIndex>()
         LaunchedEffect(Unit) {
             scope.launch {
@@ -337,21 +348,38 @@ fun WatchHomeScreen(
         pendingFirmwareSideload?.let { pending ->
             AlertDialog(
                 onDismissRequest = deepLinkHandler::dismissPendingFirmwareSideload,
-                title = { Text("Sideload firmware?") },
+                title = { Text(stringResource(Res.string.watch_home_sideload_firmware_title)) },
                 text = {
-                    Text(
-                        "Install ${pending.fileName} on every connected watch? Only install " +
-                                "firmware from sources you trust."
-                    )
+                    Text(stringResource(Res.string.watch_home_sideload_firmware_message, pending.fileName))
                 },
                 confirmButton = {
                     TextButton(onClick = deepLinkHandler::confirmPendingFirmwareSideload) {
-                        Text("Install")
+                        Text(stringResource(UtilRes.string.install))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = deepLinkHandler::dismissPendingFirmwareSideload) {
-                        Text("Cancel")
+                        Text(stringResource(UtilRes.string.cancel))
+                    }
+                },
+            )
+        }
+        val pendingBootConfig by deepLinkHandler.pendingBootConfig.collectAsState()
+        pendingBootConfig?.let { pending ->
+            AlertDialog(
+                onDismissRequest = deepLinkHandler::dismissPendingBootConfig,
+                title = { Text(stringResource(Res.string.watch_home_change_services_title)) },
+                text = {
+                    Text(stringResource(Res.string.watch_home_change_services_message, pending.host))
+                },
+                confirmButton = {
+                    TextButton(onClick = deepLinkHandler::confirmPendingBootConfig) {
+                        Text(stringResource(UtilRes.string.continue_action))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = deepLinkHandler::dismissPendingBootConfig) {
+                        Text(stringResource(UtilRes.string.cancel))
                     }
                 },
             )
@@ -403,8 +431,7 @@ fun WatchHomeScreen(
                 missingPermissions.value.filter {
                     it in listOf(
                         Permission.SetAlarms,
-                        Permission.Reminders,
-                        Permission.AlarmKit,
+                        Permission.Reminders
                     )
                 }
             }
@@ -419,12 +446,12 @@ fun WatchHomeScreen(
                 onDismissRequest = {
                     coreConfigHolder.update(coreConfig.copy(enableIndex = false))
                 },
-                title = { Text("Index Permissions") },
+                title = { Text(stringResource(Res.string.watch_home_index_permissions_title)) },
                 buttons = {
                     TextButton(onClick = {
                         coreConfigHolder.update(coreConfig.copy(enableIndex = false))
                     }) {
-                        Text("Cancel")
+                        Text(stringResource(UtilRes.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
                     TextButton(onClick = {
@@ -437,12 +464,11 @@ fun WatchHomeScreen(
                             }
                         }
                     }) {
-                        Text("Continue")
+                        Text(stringResource(UtilRes.string.continue_action))
                     }
                 },
             ) {
-                Text("Index requires additional permissions to function.\n" +
-                        "Please grant the following permissions:")
+                Text(stringResource(Res.string.watch_home_index_permissions_message))
                 Spacer(Modifier.height(8.dp))
                 for (permission in missingRequiredPermissions) {
                     Text(permission.name(), fontWeight = FontWeight.Bold)
@@ -457,24 +483,13 @@ fun WatchHomeScreen(
             SecondaryProfileWarningDialog { secondaryProfileWarningPending = false }
         }
 
-        val watchesFlow = remember {
-            libPebble.watches
-                .map { it.sortedWith(PebbleDeviceComparator) }
-        }
-        val watches by watchesFlow.collectAsState(
-            initial = libPebble.watches.value.sortedWith(
-                PebbleDeviceComparator
-            )
-        )
         val ringsFlow = remember {
             libIndex.rings
         }
         val rings by ringsFlow.collectAsState(initial = libIndex.rings.value)
         var hasSeenWatchOnboarding by remember { mutableStateOf(settings.hasSeenWatchOnboarding())}
         var hasSeenRingOnboarding by remember { mutableStateOf(settings.hasSeenRingOnboarding())}
-        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
-        // Re-read when plugins are switched, because switching them off resets it.
-        var hasSeenPermissionsIntro by remember(pluginsEnabled) { mutableStateOf(settings.hasSeenPermissionsIntro()) }
+        var hasSeenPermissionsIntro by remember { mutableStateOf(settings.hasSeenPermissionsIntro()) }
         var startingOnboarding = false
         if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
             hasSeenWatchOnboarding = true
@@ -489,7 +504,7 @@ fun WatchHomeScreen(
             startingOnboarding = true
         }
         // Watch and ring onboarding show this themselves, so only people past one get the dialog.
-        if (!startingOnboarding && (hasSeenWatchOnboarding || hasSeenRingOnboarding) && pluginsEnabled &&
+        if (!startingOnboarding && (hasSeenWatchOnboarding || hasSeenRingOnboarding) &&
             !hasSeenPermissionsIntro
         ) {
             PermissionsIntroDialog(onDismissRequest = {
@@ -540,7 +555,7 @@ fun WatchHomeScreen(
                                     },
                                     expanded = false,
                                     onExpandedChange = { },
-                                    placeholder = { Text("Search") },
+                                    placeholder = { Text(stringResource(UtilRes.string.search)) },
                                     modifier = Modifier.focusRequester(focusRequester),
                                     trailingIcon = {
                                         IconButton(onClick = {
@@ -549,7 +564,7 @@ fun WatchHomeScreen(
                                         }) {
                                             Icon(
                                                 Icons.Outlined.Close,
-                                                contentDescription = "Clear search"
+                                                contentDescription = stringResource(Res.string.watch_home_clear_search)
                                             )
                                         }
                                     },
@@ -557,7 +572,7 @@ fun WatchHomeScreen(
                                         IconButton(onClick = onSearchDone) {
                                             Icon(
                                                 Icons.Outlined.Search,
-                                                contentDescription = "Search"
+                                                contentDescription = stringResource(UtilRes.string.search)
                                             )
                                         }
                                     },
@@ -581,7 +596,7 @@ fun WatchHomeScreen(
                                     }) {
                                         Icon(
                                             Icons.AutoMirrored.Default.ArrowBack,
-                                            contentDescription = stringResource(coreapp.util.generated.resources.Res.string.back)
+                                            contentDescription = stringResource(UtilRes.string.back)
                                         )
                                     }
                                 }
@@ -600,7 +615,7 @@ fun WatchHomeScreen(
                                     TopBarIconButtonWithToolTip(
                                         onClick = { params.searchState?.show = true },
                                         icon = Icons.Filled.Search,
-                                        description = "Search",
+                                        description = stringResource(UtilRes.string.search),
                                     )
                                 }
                             }
@@ -702,7 +717,7 @@ fun WatchHomeScreen(
                                 }
                             },
                             label = {
-                                Text("More", fontSize = 9.sp, color = color, maxLines = 1)
+                                Text(stringResource(Res.string.watch_home_more), fontSize = 9.sp, color = color, maxLines = 1)
                             },
                             colors = NavigationBarItemDefaults.colors(
                                 indicatorColor = Color.Transparent

@@ -6,15 +6,15 @@ import io.rebble.libpebblecommon.connection.AppContext
  * `localStorage` for a [JsEngine] context, scoped to the same settings PKJS uses for
  * [scopedSettingsUuid] — a pbw's plugin and its PKJS app therefore read and write the same keys.
  */
-class JsEngineLocalStorage(
+internal class JsEngineLocalStorage(
     scopedSettingsUuid: String,
     appContext: AppContext,
     private val eval: (String) -> Unit,
 ) : JSLocalStorageInterface(scopedSettingsUuid, appContext), JsEngineInterface {
 
-    override val name = "_localStorage"
+    override val name: String = "_localStorage"
 
-    override val methods = listOf("getItem", "setItem", "removeItem", "clear", "key")
+    override val methods: List<String> = listOf("getItem", "setItem", "removeItem", "clear", "key")
 
     override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
         "getItem" -> getItem(args.getOrNull(0))
@@ -30,7 +30,7 @@ class JsEngineLocalStorage(
     }
 
     /** Installed over whatever the platform provides, so both engines expose the same object. */
-    val installJs = """
+    val installJs: String = """
         (function (global) {
           var native = global.$name;
           var storage = {

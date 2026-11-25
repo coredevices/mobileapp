@@ -14,7 +14,7 @@ import kotlinx.io.IOException
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class BatteryWatcher(
+internal class BatteryWatcher(
     private val scope: ConnectionCoroutineScope,
 )  {
     private val logger = Logger.withTag("BatteryWatcher")

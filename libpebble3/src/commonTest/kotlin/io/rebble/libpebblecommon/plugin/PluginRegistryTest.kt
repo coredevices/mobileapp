@@ -1,8 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
 import com.russhwolf.settings.MapSettings
-import io.rebble.libpebblecommon.WatchConfig
-import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.imaging.EncodedImage
 import io.rebble.libpebblecommon.music.PlaybackState
@@ -38,6 +36,7 @@ private class FakePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> =
         flowOf(SourceEnvelope(pluginUuid.toString(), null, emptyList()))
 }
@@ -53,6 +52,7 @@ private class FakeJsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = emptyFlow()
 
@@ -86,14 +86,12 @@ private fun weatherSource() = SourceDeclaration(
     ),
 )
 
-private fun enabled(enabled: Boolean = true) = WatchConfig(enablePlugins = enabled).asFlow()
-
 class PluginRegistryTest {
 
     @Test
     fun findsSourcePluginByCategoryAndItem() {
         val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(plugin), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(plugin), MapSettings())
 
         assertEquals(plugin, registry.findSourcePlugin("weather", "location"))
         assertNull(registry.findSourcePlugin("weather", "forecast"))
@@ -104,7 +102,7 @@ class PluginRegistryTest {
     fun prefersRequestedPluginButFallsBack() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(a, b), MapSettings())
 
         assertEquals(b, registry.findSourcePlugin("weather", "location", UUID_B.toString()))
         // An unknown preference must not fail the lookup — sources are fungible.
@@ -117,7 +115,7 @@ class PluginRegistryTest {
     @Test
     fun actionLookupIsExactAndNeverFallsBack() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(a), MapSettings())
 
         assertEquals(a, registry.findPlugin(UUID_A.toString()))
         assertNull(registry.findPlugin(UUID_B.toString()))
@@ -125,7 +123,7 @@ class PluginRegistryTest {
 
     @Test
     fun registerJsPluginsAtRuntime() {
-        val registry = PluginRegistry(emptySet(), enabled(), MapSettings())
+        val registry = PluginRegistry(emptySet(), MapSettings())
         assertNull(registry.findSourcePlugin("weather", "location"))
 
         val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
@@ -135,20 +133,10 @@ class PluginRegistryTest {
     }
 
     @Test
-    fun nothingIsVisibleWhilePluginsAreDisabled() {
-        val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(plugin), enabled(false), MapSettings())
-
-        assertTrue(registry.getAllPlugins().isEmpty())
-        assertNull(registry.findPlugin(UUID_A.toString()))
-        assertNull(registry.findSourcePlugin("weather", "location"))
-    }
-
-    @Test
     fun aDisabledBuiltInIsRemovedUntilReEnabled() = runTest {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(a, b), MapSettings())
 
         registry.setBuiltInEnabled(UUID_A, false)
 
@@ -166,7 +154,7 @@ class PluginRegistryTest {
     fun theUsersChoiceAnswersWhenTheAppDoesntAskForAPlugin() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(a, b), MapSettings())
 
         registry.setPreferredSource("weather", "location", UUID_B)
 
@@ -178,7 +166,7 @@ class PluginRegistryTest {
     fun anUnavailableChoiceFallsBackAndIsKept() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(a, b), MapSettings())
         registry.setPreferredSource("weather", "location", UUID_B)
 
         registry.setBuiltInEnabled(UUID_B, false)
@@ -191,7 +179,7 @@ class PluginRegistryTest {
     @Test
     fun withoutAChoiceBuiltInsComeFirstThenByName() {
         val builtIn = FakePlugin(UUID_A, "Zed", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(builtIn), enabled(), MapSettings())
+        val registry = PluginRegistry(setOf(builtIn), MapSettings())
         val later = FakeJsPlugin(Uuid.parse("00000000-0000-0000-0002-00000000000c"), "beta")
         val earlier = FakeJsPlugin(Uuid.parse("00000000-0000-0000-0002-00000000000d"), "Alpha")
         registry.registerPlugin(later)
@@ -207,14 +195,14 @@ class PluginRegistryTest {
         val settings = MapSettings()
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        PluginRegistry(setOf(a, b), enabled(), settings).setPreferredSource("weather", "location", UUID_B)
+        PluginRegistry(setOf(a, b), settings).setPreferredSource("weather", "location", UUID_B)
 
-        val reloaded = PluginRegistry(setOf(a, b), enabled(), settings)
+        val reloaded = PluginRegistry(setOf(a, b), settings)
         assertEquals(mapOf("weather/location" to UUID_B), reloaded.preferredSources.value)
         assertEquals(b, reloaded.findSourcePlugin("weather", "location"))
 
         reloaded.setPreferredSource("weather", "location", null)
-        assertEquals(a, PluginRegistry(setOf(a, b), enabled(), settings).findSourcePlugin("weather", "location"))
+        assertEquals(a, PluginRegistry(setOf(a, b), settings).findSourcePlugin("weather", "location"))
     }
 
     @Test
@@ -222,13 +210,13 @@ class PluginRegistryTest {
         val settings = MapSettings()
         val a = FakePlugin(UUID_A, "A")
         val b = FakePlugin(UUID_B, "B")
-        PluginRegistry(setOf(a), enabled(), settings).apply {
+        PluginRegistry(setOf(a), settings).apply {
             registerPlugin(b)
             setBuiltInEnabled(UUID_A, false)
             setBuiltInEnabled(UUID_B, false)
         }
 
-        val reloaded = PluginRegistry(setOf(a), enabled(), settings)
+        val reloaded = PluginRegistry(setOf(a), settings)
         reloaded.registerPlugin(b)
 
         assertEquals(setOf(UUID_A, UUID_B), reloaded.disabledBuiltIns.value)

@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-abstract class PKJSRunnerTests(
+internal abstract class PKJSRunnerTests(
     private val createJsRunner: (
         libPebble: LibPebble,
         scope: CoroutineScope,
@@ -319,6 +319,36 @@ abstract class PKJSRunnerTests(
                     error("Unexpected result type: ${resultEarlyGet?.let { it::class }}")
                 }
             }
+        }
+    }
+
+    /**
+     * Another session on the same store (as the pbw's plugin is) is seen while this one runs, and
+     * isn't undone when it stops.
+     */
+    open fun testLocalStorageSharedLive() {
+        val uuid = Uuid.random()
+        val app = makeRunner("", uuid)
+        val other = makeRunner("", uuid)
+
+        runBlocking {
+            app.start()
+            other.start()
+            withTimeout(1.seconds) {
+                app.readyState.first { it }
+                other.readyState.first { it }
+            }
+            other.evalWithResult("localStorage.setItem('shared', 'fromOther');")
+            assertEquals("\"fromOther\"", app.evalWithResult("localStorage.getItem('shared');"))
+            assertEquals("\"fromOther\"", app.evalWithResult("localStorage.shared;"))
+
+            app.evalWithResult("localStorage.prop = 'fromApp';")
+            app.stop()
+            assertEquals("\"fromOther\"", other.evalWithResult("localStorage.getItem('shared');"))
+            assertEquals("\"fromApp\"", other.evalWithResult("localStorage.getItem('prop');"))
+            assertEquals("2", other.evalWithResult("localStorage.length;"))
+            assertEquals("\"prop,shared\"", other.evalWithResult("Object.keys(localStorage).sort().join(',');"))
+            other.stop()
         }
     }
 

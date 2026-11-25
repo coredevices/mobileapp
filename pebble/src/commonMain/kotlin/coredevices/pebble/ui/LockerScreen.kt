@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -86,16 +87,26 @@ import coil3.request.ImageRequest
 import com.russhwolf.settings.Settings
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
+import coreapp.pebble.generated.resources.locker_active
+import coreapp.pebble.generated.resources.locker_clear_filters
+import coreapp.pebble.generated.resources.locker_configure_feeds
+import coreapp.pebble.generated.resources.locker_from_my_apps
+import coreapp.pebble.generated.resources.locker_from_my_watchfaces
+import coreapp.pebble.generated.resources.locker_from_store
+import coreapp.pebble.generated.resources.locker_in_my_collection
+import coreapp.pebble.generated.resources.locker_loading
+import coreapp.pebble.generated.resources.locker_plugin_settings
+import coreapp.pebble.generated.resources.locker_see_all
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.database.PLUGIN_DATA_APPS_SLUG
 import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.PebbleWebServices
@@ -128,6 +139,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -332,11 +344,10 @@ fun LockerScreen(
                 sideload(it)
             }
         }
-        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
         val rings by koinInject<LibIndex>().rings.collectAsState()
-        val watches by libPebble.watches.collectAsState()
+        val watches = rememberWatches() ?: return@Box
         val defaultType = if (
-            pluginsEnabled && rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
+            rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
         ) AppType.Plugin else AppType.Watchface
         LaunchedEffect(defaultType) {
             if (viewModel.defaultType != defaultType) {
@@ -375,14 +386,13 @@ fun LockerScreen(
             return
         }
         val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type.value]
-        val storeHome = remember(storeHomeForType, collections, viewModel.type.value, pluginsEnabled) {
+        val storeHome = remember(storeHomeForType, collections, viewModel.type.value) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
                 val sourceRules = collectionRules[source.id].orEmpty().filter { it.type == viewModel.type.value }
                 val homeFiltered = home.let {
                     it.copy(collections = it.collections.filter { col ->
-                        (pluginsEnabled || col.slug != PLUGIN_DATA_APPS_SLUG) &&
-                            sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
+                        sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
                     })
                 }
                 val categories = homeFiltered.categories.filter{
@@ -435,7 +445,7 @@ fun LockerScreen(
         val initialLockerSyncInProgress by initialLockerSync.initialLockerSync.collectAsState()
         LaunchedEffect(initialLockerSyncInProgress) {
             if (initialLockerSyncInProgress) {
-                topBarParams.showSnackbar("Loading Locker")
+                topBarParams.showSnackbar(getString(Res.string.locker_loading))
             }
         }
 
@@ -598,7 +608,7 @@ fun LockerScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                                         Text(
-                                            "Active",
+                                            stringResource(Res.string.locker_active),
                                             fontSize = 24.sp,
                                             modifier = Modifier.padding(
                                                 top = 5.dp,
@@ -660,7 +670,7 @@ fun LockerScreen(
                                     myApps.take(20)
                                 }
                                 Carousel(
-                                    viewModel.type.value.myCollectionName(),
+                                    stringResource(viewModel.type.value.myCollectionName()),
                                     myAppsToDisplay,
                                     highlightInLocker = false,
                                     nativePlugins = if (viewModel.type.value == AppType.Plugin) nativePlugins else emptyList(),
@@ -674,7 +684,7 @@ fun LockerScreen(
                                                     )
                                                 )
                                             }) {
-                                                Icon(Icons.Default.Settings, contentDescription = "Plugin settings")
+                                                Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.locker_plugin_settings))
                                             }
                                         }
                                     } else null,
@@ -710,7 +720,7 @@ fun LockerScreen(
                                         ) {
                                             Icon(
                                                 Icons.Default.Tune,
-                                                contentDescription = "Configure Feeds"
+                                                contentDescription = stringResource(Res.string.locker_configure_feeds)
                                             )
                                         }
                                     }
@@ -725,7 +735,7 @@ fun LockerScreen(
                                         )
                                     }
                                 }
-                                if (viewModel.type.value == AppType.Watchapp) {
+                                if (viewModel.type.value != AppType.Watchface) {
                                     it.categories.forEachIndexed { i, categories ->
                                         item(
                                             contentType = "categories",
@@ -737,12 +747,14 @@ fun LockerScreen(
                                                         source = source,
                                                         category = categories.first(),
                                                         navBarNav = navBarNav,
+                                                        appType = viewModel.type.value,
                                                     )
                                                     categories.getOrNull(1)?.let {
                                                         CategoryItem(
                                                             source = source,
                                                             category = it,
                                                             navBarNav = navBarNav,
+                                                            appType = viewModel.type.value,
                                                         )
                                                     }
                                                 }
@@ -780,7 +792,7 @@ fun LockerScreen(
                                                     home.categories
                                                 )
                                             }.filter { app ->
-                                                app.type == viewModel.type.value &&
+                                                (app.type == viewModel.type.value || viewModel.type.value == AppType.Plugin && app.hasPlugin) &&
                                                         (sharedViewModel.showIncompatible.value || app.isCompatible) &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
                                                 app.storeId !in excludedStoreIds &&
@@ -824,6 +836,7 @@ fun RowScope.CategoryItem(
     source: AppstoreSource,
     category: StoreCategory,
     navBarNav: NavBarNav,
+    appType: AppType,
 ) {
     val color = category.color.toColorKmp()
     Box(
@@ -835,7 +848,7 @@ fun RowScope.CategoryItem(
                         sourceId = source.id,
                         path = "category/${category.slug}",
                         title = category.name,
-                        appType = AppType.Watchapp.code,
+                        appType = appType.code,
                     )
                 )
             }.background(color)
@@ -893,7 +906,7 @@ fun SearchResultsList(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 if (lockerEntries.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
+                    item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(stringResource(Res.string.locker_from_my_watchfaces)) }
                     items(
                         items = lockerEntries,
                         key = { "locker_${it.storeId}-${it.uuid}" },
@@ -907,7 +920,7 @@ fun SearchResultsList(
                         )
                     }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader(stringResource(Res.string.locker_from_store)) }
                 items(
                     count = storeResults.itemCount,
                     key = storeResults.itemKey { "store_${it.storeId}-${it.uuid}" },
@@ -931,7 +944,7 @@ fun SearchResultsList(
                 } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         PebbleElevatedButton(
-                            text = "Clear filters for more results",
+                            text = stringResource(Res.string.locker_clear_filters),
                             onClick = {
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
@@ -947,7 +960,7 @@ fun SearchResultsList(
             if (lockerEntries.isNotEmpty()) {
                 item {
                     Text(
-                        "From my apps",
+                        stringResource(Res.string.locker_from_my_apps),
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
@@ -975,7 +988,7 @@ fun SearchResultsList(
             }
             item {
                 Text(
-                    "From the store",
+                    stringResource(Res.string.locker_from_store),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
@@ -1020,7 +1033,7 @@ fun SearchResultsList(
                 } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
                     item {
                         PebbleElevatedButton(
-                            text = "Clear filters for more results",
+                            text = stringResource(Res.string.locker_clear_filters),
                             onClick = {
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
@@ -1062,7 +1075,7 @@ fun AppCarousel(
                 Text(title, fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
                 Spacer(modifier = Modifier.width(7.dp))
                 if (onClick != null) {
-                    Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = "See all", modifier = Modifier)
+                    Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = stringResource(Res.string.locker_see_all), modifier = Modifier)
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -1264,7 +1277,7 @@ fun NativeWatchfaceMainContent(
                 if (inMyCollection) {
                     Icon(
                         Icons.AutoMirrored.Filled.PlaylistAddCheck,
-                        contentDescription = "In My Collection",
+                        contentDescription = stringResource(Res.string.locker_in_my_collection),
                         modifier = Modifier.size(19.dp)
                             .padding(top = 1.dp, bottom = 5.dp),
                         tint = coreDarkGreen,
@@ -1345,7 +1358,7 @@ fun NativeWatchfaceListItem(
                         if (inMyCollection) {
                             Icon(
                                 Icons.AutoMirrored.Filled.PlaylistAddCheck,
-                                contentDescription = "In My Collection",
+                                contentDescription = stringResource(Res.string.locker_in_my_collection),
                                 modifier = Modifier.size(16.dp)
                                     .padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
                                 tint = coreDarkGreen,
@@ -1382,6 +1395,8 @@ private fun SectionHeader(text: String) {
 fun CommonApp.listImageColorFilter(): ColorFilter? =
     if (listImageTintable) ColorFilter.tint(LocalContentColor.current) else null
 
+private const val SCREENSHOT_ASPECT_RATIO = 144f / 168f
+
 @Composable
 fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
     val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -1395,8 +1410,10 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 val url = when (entry.type) {
                     AppType.Watchapp -> entry.screenshotImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
-                    AppType.Plugin -> entry.listImageUrl ?: entry.screenshotImageUrl
+                    AppType.Plugin -> entry.listImageUrl?.ifBlank { null } ?: entry.screenshotImageUrl
                 }
+                // A sideloaded app often has none.
+                if (url.isNullOrBlank()) return@remember null
                 ImageRequest.Builder(context)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .data(url)
@@ -1420,6 +1437,17 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 Res.getUri(resUri)
             }
         }
+    }
+    if (model == null) {
+        Box(
+            modifier = modifier.height(size)
+                .aspectRatio(if (entry.type == AppType.Plugin) 1f else SCREENSHOT_ASPECT_RATIO)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(entry.type.icon(), contentDescription = null, modifier = Modifier.size(size * 0.4f))
+        }
+        return
     }
 
     AsyncImage(

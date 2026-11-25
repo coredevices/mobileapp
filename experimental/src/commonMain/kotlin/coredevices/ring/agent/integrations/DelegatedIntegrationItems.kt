@@ -79,3 +79,16 @@ class DelegatingReminderIntegration(
         return id
     }
 }
+
+/** Wraps an external list integration so each added item also records a delegated item. */
+class DelegatingListIntegration(
+    private val delegate: ListIntegration,
+    private val integrationTitle: String,
+    private val items: DelegatedIntegrationItems,
+) : ListIntegration by delegate {
+    override suspend fun createListItem(title: String, deadline: Instant?, listId: String?, source: ItemSource?): String {
+        val id = delegate.createListItem(title, deadline, listId, source)
+        items.record(integrationTitle, title, source)
+        return id
+    }
+}

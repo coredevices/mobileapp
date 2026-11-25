@@ -2,8 +2,9 @@ package coredevices.pebble.actions.watch
 
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
+import io.rebble.libpebblecommon.packets.blobdb.TimelineActionType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItemLayout
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -38,7 +39,7 @@ fun insertTimelinePinRich(
     ) {
         itemID = pinUuid
         duration = Duration.ZERO
-        layout = TimelineItem.Layout.GenericPin
+        layout = TimelineItemLayout.GenericPin
         attributes {
             this.title { title }
             this.body { if (body.isEmpty()) " " else body }
@@ -53,7 +54,7 @@ fun insertTimelinePinRich(
             }
         }
         actions {
-            action(TimelineItem.Action.Type.Remove) {
+            action(TimelineActionType.Remove) {
                 attributes { this.title { "Remove" } }
             }
         }

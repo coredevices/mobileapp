@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlin.uuid.Uuid
 
 /** Each watch's foreground app, and plugins with a running script or subscription. */
-class RunningApps(private val watches: Watches) {
+internal class RunningApps internal constructor(private val watches: Watches) {
     private val subscriptions = MutableStateFlow<Map<Uuid, Int>>(emptyMap())
 
     @OptIn(ExperimentalCoroutinesApi::class)

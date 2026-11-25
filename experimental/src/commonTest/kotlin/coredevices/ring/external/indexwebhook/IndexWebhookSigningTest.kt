@@ -62,6 +62,21 @@ class IndexWebhookSigningTest {
     }
 
     @Test
+    fun signatureIgnoresWhitespaceAroundTheSecret() {
+        fun signature(secret: String) = createWebhookSignature(
+            secret = secret,
+            timestamp = 1_700_000_000,
+            deliveryId = "delivery-123",
+            triggerValue = "single-click-hold",
+            isTest = false,
+            body = byteArrayOf(1, 2, 3),
+        )
+
+        assertEquals(signature("secret value"), signature(" \tsecret value\n"))
+        assertNotEquals(signature("secret value"), signature("secretvalue"))
+    }
+
+    @Test
     fun signatureHeaderValueIsRawLowercaseHex() {
         val signature = createWebhookSignature(
             secret = "0123456789abcdef0123456789abcdef",

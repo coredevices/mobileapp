@@ -16,11 +16,11 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.uuid.Uuid
 
-class WatchStatePlugin(
+internal class WatchStatePlugin(
     private val locker: Locker,
     private val watches: Watches,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_WATCH_STATE_UUID
+    override val pluginUuid: Uuid = BuiltInPlugins.WATCH_STATE
     override val name: String = "Watch State"
     override val description: String = "List and launch the apps and watchfaces in the locker."
 
@@ -41,13 +41,14 @@ class WatchStatePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (category != CATEGORY || item != ITEM_APP) return emptyFlow()
         return locker.getAllLockerBasicInfo().map(::appsEnvelope)
     }
 
     override suspend fun invoke(action: String, args: JsonObject): ActionResult {
-        val connected = watches.watches.value.filterIsInstance<ConnectedPebbleDevice>()
+        val connected = watches.watches.first().filterIsInstance<ConnectedPebbleDevice>()
         return when (action) {
             ACTION_LAUNCH_APP -> {
                 val uuid = (args[PARAM_UUID] ?: args[ActionDeclaration.PARAM_INSTANCE_ID])
@@ -89,12 +90,12 @@ class WatchStatePlugin(
     companion object {
         private val LAUNCH = listOf(PluginPermission(PluginPermissions.LAUNCH_APPS))
 
-        const val CATEGORY = "watch"
-        const val ITEM_APP = "app"
+        const val CATEGORY: String = "watch"
+        const val ITEM_APP: String = "app"
         /** `watchapp` or `watchface`. */
-        const val PROPERTY_TYPE = "type"
+        const val PROPERTY_TYPE: String = "type"
 
-        val LAUNCH_APP_ACTION = ActionDeclaration(
+        val LAUNCH_APP_ACTION: ActionDeclaration = ActionDeclaration(
             name = ACTION_LAUNCH_APP,
             description = "Open an app or watchface on the watch, by its uuid. It has to be in the user's locker, or be a system shortcut (e.g. Timeline Future, Quiet Time).",
             // Neither is required, so `uuid` callers keep working and a $CATEGORY/$ITEM_APP tile can bind `instanceId`.
@@ -108,7 +109,7 @@ class WatchStatePlugin(
             callerPermissions = LAUNCH,
         )
 
-        val APPS_SOURCE = SourceDeclaration(
+        val APPS_SOURCE: SourceDeclaration = SourceDeclaration(
             category = CATEGORY,
             items = listOf(ITEM_APP),
             properties = mapOf(
@@ -119,17 +120,15 @@ class WatchStatePlugin(
             callerPermissions = listOf(PluginPermission(PluginPermissions.READ_APPS)),
         )
 
-        const val ACTION_LAUNCH_APP = "launch_app"
-        const val ACTION_LAUNCH_PREVIOUS_APP = "launch_previous_app"
-        const val PARAM_UUID = "uuid"
-
-        val BUILT_IN_WATCH_STATE_UUID: Uuid = Uuid.parse("00000000-0000-0000-0001-000000000007")
+        const val ACTION_LAUNCH_APP: String = "launch_app"
+        const val ACTION_LAUNCH_PREVIOUS_APP: String = "launch_previous_app"
+        const val PARAM_UUID: String = "uuid"
     }
 }
 
 /** One instance per launchable locker app, keyed by its uuid: plugin-only pbws have nothing to open. */
 internal fun appsEnvelope(apps: List<AppBasicProperties>) = SourceEnvelope(
-    pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID.toString(),
+    pluginUuid = BuiltInPlugins.WATCH_STATE.toString(),
     instances = apps.filter { it.type != AppType.Plugin }.map { app ->
         SourceInstance(
             instanceId = app.id.toString(),

@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.database
 import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.DeleteTable
+import androidx.room.RenameColumn
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
@@ -12,6 +13,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.database.dao.AppDataUsageDao
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.HealthDao
@@ -22,6 +24,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.dao.PluginActionLogDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -31,6 +34,7 @@ import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryEntity
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntrySyncEntity
+import io.rebble.libpebblecommon.database.entity.AppDataUsageEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -48,6 +52,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -95,8 +100,10 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
+        AppDataUsageEntity::class,
+        PluginActionLogEntity::class,
     ],
-    version = 51,
+    version = 54,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -139,12 +146,15 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 48, to = 49),
         AutoMigration(from = 49, to = 50),
         AutoMigration(from = 50, to = 51, spec = AutoMigration51::class),
+        AutoMigration(from = 51, to = 52),
+        AutoMigration(from = 52, to = 53),
+        AutoMigration(from = 53, to = 54, spec = AutoMigration54::class),
     ],
     exportSchema = true,
 )
 @ConstructedBy(DatabaseConstructor::class)
 @TypeConverters(RoomTypeConverters::class)
-abstract class Database : RoomDatabase() {
+internal abstract class Database : RoomDatabase() {
     abstract fun knownWatchDao(): KnownWatchDao
     abstract fun lockerEntryDao(): LockerEntryRealDao
     abstract fun notificationAppDao(): NotificationAppRealDao
@@ -163,36 +173,42 @@ abstract class Database : RoomDatabase() {
     abstract fun weatherAppDao(): WeatherAppRealDao
     abstract fun appPrefsDao(): AppPrefsEntryDao
     abstract fun notificationRuleDao(): NotificationRuleDao
+    abstract fun appDataUsageDao(): AppDataUsageDao
+    abstract fun pluginActionLogDao(): PluginActionLogDao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")
 @DeleteTable(tableName = "WatchSettingsSyncEntity")
-class AutoMigration30 : AutoMigrationSpec
+internal class AutoMigration30 : AutoMigrationSpec
 
 @DeleteTable(tableName = "LockerAppPermission")
-class AutoMigration48 : AutoMigrationSpec
+internal class AutoMigration48 : AutoMigrationSpec
 
 
 /** Rows from before askedAtMs prompted whenever undecided, as if asked when recorded. */
-class AutoMigration51 : AutoMigrationSpec {
+internal class AutoMigration51 : AutoMigrationSpec {
     override fun onPostMigrate(connection: SQLiteConnection) {
         connection.execSQL("UPDATE AppPermission SET askedAtMs = requestedAtMs")
     }
 }
 
+/** Microphone is bit 0, so its old 0/1 values carry over. */
+@RenameColumn(tableName = "LockerEntryEntity", fromColumnName = "microphoneGranted", toColumnName = "watchPermissions")
+internal class AutoMigration54 : AutoMigrationSpec
+
 @Suppress("NO_ACTUAL_FOR_EXPECT")
-expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
+internal expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
     override fun initialize(): Database
 }
 
 // Force re-sync of all app metadata after fixing SDK version selection
-val MIGRATION_39_40 = object : Migration(39, 40) {
+internal val MIGRATION_39_40: Migration = object : Migration(39, 40) {
     override fun migrate(connection: SQLiteConnection) {
         connection.execSQL("UPDATE LockerEntrySyncEntity SET watchSynchHashcode = watchSynchHashcode + 1")
     }
 }
 
-fun getRoomDatabase(ctx: AppContext): Database {
+internal fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
         .addMigrations(MIGRATION_39_40)
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)

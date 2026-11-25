@@ -5,6 +5,7 @@ import com.russhwolf.settings.MapSettings
 import coredevices.ring.agent.integrations.AgentIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.DelegatingAgentIntegration
+import coredevices.ring.agent.integrations.DelegatingListIntegration
 import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.DelegatingReminderIntegration
 import coredevices.ring.agent.integrations.ItemSource
@@ -50,15 +51,21 @@ private class FakeNoteIntegration : NoteIntegration {
 }
 
 private class FakeReminderIntegration : ReminderIntegration {
+    var lastListId: String? = null
+
     override suspend fun createReminder(
         title: String,
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
         source: ItemSource?,
-    ): String = "r1"
+    ): String {
+        lastListId = listId
+        return "r1"
+    }
 
-    override suspend fun searchForList(listName: String): List<ReminderListEntry> = emptyList()
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> =
+        listOf(ReminderListEntry("l1", listName))
     override suspend fun signIn(uiContext: PlatformUiContext) = true
     override suspend fun unlink() {}
     override suspend fun isAuthorized() = true
@@ -120,18 +127,18 @@ private class FakeCachedItemDao : CachedItemDao {
 class IntegrationProviderRepositoryTest {
     private val index = FakeProvider(
         id = "index",
-        supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
+        supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder, IntegrationSupport.List),
         storesItemsLocally = true,
     )
     private val notion = FakeProvider(id = "notion", supports = setOf(IntegrationSupport.Note))
     private val googleTasks = FakeProvider(
         id = "google_tasks",
-        supports = setOf(IntegrationSupport.Reminder),
+        supports = setOf(IntegrationSupport.Reminder, IntegrationSupport.List),
         title = "Google Tasks",
     )
     private val tasker = FakeProvider(
         id = "tasker",
-        supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
+        supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder, IntegrationSupport.List),
         platforms = setOf(SupportedPlatform.Android),
     )
     private val iosReminders = FakeProvider(
@@ -271,6 +278,41 @@ class IntegrationProviderRepositoryTest {
 
         assertFailsWith<IllegalArgumentException> { repository.selectNoteProvider(googleTasks) }
         assertFailsWith<IllegalArgumentException> { repository.selectReminderProvider(notion) }
+        assertFailsWith<IllegalArgumentException> { repository.selectListProvider(notion) }
+    }
+
+    @Test
+    fun listsFollowRemindersUntilGivenTheirOwnProvider() {
+        val repository = repository()
+
+        repository.selectReminderProvider(googleTasks)
+        assertSame(googleTasks, repository.selectedListProvider.value)
+
+        repository.selectListProvider(index)
+        repository.selectReminderProvider(tasker)
+        assertSame(index, repository.selectedListProvider.value)
+        assertEquals("index", preferences.listProviderId.value)
+    }
+
+    @Test
+    fun aStoredReminderProviderIsWhereListsStart() {
+        val settings = MapSettings("reminder_provider_id" to "google_tasks")
+        assertEquals("google_tasks", PreferencesImpl(settings).listProviderId.value)
+
+        PreferencesImpl(settings).setListProviderId("index")
+        assertEquals("index", PreferencesImpl(settings).listProviderId.value)
+    }
+
+    @Test
+    fun listItemsAreRemindersInOneOfTheProvidersLists() = runTest {
+        val repository = repository()
+
+        val lists = repository.listIntegration(index)
+        val list = lists.searchForList("shopping").single()
+
+        assertEquals("r1", lists.createListItem("milk", deadline = null, listId = list.id))
+        assertEquals("l1", index.reminders.lastListId)
+        assertIs<DelegatingListIntegration>(repository.listIntegration(googleTasks))
     }
 
     @Test

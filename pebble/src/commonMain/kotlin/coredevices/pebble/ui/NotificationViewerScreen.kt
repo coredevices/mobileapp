@@ -36,6 +36,23 @@ import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.notif_viewer_recent_for
+import coreapp.pebble.generated.resources.notif_viewer_recent_for_channel
+import coreapp.pebble.generated.resources.notif_viewer_empty
+import coreapp.pebble.generated.resources.notif_viewer_displayed
+import coreapp.pebble.generated.resources.notif_viewer_not_displayed
+import coreapp.pebble.generated.resources.notif_decision_sent
+import coreapp.pebble.generated.resources.notif_decision_local_only
+import coreapp.pebble.generated.resources.notif_decision_group_summary
+import coreapp.pebble.generated.resources.notif_decision_app_muted
+import coreapp.pebble.generated.resources.notif_decision_channel_muted
+import coreapp.pebble.generated.resources.notif_decision_duplicate
+import coreapp.pebble.generated.resources.notif_decision_contact_muted
+import coreapp.pebble.generated.resources.notif_decision_screen_on
+import coreapp.pebble.generated.resources.notif_decision_rule_filtered
+import coreapp.pebble.generated.resources.notif_decision_empty
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun AppNotificationViewerScreen(
@@ -72,9 +89,9 @@ fun AppNotificationViewerScreen(
                         showBadge = false,
                     )
                     val text = if (channelId == null) {
-                        "Recent notifications for ${appWrapper.app.name}"
+                        stringResource(Res.string.notif_viewer_recent_for, appWrapper.app.name)
                     } else {
-                        "Recent notifications for ${appWrapper.app.name} in channel: ${channel?.name}"
+                        stringResource(Res.string.notif_viewer_recent_for_channel, appWrapper.app.name, channel?.name.orEmpty())
                     }
                     Text(text, modifier = Modifier.padding(8.dp))
                 }
@@ -123,7 +140,7 @@ fun NotificationHistoryList(
             ListItem(
                 headlineContent = {
                     Text(
-                        text = notification.title ?: "<Empty>",
+                        text = notification.title ?: stringResource(Res.string.notif_viewer_empty),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -131,7 +148,7 @@ fun NotificationHistoryList(
                 supportingContent = {
                     Text(
                         text = notification.body?.take(100)?.replace("\n", " ")
-                            ?: "<Empty>",
+                            ?: stringResource(Res.string.notif_viewer_empty),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 10.sp,
@@ -157,9 +174,9 @@ fun NotificationHistoryList(
                         )
                         val sentText =
                             if (notification.decision == NotificationDecision.SendToWatch) {
-                                "Displayed"
+                                stringResource(Res.string.notif_viewer_displayed)
                             } else {
-                                "Not displayed - ${notification.decision.displayName()}"
+                                stringResource(Res.string.notif_viewer_not_displayed, notification.decision.displayName())
                             }
                         Text(sentText, fontSize = 10.sp)
                     }
@@ -169,17 +186,18 @@ fun NotificationHistoryList(
     }
 }
 
+@Composable
 fun NotificationDecision.displayName(): String = when (this) {
-    NotificationDecision.SendToWatch -> "Sent"
-    NotificationDecision.NotSentLocalOnly -> "Local Only"
-    NotificationDecision.NotSentGroupSummary -> "Group Summary"
-    NotificationDecision.NotSentAppMuted -> "App Muted"
-    NotificationDecision.NotSendChannelMuted -> "Channel Muted"
-    NotificationDecision.NotSentDuplicate -> "Duplicate"
-    NotificationDecision.NotSendContactMuted -> "Contact Muted"
-    NotificationDecision.NotSentScreenOn -> "Screen On"
-    NotificationDecision.NotSentRuleFiltered -> "Rule Filtered"
-    NotificationDecision.NotSentEmpty -> "Empty"
+    NotificationDecision.SendToWatch -> stringResource(Res.string.notif_decision_sent)
+    NotificationDecision.NotSentLocalOnly -> stringResource(Res.string.notif_decision_local_only)
+    NotificationDecision.NotSentGroupSummary -> stringResource(Res.string.notif_decision_group_summary)
+    NotificationDecision.NotSentAppMuted -> stringResource(Res.string.notif_decision_app_muted)
+    NotificationDecision.NotSendChannelMuted -> stringResource(Res.string.notif_decision_channel_muted)
+    NotificationDecision.NotSentDuplicate -> stringResource(Res.string.notif_decision_duplicate)
+    NotificationDecision.NotSendContactMuted -> stringResource(Res.string.notif_decision_contact_muted)
+    NotificationDecision.NotSentScreenOn -> stringResource(Res.string.notif_decision_screen_on)
+    NotificationDecision.NotSentRuleFiltered -> stringResource(Res.string.notif_decision_rule_filtered)
+    NotificationDecision.NotSentEmpty -> stringResource(Res.string.notif_decision_empty)
 }
 
 private val FORMAT = LocalDateTime.Format {

@@ -18,13 +18,13 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-interface FirmwareUpdateManager {
+internal interface FirmwareUpdateManager {
     fun init(watchInfo: WatchInfo)
     fun checkForUpdates(force: Boolean)
     val availableUpdates: Flow<FirmwareUpdateCheckState>
 }
 
-class RealFirmwareUpdateManager(
+internal class RealFirmwareUpdateManager(
     private val webServices: WebServices,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val identifier: PebbleIdentifier,

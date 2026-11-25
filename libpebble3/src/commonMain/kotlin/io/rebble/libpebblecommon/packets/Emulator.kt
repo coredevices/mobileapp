@@ -6,14 +6,14 @@ import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 
-const val HEADER_SIGNATURE = 0xFEEDU
-const val FOOTER_SIGNATURE = 0xBEEFU
+internal const val HEADER_SIGNATURE: UInt = 0xFEEDU
+internal const val FOOTER_SIGNATURE: UInt = 0xBEEFU
 
-open class QemuPacket(protocol: Protocol) {
-    val m = StructMapper()
-    val signature = SUShort(m, HEADER_SIGNATURE.toUShort())
-    val protocol = SUShort(m, protocol.value)
-    val length = SUShort(m)
+internal open class QemuPacket(protocol: Protocol) {
+    val m: StructMapper = StructMapper()
+    val signature: SUShort = SUShort(m, HEADER_SIGNATURE.toUShort())
+    val protocol: SUShort = SUShort(m, protocol.value)
+    val length: SUShort = SUShort(m)
 
     enum class Protocol(val value: UShort) {
         SPP(1U),
@@ -32,8 +32,8 @@ open class QemuPacket(protocol: Protocol) {
     }
 
     class QemuSPP(data: UByteArray? = null): QemuPacket(Protocol.SPP) {
-        val payload = SBytes(m, data?.size?:-1, data?: ubyteArrayOf())
-        val footer = SUShort(m, FOOTER_SIGNATURE.toUShort())
+        val payload: SBytes = SBytes(m, data?.size?:-1, data?: ubyteArrayOf())
+        val footer: SUShort = SUShort(m, FOOTER_SIGNATURE.toUShort())
 
         init {
             if (data == null) payload.linkWithSize(length)

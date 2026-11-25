@@ -1,6 +1,5 @@
 package coredevices.pebble.services
 
-import io.rebble.libpebblecommon.locker.asEntity
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -81,9 +80,10 @@ class StorePluginLockerEntryTest {
         val tintableStocks = stocks.replace(""""title":"Stocks",""", """"icon_tintable":true,"title":"Stocks",""")
         assertFalse(tintable(stocks))
         assertTrue(tintable(tintableStocks))
-        val entity = json.decodeFromString(StoreApplication.serializer(), tintableStocks)
-            .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!.asEntity(0)
-        assertTrue(entity.platforms.all { it.listImageTintable })
+        assertTrue(
+            json.decodeFromString(StoreApplication.serializer(), tintableStocks)
+                .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!.iconTintable,
+        )
     }
 
     @Test

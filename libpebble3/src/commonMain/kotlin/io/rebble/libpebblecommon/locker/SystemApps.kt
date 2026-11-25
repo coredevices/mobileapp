@@ -4,12 +4,12 @@ import io.rebble.libpebblecommon.SystemAppIDs
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlin.uuid.Uuid
 
-enum class SystemApps(
-    val uuid: Uuid,
-    val displayName: String,
-    val type: AppType,
-    val compatiblePlatforms: List<WatchType>,
-    val defaultOrder: Int,
+public enum class SystemApps(
+    public val uuid: Uuid,
+    public val displayName: String,
+    public val type: AppType,
+    public val compatiblePlatforms: List<WatchType>,
+    public val defaultOrder: Int,
 ) {
     // Apps
     Settings(SystemAppIDs.SETTINGS_APP_UUID, "Settings", AppType.Watchapp, WatchType.entries, defaultOrder = -10),

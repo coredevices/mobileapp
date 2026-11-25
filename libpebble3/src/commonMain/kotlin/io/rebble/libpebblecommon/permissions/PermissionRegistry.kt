@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 @Serializable
-enum class PermissionKind {
+public enum class PermissionKind {
     /** Reads the user's data. */
     @SerialName("read") Read,
     /** Takes an action that could change user data. */
@@ -19,21 +19,21 @@ enum class PermissionKind {
     @SerialName("dangerous") Dangerous,
 }
 
-data class PermissionDefinition(
+internal data class PermissionDefinition(
     val name: String,
     val kind: PermissionKind,
     /** Set when the permission can be held for some instances only: the property naming them. */
     val scopeProperty: String? = null,
 )
 
-/** No Health: the watch reads it directly, so the phone can't enforce it. */
-object PermissionRegistry {
+internal object PermissionRegistry {
     val all: List<PermissionDefinition> = listOf(
         PermissionDefinition(PluginPermissions.INTERNET, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.LOCAL_NETWORK, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.GLOBAL_INTERNET, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.LOCATION, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WATCH_MICROPHONE, PermissionKind.Read),
+        PermissionDefinition(PluginPermissions.HEALTH, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.NOTIFICATIONS, PermissionKind.Dangerous, SourceInstance.PROPERTY_PACKAGE),
         PermissionDefinition(PluginPermissions.CALENDAR, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTACTS, PermissionKind.Read),
@@ -46,6 +46,10 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.READ_APPS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.LAUNCH_APPS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.FIND_MY_PHONE, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.SET_INDEX_ALARMS, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.SEND_MESSAGES_BEEPER, PermissionKind.Exfiltrating),
+        PermissionDefinition(PluginPermissions.WRITE_INDEX_NOTES, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.WRITE_INDEX_REMINDERS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_FILES, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WRITE_FILES, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.LEGACY_PEBBLEKIT, PermissionKind.Exfiltrating),
@@ -57,7 +61,22 @@ object PermissionRegistry {
     operator fun get(name: String): PermissionDefinition? = byName[name]
 }
 
-fun isLegacy(manifestVersion: Int): Boolean = manifestVersion < 2
+public fun isLegacy(manifestVersion: Int): Boolean = manifestVersion < 2
+
+/** The first SDK that refuses to build an app using health without declaring `Health`. */
+private const val HEALTH_PERMISSION_SDK_MAJOR = 5
+private const val HEALTH_PERMISSION_SDK_MINOR = 113
+private val SDK_VERSION = Regex("(\\d+)\\.(\\d+)")
+
+/**
+ * Built before the SDK checked health use, from each platform's binary SDK version ("5.112"). Health
+ * is enforced for these only while `askLegacyAppsForPermissions` is on.
+ */
+public fun isLegacyForHealth(sdkVersions: Collection<String>): Boolean = sdkVersions.all { version ->
+    val (major, minor) = SDK_VERSION.find(version)?.destructured ?: return@all true
+    major.toInt() < HEALTH_PERMISSION_SDK_MAJOR ||
+        (major.toInt() == HEALTH_PERMISSION_SDK_MAJOR && minor.toInt() < HEALTH_PERMISSION_SDK_MINOR)
+}
 
 private val LEGACY_PKJS = listOf(
     PluginPermissions.GLOBAL_INTERNET,
@@ -77,31 +96,31 @@ internal fun legacyRequested(hasPkjs: Boolean, hasAndroidCompanion: Boolean): Li
 }
 
 /** Keys are a name, `Internet/<domain>`, `PebbleKit2/<package>` or `ReadFiles/<path or uri>`. */
-fun permissionOf(key: String): String = key.substringBefore('/')
+public fun permissionOf(key: String): String = key.substringBefore('/')
 
 internal fun argumentOf(key: String): String? = key.substringAfter('/', "").ifEmpty { null }
 
-fun domainOf(key: String): String? = argumentOf(key)?.takeIf { permissionOf(key) == PluginPermissions.INTERNET }
+public fun domainOf(key: String): String? = argumentOf(key)?.takeIf { permissionOf(key) == PluginPermissions.INTERNET }
 
-fun packageOf(key: String): String? = argumentOf(key)?.takeIf {
+public fun packageOf(key: String): String? = argumentOf(key)?.takeIf {
     permissionOf(key) == PluginPermissions.PEBBLEKIT_2 || permissionOf(key) == PluginPermissions.NOTIFICATIONS
 }
 
 /** The path (iOS) or uri (Android) of a file permission's entry. */
-fun fileScopeOf(key: String): String? =
+public fun fileScopeOf(key: String): String? =
     argumentOf(key)?.takeIf { permissionOf(key) == PluginPermissions.READ_FILES || permissionOf(key) == PluginPermissions.WRITE_FILES }
 
-fun internetKey(domain: String): String = "${PluginPermissions.INTERNET}/$domain"
+internal fun internetKey(domain: String): String = "${PluginPermissions.INTERNET}/$domain"
 
-fun readFilesKey(scope: String): String = "${PluginPermissions.READ_FILES}/$scope"
+public fun readFilesKey(scope: String): String = "${PluginPermissions.READ_FILES}/$scope"
 
-fun writeFilesKey(scope: String): String = "${PluginPermissions.WRITE_FILES}/$scope"
+internal fun writeFilesKey(scope: String): String = "${PluginPermissions.WRITE_FILES}/$scope"
 
-fun pebbleKit2Key(packageName: String): String = "${PluginPermissions.PEBBLEKIT_2}/$packageName"
+internal fun pebbleKit2Key(packageName: String): String = "${PluginPermissions.PEBBLEKIT_2}/$packageName"
 
-fun notificationsKey(packageName: String): String = "${PluginPermissions.NOTIFICATIONS}/$packageName"
+internal fun notificationsKey(packageName: String): String = "${PluginPermissions.NOTIFICATIONS}/$packageName"
 
-fun PluginPermission.keys(): List<String> {
+internal fun PluginPermission.keys(): List<String> {
     if (plugin != null) return listOfNotNull(Uuid.parseOrNull(plugin)?.let { pluginPermissionKey(it, name) })
     // A manifest only ever gets the bare file permission; entries come from the user's picks.
     if (fileScopeOf(name) != null) return listOf(permissionOf(name))
@@ -113,19 +132,19 @@ fun PluginPermission.keys(): List<String> {
 }
 
 /** The developer said which permissions the app needs; otherwise none are treated as required. */
-fun List<PluginPermission>.describesRequired(): Boolean = any { it.required != null }
+public fun List<PluginPermission>.describesRequired(): Boolean = any { it.required != null }
 
 /** Only once the developer has said which are required (see [describesRequired]). */
-fun List<PluginPermission>.isRequired(key: String): Boolean = describesRequired() && declarationOf(key)?.required == true
+public fun List<PluginPermission>.isRequired(key: String): Boolean = describesRequired() && declarationOf(key)?.required == true
 
 /** The declaration [key] was granted under: its own entry, else a bare permission's (a file scope's `ReadFiles`). */
-fun List<PluginPermission>.declarationOf(key: String): PluginPermission? =
+public fun List<PluginPermission>.declarationOf(key: String): PluginPermission? =
     firstOrNull { key in it.keys() } ?: firstOrNull { it.plugin == null && it.name == permissionOf(key) }
 
 private val HOSTNAME = Regex("[a-z0-9-]+(\\.[a-z0-9-]+)*")
 
 /** Domains end up in CSPs and content-blocker patterns, so nothing but a plain hostname. */
-fun isHostname(domain: String): Boolean = HOSTNAME.matches(domain)
+internal fun isHostname(domain: String): Boolean = HOSTNAME.matches(domain)
 
 /** Most specific first. A `WriteFiles` decision covers the matching `ReadFiles` when it has none of its own. */
 internal fun coveringKeys(key: String): List<String> {

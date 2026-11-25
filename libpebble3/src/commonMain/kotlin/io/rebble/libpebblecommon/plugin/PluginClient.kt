@@ -30,45 +30,55 @@ import kotlinx.serialization.json.JsonObject
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
-sealed interface PluginCaller {
+public sealed interface PluginCaller {
     /** Checking plugin state for the UI rather than acting for the user: never prompts, isn't counted. */
-    val probe: Boolean get() = false
+    public val probe: Boolean get() = false
 
     /** A PKJS app, held to each plugin's caller permissions. */
-    data class App(val subject: PermissionSubject, val name: String) : PluginCaller
+    public data class App internal constructor(val subject: PermissionSubject, val name: String) : PluginCaller
 
     /** The phone app itself (e.g. Index), trusted with every plugin. */
-    data class Host(override val probe: Boolean = false) : PluginCaller
+    public data class Host(override val probe: Boolean = false) : PluginCaller
 }
 
-object PluginHeartbeatCounters {
-    const val HOST_INVOCATIONS = "plugin.invocation_count"
-    const val HOST_OBSERVATIONS = "plugin.observation_count"
-    const val PKJS_INVOCATIONS = "plugin.pkjs_invocation_count"
-    const val PKJS_OBSERVATIONS = "plugin.pkjs_observation_count"
+public object PluginHeartbeatCounters {
+    internal const val HOST_INVOCATIONS: String = "plugin.invocation_count"
+    internal const val HOST_OBSERVATIONS: String = "plugin.observation_count"
+    internal const val PKJS_INVOCATIONS: String = "plugin.pkjs_invocation_count"
+    internal const val PKJS_OBSERVATIONS: String = "plugin.pkjs_observation_count"
 
-    val all = listOf(HOST_INVOCATIONS, HOST_OBSERVATIONS, PKJS_INVOCATIONS, PKJS_OBSERVATIONS)
+    public val all: List<String> = listOf(HOST_INVOCATIONS, HOST_OBSERVATIONS, PKJS_INVOCATIONS, PKJS_OBSERVATIONS)
+
+    internal const val SUBSCRIPTIONS: String = "subscription_count"
+    internal const val INVOCATIONS: String = "invocation_count"
+
+    internal fun perPlugin(pluginUuid: Uuid, metric: String): String = "plugin.$pluginUuid.$metric"
 }
 
-class PluginClient(
+internal class PluginClient(
     private val registry: PluginRegistry,
     private val permissions: AppPermissions,
     private val runningApps: RunningApps,
     private val analytics: LibPebbleAnalytics,
     private val pluginLogs: PluginLogs,
+    private val actionLog: PluginActionRecorder,
 ) : Plugins {
     private val logger = Logger.withTag("PluginClient")
 
     override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> get() = registry.disabledBuiltIns
 
-    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) =
+    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean): Unit =
         registry.setBuiltInEnabled(pluginUuid, enabled)
 
-    override fun registerPlugin(plugin: NativePlugin) = registry.registerPlugin(plugin)
+    override fun registerPlugin(plugin: NativePlugin): Unit = registry.registerPlugin(plugin)
+
+    override fun unregisterPlugin(pluginUuid: Uuid) {
+        registry.unregisterPlugin(pluginUuid)
+    }
 
     override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> get() = registry.preferredSources
 
-    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) =
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?): Unit =
         registry.setPreferredSource(category, item, pluginUuid)
 
     override fun sourcePlugin(category: String, item: String): PluginMetadata? =
@@ -100,6 +110,7 @@ class PluginClient(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceUpdate> = flow {
         val target = registry.findPlugin(plugin.pluginUuid.toString())
         val declaration = target?.sources?.firstOrNull { it.serves(category, item) }
@@ -110,9 +121,10 @@ class PluginClient(
         // Whatever the caller chooses reaches the plugin, which may send it off the phone.
         val declared = properties?.filter { it in declaration.properties }
         val pixels = iconPixelSize?.clamped()
-        count(caller, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
+        val cap = limit.clampedLimit()
+        count(caller, target.pluginUuid, PluginHeartbeatCounters.SUBSCRIPTIONS, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
         if (caller !is PluginCaller.App) {
-            emitAll(serve(caller, target, declaration, category, item, declared, pixels))
+            emitAll(serve(caller, target, declaration, category, item, declared, pixels, cap))
             return@flow
         }
         val required = requiredOfCaller(declaration)
@@ -129,7 +141,7 @@ class PluginClient(
                     if (scope != null) {
                         // The scoping properties are needed to filter by, whether asked for or not.
                         val wanted = declared?.plus(scope.keys)?.distinct()
-                        serve(caller, target, declaration, category, item, wanted, pixels).map { it.scopedTo(scope) }
+                        serve(caller, target, declaration, category, item, wanted, pixels, cap).map { it.scopedTo(scope) }
                     } else {
                         val refused = asked.associateWith { permissions.check(caller.subject, it) }
                             .filterValues { it != PermissionDecision.Granted }
@@ -142,7 +154,13 @@ class PluginClient(
                     }
                 }
         )
-    }
+    }.map { it.takeInstances(limit.clampedLimit() ?: Plugin.MAX_LIMIT) }
+
+    private fun Int?.clampedLimit() = this?.coerceIn(1, Plugin.MAX_LIMIT)
+
+    private fun SourceUpdate.takeInstances(limit: Int): SourceUpdate =
+        if (this !is SourceUpdate.Data) this
+        else SourceUpdate.Data(envelope.copy(instances = envelope.instances.take(limit)))
 
     override suspend fun invoke(
         caller: PluginCaller,
@@ -183,7 +201,7 @@ class PluginClient(
         if (missing.isNotEmpty()) {
             return ActionResult.error(PluginErrors.INVALID_ARGS, "missing required: ${missing.joinToString()}")
         }
-        count(caller, PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.PKJS_INVOCATIONS)
+        count(caller, target.pluginUuid, PluginHeartbeatCounters.INVOCATIONS, PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.PKJS_INVOCATIONS)
         val run = suspend {
             withTimeoutOrNull(timeout ?: Duration.INFINITE) {
                 try {
@@ -197,7 +215,9 @@ class PluginClient(
             } ?: ActionResult.error(PluginErrors.TIMEOUT, "no response in $timeout")
         }
         // A probe can't ask for anything, so it doesn't bring the plugin's requests to the user.
-        return if (caller.probe) run() else runningApps.whileRunning(plugin.pluginUuid) { run() }
+        val result = if (caller.probe) run() else runningApps.whileRunning(plugin.pluginUuid) { run() }
+        if (caller is PluginCaller.App) actionLog.record(caller.subject.appUuid, target.pluginUuid, action, args, result)
+        return result
     }
 
     private fun serve(
@@ -208,7 +228,8 @@ class PluginClient(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
-    ): Flow<SourceUpdate> = plugin.observe(category, item, properties, iconPixelSize, prompt = !caller.probe)
+        limit: Int?,
+    ): Flow<SourceUpdate> = plugin.observe(category, item, properties, iconPixelSize, limit, prompt = !caller.probe)
         .map { update ->
             if (update !is SourceUpdate.Data) return@map update
             SourceUpdate.Data(
@@ -235,12 +256,10 @@ class PluginClient(
         logger.w { message }
     }
 
-    private fun count(caller: PluginCaller, host: String, pkjs: String) {
-        when {
-            caller.probe -> Unit
-            caller is PluginCaller.App -> analytics.incrementHeartbeatCounter(pkjs)
-            else -> analytics.incrementHeartbeatCounter(host)
-        }
+    private fun count(caller: PluginCaller, pluginUuid: Uuid, perPlugin: String, host: String, pkjs: String) {
+        if (caller.probe) return
+        analytics.incrementHeartbeatCounter(if (caller is PluginCaller.App) pkjs else host)
+        analytics.incrementHeartbeatCounter(PluginHeartbeatCounters.perPlugin(pluginUuid, perPlugin))
     }
 
     private val PluginCaller.label: String

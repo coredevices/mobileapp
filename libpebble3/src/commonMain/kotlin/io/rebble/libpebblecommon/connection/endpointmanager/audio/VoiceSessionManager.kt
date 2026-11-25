@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.connection.endpointmanager.audio
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs
-import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.AudioStream
@@ -19,6 +18,7 @@ import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.VoiceService
+import io.rebble.libpebblecommon.voice.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.TranscriptionWord
@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flow
@@ -41,7 +42,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class VoiceSessionManager(
+internal class VoiceSessionManager(
     private val voiceService: VoiceService,
     private val audioStreamService: AudioStreamService,
     private val watchScope: ConnectionCoroutineScope,
@@ -49,13 +50,12 @@ class VoiceSessionManager(
     private val companionAppLifecycleManager: CompanionAppLifecycleManager,
     private val audioFrameDecoder: AudioFrameDecoder,
     private val permissions: AppPermissions,
-    private val watchConfig: WatchConfigFlow,
 ) {
     companion object Companion {
         private val logger = Logger.withTag("VoiceSession")
     }
     private val _currentSession = MutableStateFlow<CurrentSession?>(null)
-    val currentSession = _currentSession.asStateFlow()
+    val currentSession: StateFlow<VoiceSessionManager.CurrentSession?> = _currentSession.asStateFlow()
 
     data class CurrentSession (
         val request: VoiceService.SessionSetupRequest,
@@ -133,11 +133,6 @@ class VoiceSessionManager(
         val encoderInfo = setupRequest.encoderInfo
         val sessionId = setupRequest.sessionId.toUShort()
         val subject = permissions.subjectOf(setupRequest.appUuid)
-        if (!watchConfig.value.enablePlugins) { // Only enable for apps if plugins are enabled, otherwise we would default-allow
-            logger.w { "Audio stream from ${setupRequest.appUuid} refused: permissions not enabled" }
-            voiceService.send(makeAudioStreamSetupResult(Result.FailDisabled, sessionId, appInitiated))
-            return
-        }
         if (subject == null || permissions.request(subject, PluginPermissions.WATCH_MICROPHONE) != PermissionDecision.Granted) {
             logger.w { "Audio stream from ${setupRequest.appUuid} refused: microphone permission not granted" }
             voiceService.send(makeAudioStreamSetupResult(Result.FailDisabled, sessionId, appInitiated))

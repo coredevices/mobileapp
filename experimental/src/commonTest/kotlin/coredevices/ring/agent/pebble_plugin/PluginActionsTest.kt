@@ -1,10 +1,9 @@
 package coredevices.ring.agent.pebble_plugin
 
+import coredevices.ring.agent.builtin_servlets.clock.CLOCK_PLUGIN_UUID
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
-import io.rebble.libpebblecommon.plugin.PlatformPlugins
+import io.rebble.libpebblecommon.plugin.BuiltInPlugins
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
-import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
-import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -15,26 +14,26 @@ class PluginActionsTest {
     private val things = FakePlugin(
         actions = listOf(ActionDeclaration(name = "create_todo"), ActionDeclaration(name = "create_note")),
         name = "Things",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000001"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-CAFE00000001"),
     ).metadata
     private val notes = FakePlugin(
         actions = listOf(ActionDeclaration(name = "create_note"), ActionDeclaration(name = "create_reminder")),
         name = "Notes",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000002"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-CAFE00000002"),
     ).metadata
     private val claude = FakePlugin(
         actions = listOf(ActionDeclaration(name = "send_to_agent")),
         name = "Claude",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000005"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-CAFE00000005"),
     ).metadata
     private val music = FakePlugin(
         actions = listOf(ActionDeclaration(name = "next")),
         name = "Music",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000003"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-CAFE00000003"),
     ).metadata
     private val weather = FakePlugin(
         name = "Weather",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000004"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-CAFE00000004"),
         sources = listOf(
             SourceDeclaration(category = "weather", items = listOf("current", "forecast")),
             SourceDeclaration(category = "air", items = listOf("quality")),
@@ -44,17 +43,22 @@ class PluginActionsTest {
     private val watchSettings = FakePlugin(
         actions = listOf(ActionDeclaration(name = "set_on")),
         name = "Watch Settings",
-        pluginUuid = WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID,
+        pluginUuid = BuiltInPlugins.WATCH_SETTINGS,
     ).metadata
     private val watchState = FakePlugin(
         actions = listOf(ActionDeclaration(name = "launch_app")),
         name = "Watch State",
-        pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
+        pluginUuid = BuiltInPlugins.WATCH_STATE,
     ).metadata
     private val notifications = FakePlugin(
         actions = listOf(ActionDeclaration(name = "reply")),
         name = "Notifications",
-        pluginUuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID,
+        pluginUuid = BuiltInPlugins.NOTIFICATIONS,
+    ).metadata
+    private val clock = FakePlugin(
+        actions = listOf(ActionDeclaration(name = "set_alarm")),
+        name = "Timers & Alarms",
+        pluginUuid = CLOCK_PLUGIN_UUID,
     ).metadata
 
     @Test
@@ -82,6 +86,12 @@ class PluginActionsTest {
     @Test
     fun `only plugins with actions or sources reach the agent list`() {
         assertEquals(listOf(things, weather, music), listOf(things, weather, notes, music, empty).forAgent())
+    }
+
+    @Test
+    fun `the servlet plugins never reach the agent list, which has them as servlets`() {
+        assertTrue(clock.offers(PluginGrant.Actions))
+        assertEquals(listOf(things), listOf(clock, things).forAgent())
     }
 
     @Test

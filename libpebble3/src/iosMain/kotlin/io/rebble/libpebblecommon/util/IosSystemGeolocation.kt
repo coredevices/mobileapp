@@ -29,7 +29,7 @@ import platform.CoreLocation.CLLocation
 import platform.Foundation.NSError
 import platform.Foundation.timeIntervalSince1970
 
-class IosSystemGeolocation: SystemGeolocation {
+internal class IosSystemGeolocation: SystemGeolocation {
     private val logger = Logger.withTag("IosSystemGeolocation")
     private var iosLocationRef: IOSLocation? = null
     private val accuracyLock = Mutex()

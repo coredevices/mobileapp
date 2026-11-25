@@ -5,7 +5,7 @@ import kotlinx.io.Source
 /**
  * CRC32 hash Calculator that is compatible with hardware CRC32 on the STM chips.
  */
-class Crc32Calculator {
+internal class Crc32Calculator {
     private var finalized = false
     private var value: UInt = 0xFFFFFFFFu
 
@@ -67,7 +67,7 @@ private fun UByteArray.padZerosLeft(amount: Int): UByteArray {
 /**
  * CRC of the first [length] bytes of this source, or null if it has fewer than [length] bytes.
  */
-fun Source.crc32(length: Long): UInt? {
+internal fun Source.crc32(length: Long): UInt? {
     val calculator = Crc32Calculator()
     val buffer = ByteArray(8192)
     var remaining = length

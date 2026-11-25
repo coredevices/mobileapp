@@ -38,8 +38,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -47,7 +47,6 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.runningReduce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -56,7 +55,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
-data class KnownWatchProperties(
+internal data class KnownWatchProperties(
     val name: String,
     val nickname: String?,
     val runningFwVersion: String,
@@ -96,7 +95,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
     )
 }
 
-interface WatchConnector {
+internal interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
     fun requestConnection(identifier: PebbleIdentifier)
     fun requestDisconnection(identifier: PebbleIdentifier)
@@ -149,7 +148,7 @@ private data class CombinedState(
     val btstate: BluetoothState,
 )
 
-class WatchManager(
+internal class WatchManager(
     private val knownWatchDao: KnownWatchDao,
     private val pebbleDeviceFactory: PebbleDeviceFactory,
     private val createPlatformIdentifier: CreatePlatformIdentifier,
@@ -168,44 +167,9 @@ class WatchManager(
     private val legacyBtClassicMigrator: LegacyBtClassicMigrator,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
-    private val allWatches: MutableStateFlow<Map<PebbleIdentifier, Watch>> = MutableStateFlow(
-        runBlocking {
-            legacyBtClassicMigrator.migrateIfNeeded()
-            knownWatchDao.knownWatches().associate {
-                val identifier = it.identifier()
-                identifier to Watch(
-                    identifier = identifier,
-                    name = it.name,
-                    scanResult = null,
-                    connectGoal = it.connectGoal,
-                    knownWatchProps = it.asProps(),
-                    activeConnection = null,
-                    asPersisted = it,
-                    forget = false,
-                    firmwareUpdateAvailable = FirmwareUpdateCheckState(
-                        checkingForUpdates = false,
-                        result = null,
-                    ),
-                    lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
-                    nickname = it.nickname,
-                    connectionFailureInfo = null,
-                )
-            }
-        }
-    )
-    private val _watches = MutableStateFlow<List<PebbleDevice>>(
-        allWatches.value.map {
-            it.value.createPebbleDevice(
-                batteryLevel = null,
-                btState = bluetoothStateProvider.state.value,
-                state = null,
-                firmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
-                usingBtClassic = false,
-                languagePackInstallState = LanguagePackInstallState.Idle(),
-            )
-        }
-    )
-    override val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
+    private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
+    private val _watches = MutableStateFlow<List<PebbleDevice>?>(null)
+    override val watches: Flow<List<PebbleDevice>> = _watches.filterNotNull()
     private val _connectionEvents = MutableSharedFlow<PebbleConnectionEvent>(extraBufferCapacity = 5)
     override val connectionEvents: Flow<PebbleConnectionEvent> = _connectionEvents.asSharedFlow()
     private val activeConnections = mutableSetOf<PebbleIdentifier>()
@@ -233,6 +197,7 @@ class WatchManager(
         if (settings.getBoolean(SEEDED_BONDED_KEY, false)) return
         libPebbleCoroutineScope.launch {
             seedBondedMutex.withLock {
+                watches.first()
                 // Re-check inside the lock — another caller may have finished while we waited.
                 if (settings.getBoolean(SEEDED_BONDED_KEY, false)) return@withLock
                 // Only seed if there are no known watches yet — approximates "fresh install".
@@ -336,10 +301,46 @@ class WatchManager(
             reversePpogVersion = state.reversePpogVersion(),
         )
 
+    private suspend fun loadKnownWatches() {
+        legacyBtClassicMigrator.migrateIfNeeded()
+        val known = knownWatchDao.knownWatches().associate {
+            val identifier = it.identifier()
+            identifier to Watch(
+                identifier = identifier,
+                name = it.name,
+                scanResult = null,
+                connectGoal = it.connectGoal,
+                knownWatchProps = it.asProps(),
+                activeConnection = null,
+                asPersisted = it,
+                forget = false,
+                firmwareUpdateAvailable = FirmwareUpdateCheckState(
+                    checkingForUpdates = false,
+                    result = null,
+                ),
+                lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
+                nickname = it.nickname,
+                connectionFailureInfo = null,
+            )
+        }
+        allWatches.update { it + known }
+        _watches.value = allWatches.value.values.map {
+            it.createPebbleDevice(
+                batteryLevel = null,
+                btState = bluetoothStateProvider.state.value,
+                state = null,
+                firmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
+                usingBtClassic = false,
+                languagePackInstallState = LanguagePackInstallState.Idle(),
+            )
+        }
+    }
+
     fun init() {
         logger.d("watchmanager init()")
         seedBondedWatchesIfNeeded()
         libPebbleCoroutineScope.launch {
+            loadKnownWatches()
             val activeConnectionStates = allWatches.flowOfAllDevices()
             combine(
                 allWatches,
@@ -574,16 +575,21 @@ class WatchManager(
                 lastAttemptFailed = device.connectionFailureInfo != null,
             )
             if (platformIdentifier == null) {
-                // Probably because it couldn't create the device (ios throws on an unknown peristed
-                // uuid, so we'll need to scan for it using the name/serial?)...
-                // ...but TODO revit this once have more error modes + are handling BT being disabled
-                if (device.knownWatchProps != null) {
-                    logger.w("removing known device: $identifier")
-                    forget(identifier)
+                // e.g. iOS can't retrieve the persisted peripheral uuid. Don't forget the watch: retry a
+                // few times, then stop auto-connecting and let the UI offer re-pairing guidance.
+                val failed = watch.withFailureReason(ConnectionFailureReason.PeripheralNotFound)
+                if ((failed.connectionFailureInfo?.times ?: 0) >= PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS) {
+                    logger.w("couldn't find $identifier; giving up")
+                    return@updateWatch failed.copy(connectGoal = false)
                 }
-                // hack force another connection
-                updateWatch(identifier = identifier) { watch ->
-                    watch.copy()
+                logger.w("couldn't find $identifier; retrying in $PERIPHERAL_NOT_FOUND_RETRY_DELAY")
+                // Stops the reconcile loop from retrying immediately
+                activeConnections.add(identifier)
+                libPebbleCoroutineScope.launch {
+                    delay(PERIPHERAL_NOT_FOUND_RETRY_DELAY)
+                    activeConnections.remove(identifier)
+                    // Changes the watch state, which triggers the retry
+                    updateWatch(identifier = identifier) { it.withFailureReason(ConnectionFailureReason.PeripheralNotFound) }
                 }
                 return@updateWatch null
             }
@@ -647,16 +653,20 @@ class WatchManager(
         }
     }
 
+    private fun Watch.withFailureReason(newReason: ConnectionFailureReason): Watch = copy(
+        connectionFailureInfo = ConnectionFailureInfo(
+            reason = newReason,
+            times = if (connectionFailureInfo?.reason == newReason) {
+                connectionFailureInfo.times + 1
+            } else {
+                1
+            },
+        )
+    )
+
     private fun Watch.updateFailureReason(newReason: ConnectionFailureReason?) {
         if (newReason != null) {
-            val failureInfo = ConnectionFailureInfo(
-                reason = newReason,
-                times = if (connectionFailureInfo?.reason == newReason) {
-                    connectionFailureInfo.times + 1
-                } else {
-                    1
-                },
-            )
+            val failureInfo = withFailureReason(newReason).connectionFailureInfo
             updateWatch(identifier) {
                 it.copy(
                     connectionFailureInfo = failureInfo,
@@ -739,18 +749,19 @@ class WatchManager(
     }
 
     companion object {
-        private val DISCONNECT_TIMEOUT = 3.seconds
+        val DISCONNECT_TIMEOUT = 3.seconds
         private val APP_START_WAIT_TO_CONNECT = 2.5.seconds
+        private val PERIPHERAL_NOT_FOUND_RETRY_DELAY = 5.seconds
         private const val SEEDED_BONDED_KEY = "seeded_bonded_watches_v1"
     }
 }
 
-data class CurrentAndPreviousState(
+internal data class CurrentAndPreviousState(
     val previousState: ActivePebbleState?,
     val currentState: ActivePebbleState?,
 )
 
-data class ActivePebbleState(
+internal data class ActivePebbleState(
     val connectingPebbleState: ConnectingPebbleState,
     val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     val firmwareUpdateStatus: FirmwareUpdateStatus,
@@ -789,5 +800,5 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
 }
 
 private fun Watch.color(): WatchColor = knownWatchProps?.color
-    ?: scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }
+    ?: scanResult?.leScanRecord?.watchColor()
     ?: WatchColor.Unknown

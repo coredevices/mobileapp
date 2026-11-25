@@ -17,7 +17,7 @@ import org.json.JSONObject
  *
  * @author zulak@getpebble.com
  */
-class PebbleClassicDictionary : Iterable<PebbleTuple?> {
+internal class PebbleClassicDictionary : Iterable<PebbleTuple?> {
     val tuples: MutableMap<Int, PebbleTuple> = HashMap<Int, PebbleTuple>()
 
     /**

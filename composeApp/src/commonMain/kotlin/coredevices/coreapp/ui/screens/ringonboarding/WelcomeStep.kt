@@ -24,9 +24,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.Res as UtilRes
 import coreapp.util.generated.resources.ring_wireframe
 import org.jetbrains.compose.resources.imageResource
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.ring_onboarding_get_started
+import coreapp.composeapp.generated.resources.ring_onboarding_welcome_body
+import coreapp.composeapp.generated.resources.ring_onboarding_welcome_title
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -53,7 +58,7 @@ internal fun WelcomeStep(
             // line-art lines stay black. Multiply needs a light base or the image
             // goes dark, so always use the light container color even in dark mode
             // (MOB-8710).
-            val ringBitmap = imageResource(Res.drawable.ring_wireframe)
+            val ringBitmap = imageResource(UtilRes.drawable.ring_wireframe)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -85,7 +90,7 @@ internal fun WelcomeStep(
 
             Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(
-                    text = "Meet Index 01",
+                    text = stringResource(Res.string.ring_onboarding_welcome_title),
                     fontSize = 36.sp,
                     lineHeight = 42.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -94,9 +99,7 @@ internal fun WelcomeStep(
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "You're holding an entirely new type of device. Index 01 isn't like " +
-                            "anything you've used before. Please spend a few minutes learning how " +
-                            "it works, and how to get the most out of it.",
+                    text = stringResource(Res.string.ring_onboarding_welcome_body),
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     color = palette.onSurfaceVariant,
@@ -107,7 +110,7 @@ internal fun WelcomeStep(
         Column(
             modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
         ) {
-            PrimaryFilledButton(text = "Get started", onClick = onGetStarted)
+            PrimaryFilledButton(text = stringResource(Res.string.ring_onboarding_get_started), onClick = onGetStarted)
         }
     }
 }

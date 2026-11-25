@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 
-class PebbleKit2(
+internal class PebbleKit2(
     private val device: CompanionAppDevice,
     private val appInfo: PbwAppInfo,
     private val pkjsRunning: Boolean,
@@ -119,7 +119,7 @@ class PebbleKit2(
     }
 
     private suspend fun isAllowed(pkg: String) =
-        !permissions.enforcing || permissions.request(uuid, pebbleKit2Key(pkg)) == PermissionDecision.Granted
+        permissions.request(uuid, pebbleKit2Key(pkg)) == PermissionDecision.Granted
 
     suspend fun sendMessage(pebbleDictionary: PebbleDictionary): TransmissionResult {
         val transactionId = (nextTransactionId.getAndIncrement() % UByte.MAX_VALUE.toInt()).toUByte()

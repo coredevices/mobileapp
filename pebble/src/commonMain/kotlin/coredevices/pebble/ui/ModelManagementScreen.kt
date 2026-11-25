@@ -77,6 +77,23 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.models_switched_to_cloud
+import coreapp.pebble.generated.resources.models_unknown_error
+import coreapp.pebble.generated.resources.models_download_required
+import coreapp.pebble.generated.resources.models_download_lite
+import coreapp.pebble.generated.resources.models_download_model
+import coreapp.pebble.generated.resources.models_download_message
+import coreapp.pebble.generated.resources.models_lite_message
+import coreapp.pebble.generated.resources.models_title
+import coreapp.pebble.generated.resources.models_recommended
+import coreapp.pebble.generated.resources.models_size_mb
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.delete
+import coreapp.util.generated.resources.download
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.getString
 
 class ModelManagementScreenViewModel(
     private val modelManager: ModelManager,
@@ -144,7 +161,7 @@ class ModelManagementScreenViewModel(
                     )
                 )
             )
-            _snackbarMessages.tryEmit("Speech recognition switched to Cloud Only")
+            viewModelScope.launch { _snackbarMessages.tryEmit(getString(Res.string.models_switched_to_cloud)) }
         }
     }
 
@@ -194,14 +211,14 @@ class ModelManagementScreenViewModel(
                     }
                 )
             } catch (e: Exception) {
-                AvailableModelsState.Error(e.message ?: "Unknown error")
+                AvailableModelsState.Error(e.message ?: getString(Res.string.models_unknown_error))
             }
         }
         viewModelScope.launch {
             _availableLanguageModels.value = try {
                 AvailableModelsState.Success(modelManager.getAvailableLanguageModels())
             } catch (e: Exception) {
-                AvailableModelsState.Error(e.message ?: "Unknown error")
+                AvailableModelsState.Error(e.message ?: getString(Res.string.models_unknown_error))
             }
         }
     }
@@ -232,33 +249,30 @@ fun ModelDownloadPromptDialog(
 
             )
         },
-        title = { Text("Download Required") },
+        title = { Text(stringResource(Res.string.models_download_required)) },
         verticalButtons = {
             TextButton(
                 onClick = onGetRecommended,
             ) {
                 if (isLite) {
-                    Text("Download lite model: ${downloadSizeInMb}MB")
+                    Text(stringResource(Res.string.models_download_lite, downloadSizeInMb))
                 } else {
-                    Text("Download model (${downloadSizeInMb}MB)")
+                    Text(stringResource(Res.string.models_download_model, downloadSizeInMb))
                 }
             }
             TextButton(
                 onClick = onDismiss,
             ) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
         }
     ) {
         Text(
-            """
-                To use offline speech recognition, you need to download a model first.
-                Data charges may apply, Wi-Fi is recommended.
-            """.trimIndent(),
+            stringResource(Res.string.models_download_message),
         )
         if (isLite) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Your device may struggle with larger models, a reduced accuracy model will be used.")
+            Text(stringResource(Res.string.models_lite_message))
         }
     }
 }
@@ -278,7 +292,7 @@ fun ModelManagementScreen(
     onSetCurrentSTTModel: (String) -> Unit,
 ) {
     LaunchedEffect(Unit) {
-        topBarParams.title("Manage Models")
+        topBarParams.title(getString(Res.string.models_title))
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
     }
@@ -382,7 +396,7 @@ private fun ModelListItem(
             .clickable(enabled = downloadState == DownloadState.Downloaded) {
                 onSelect()
             },
-        overlineContent = { if (isRecommended) { Text("Recommended for your device") } },
+        overlineContent = { if (isRecommended) { Text(stringResource(Res.string.models_recommended)) } },
         headlineContent = { Text(model.slug) },
         supportingContent = { model.intendedTask?.let { Text(it) } },
         leadingContent = {
@@ -420,7 +434,7 @@ private fun ModelListItem(
                             IconButton(
                                 onClick = onDownloadCancel,
                             ) {
-                                Icon(Icons.Default.Cancel, contentDescription = "Download")
+                                Icon(Icons.Default.Cancel, contentDescription = stringResource(UtilRes.string.download))
                             }
                         }
                     }
@@ -429,7 +443,7 @@ private fun ModelListItem(
                             onClick = { onDownload?.invoke() },
                             enabled = onDownload != null
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = "Download")
+                            Icon(Icons.Default.Download, contentDescription = stringResource(UtilRes.string.download))
                         }
                     }
                     DownloadState.Downloaded -> {
@@ -438,13 +452,13 @@ private fun ModelListItem(
                         ) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "Delete",
+                                contentDescription = stringResource(UtilRes.string.delete),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
                     }
                 }
-                Text("${model.sizeInMB} MB", modifier = Modifier.offset(y = (-8).dp))
+                Text(stringResource(Res.string.models_size_mb, model.sizeInMB), modifier = Modifier.offset(y = (-8).dp))
             }
         }
     )

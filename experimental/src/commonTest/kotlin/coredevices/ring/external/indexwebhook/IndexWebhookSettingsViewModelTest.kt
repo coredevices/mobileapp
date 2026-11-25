@@ -33,20 +33,43 @@ class IndexWebhookSettingsViewModelTest {
 
             fixture.viewModel.updateUrlInput("https://example.com/hook")
             fixture.viewModel.updateSignRequests(true)
-            fixture.viewModel.updateSigningSecret("  exact secret value  ")
+            fixture.viewModel.updateSigningSecret("exact secret value")
             fixture.viewModel.save()
             advanceUntilIdle()
 
             val config = fixture.preferences.configFor(RingGesture.Hold)
             assertTrue(config.signRequests)
             assertEquals("https://example.com/hook", config.url)
-            assertEquals(
-                "  exact secret value  ",
-                fixture.secretStorage.get(RingGesture.Hold),
-            )
+            assertEquals("exact secret value", fixture.secretStorage.get(RingGesture.Hold))
             assertFalse(fixture.settings.keys.any { key ->
                 fixture.settings.getStringOrNull(key)?.contains("exact secret value") == true
             })
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun saveAndTestEventTrimWhitespaceAroundTheSigningSecret() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val fixture = Fixture(backgroundScope)
+            fixture.viewModel.openDialog(RingGesture.Hold)
+            advanceUntilIdle()
+
+            fixture.viewModel.updateUrlInput("https://example.com/hook")
+            fixture.viewModel.updateSignRequests(true)
+            fixture.viewModel.updateSigningSecret(" \tpasted secret value\n")
+            fixture.viewModel.sendTestEvent()
+            advanceUntilIdle()
+
+            assertEquals("pasted secret value", fixture.api.lastTestRequest?.signingSecret)
+
+            fixture.viewModel.save()
+            advanceUntilIdle()
+
+            assertEquals("pasted secret value", fixture.secretStorage.get(RingGesture.Hold))
         } finally {
             Dispatchers.resetMain()
         }
@@ -212,7 +235,7 @@ class IndexWebhookSettingsViewModelTest {
             gesture: RingGesture,
         ): IndexWebhookRunResult? = null
 
-        override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+        override suspend fun sendButtonEvent(gesture: RingGesture, pressedAt: Instant, deliveryId: String): IndexWebhookRunResult? = null
 
         override suspend fun sendTestEvent(
             gesture: RingGesture,
@@ -221,6 +244,7 @@ class IndexWebhookSettingsViewModelTest {
             signRequests: Boolean,
             signingSecret: String?,
             clickPayload: String,
+            sendJson: Boolean,
         ): IndexWebhookRunResult {
             lastTestRequest = TestRequest(gesture, url, signRequests, signingSecret)
             return IndexWebhookRunResult(true, "200 OK", "test event", 0, 0)

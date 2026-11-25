@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.util
 
 import io.rebble.libpebblecommon.NotificationConfigFlow
 
-class PrivateLogger(private val notificationConfig: NotificationConfigFlow) {
+internal class PrivateLogger(private val notificationConfig: NotificationConfigFlow) {
     fun obfuscate(content: CharSequence?): String? {
         if (content == null) return null
         if (notificationConfig.value.obfuscateContent) {
@@ -18,4 +18,4 @@ class PrivateLogger(private val notificationConfig: NotificationConfigFlow) {
     }
 }
 
-fun CharSequence?.obfuscate(logger: PrivateLogger) = logger.obfuscate(this)
+internal fun CharSequence?.obfuscate(logger: PrivateLogger): String? = logger.obfuscate(this)

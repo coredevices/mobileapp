@@ -62,7 +62,53 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.touchlab.kermit.Logger
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.settings_index_advanced
+import coreapp.ring.generated.resources.settings_index_android_only
+import coreapp.ring.generated.resources.settings_index_auto_dismiss
+import coreapp.ring.generated.resources.settings_index_auto_dismiss_subtitle
+import coreapp.ring.generated.resources.settings_index_backup
+import coreapp.ring.generated.resources.settings_index_backup_subtitle
+import coreapp.ring.generated.resources.settings_index_debug_details
+import coreapp.ring.generated.resources.settings_index_diagnostics
+import coreapp.ring.generated.resources.settings_index_diagnostics_subtitle
+import coreapp.ring.generated.resources.settings_index_disable_bt_sync
+import coreapp.ring.generated.resources.settings_index_disable_bt_sync_subtitle
+import coreapp.ring.generated.resources.settings_index_email_me
+import coreapp.ring.generated.resources.settings_index_faq
+import coreapp.ring.generated.resources.settings_index_firmware_not_seen
+import coreapp.ring.generated.resources.settings_index_firmware_version
+import coreapp.ring.generated.resources.settings_index_force_close
+import coreapp.ring.generated.resources.settings_index_getting_started_guide
+import coreapp.ring.generated.resources.settings_index_legacy_lists
+import coreapp.ring.generated.resources.settings_index_legacy_notes
+import coreapp.ring.generated.resources.settings_index_legacy_reminders
+import coreapp.ring.generated.resources.settings_index_legacy_shortcut
+import coreapp.ring.generated.resources.settings_index_needs_relinking
+import coreapp.ring.generated.resources.settings_index_new_to_index
+import coreapp.ring.generated.resources.settings_index_new_to_index_description
+import coreapp.ring.generated.resources.settings_index_no_ring_paired
+import coreapp.ring.generated.resources.settings_index_not_paired
+import coreapp.ring.generated.resources.settings_index_notification_shortcut
+import coreapp.ring.generated.resources.settings_index_paired
+import coreapp.ring.generated.resources.settings_index_paired_to_index
+import coreapp.ring.generated.resources.settings_index_pending_intent_scan
+import coreapp.ring.generated.resources.settings_index_pending_intent_scan_subtitle
+import coreapp.ring.generated.resources.settings_index_relink_description
+import coreapp.ring.generated.resources.settings_index_ring_button
+import coreapp.ring.generated.resources.settings_index_scan_by_address
+import coreapp.ring.generated.resources.settings_index_scan_by_address_subtitle
+import coreapp.ring.generated.resources.settings_index_speech_recognition
+import coreapp.ring.generated.resources.settings_index_timers_alarms
+import coreapp.ring.generated.resources.settings_index_timers_alarms_subtitle
+import coreapp.ring.generated.resources.settings_index_validate_choices
+import coreapp.ring.generated.resources.settings_index_validate_choices_subtitle
+import coreapp.ring.generated.resources.settings_index_version
+import coreapp.ring.generated.resources.settings_index_web
+import coreapp.ring.generated.resources.settings_index_web_subtitle
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.ok
 import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
@@ -83,6 +129,8 @@ import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.produceState
@@ -115,20 +163,22 @@ private fun RelinkDestinationsCard(destinations: List<LegacyDestination>) {
                 Icon(Icons.Default.Link, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    destinations.map { it.provider.title }.distinct().joinToString() + " needs re-linking",
+                    stringResource(
+                        Res.string.settings_index_needs_relinking,
+                        destinations.map { it.provider.title }.distinct().joinToString(),
+                    ),
                     style = MaterialTheme.typography.titleMedium
                 )
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                "Built-in integrations are being replaced by plugins and will be removed in an upcoming version. " +
-                    "Relink each one as a plugin to keep sending to it.",
+                stringResource(Res.string.settings_index_relink_description),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(8.dp))
             destinations.forEach { destination ->
                 Text(
-                    "${destination.provider.title} · ${legacyDestinationLabel(destination.setting)}",
+                    "${destination.provider.title} · ${stringResource(legacyDestinationLabel(destination.setting))}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -136,10 +186,11 @@ private fun RelinkDestinationsCard(destinations: List<LegacyDestination>) {
     }
 }
 
-private fun legacyDestinationLabel(setting: LegacyDestination.Setting): String = when (setting) {
-    LegacyDestination.Setting.Notes -> "Notes"
-    LegacyDestination.Setting.Reminders -> "Reminders"
-    LegacyDestination.Setting.Shortcut -> "Notification shortcut"
+private fun legacyDestinationLabel(setting: LegacyDestination.Setting): StringResource = when (setting) {
+    LegacyDestination.Setting.Notes -> Res.string.settings_index_legacy_notes
+    LegacyDestination.Setting.Reminders -> Res.string.settings_index_legacy_reminders
+    LegacyDestination.Setting.Lists -> Res.string.settings_index_legacy_lists
+    LegacyDestination.Setting.Shortcut -> Res.string.settings_index_legacy_shortcut
 }
 
 // openUri throws if nothing can handle the link (no browser, DPC policy);
@@ -159,6 +210,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
+    val actionValidationEnabled by viewModel.actionValidationEnabled.collectAsState()
     val pendingIntentScanEnabled by viewModel.pendingIntentScanEnabled.collectAsState()
     val scanByPairedAddress by viewModel.scanByPairedAddress.collectAsState()
     val diagnosticsState by viewModel.diagnosticsState.collectAsState()
@@ -186,6 +238,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
+    val batteryLife by viewModel.batteryLife.collectAsStateWithLifecycle()
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
@@ -247,7 +300,7 @@ fun IndexSettings(coreNav: CoreNav) {
                     IconButton(onClick = coreNav::goBack) {
                         Icon(
                             Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(coreapp.util.generated.resources.Res.string.back)
+                            contentDescription = stringResource(UtilRes.string.back)
                         )
                     }
                 },
@@ -293,13 +346,13 @@ fun IndexSettings(coreNav: CoreNav) {
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "New to Index 01?",
+                                stringResource(Res.string.settings_index_new_to_index),
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "It's a new kind of gadget! A quick read goes a long way.",
+                            stringResource(Res.string.settings_index_new_to_index_description),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(Modifier.height(12.dp))
@@ -313,7 +366,7 @@ fun IndexSettings(coreNav: CoreNav) {
                                 ),
                                 modifier = Modifier.weight(1f).height(40.dp)
                             ) {
-                                Text("Getting Started Guide")
+                                Text(stringResource(Res.string.settings_index_getting_started_guide))
                                 Spacer(Modifier.width(6.dp))
                                 Icon(
                                     Icons.AutoMirrored.Filled.OpenInNew,
@@ -332,7 +385,7 @@ fun IndexSettings(coreNav: CoreNav) {
                                 ),
                                 modifier = Modifier.height(40.dp),
                             ) {
-                                Text("FAQ")
+                                Text(stringResource(Res.string.settings_index_faq))
                             }
                         }
                     }
@@ -344,17 +397,19 @@ fun IndexSettings(coreNav: CoreNav) {
                 IndexDeviceListItem(
                     headline = when {
                         ringPaired && currentRing != null -> (currentRing ?: "")
-                        ringPaired -> "Paired to Index 01"
-                        else -> "No Ring Paired"
+                        ringPaired -> stringResource(Res.string.settings_index_paired_to_index)
+                        else -> stringResource(Res.string.settings_index_no_ring_paired)
                     },
-                    supporting = if (ringPaired) "Paired" else "Not paired",
+                    supporting = stringResource(
+                        if (ringPaired) Res.string.settings_index_paired else Res.string.settings_index_not_paired
+                    ),
                 )
             }
 
             // --- Button Actions section ---
             item {
                 SectionHeader(
-                    title = "Ring Button",
+                    title = stringResource(Res.string.settings_index_ring_button),
                     modifier = Modifier.padding(top = 18.dp, bottom = 2.dp, start = 16.dp, end = 16.dp)
                 )
             }
@@ -365,7 +420,7 @@ fun IndexSettings(coreNav: CoreNav) {
             item {
                 SectionHeader(
                     modifier = Modifier.padding(top = 22.dp, bottom = 2.dp, start = 16.dp, end = 16.dp),
-                    title = "Speech Recognition",
+                    title = stringResource(Res.string.settings_index_speech_recognition),
                 )
             }
             item {
@@ -421,12 +476,15 @@ fun IndexSettings(coreNav: CoreNav) {
                     onShowModelDownload = { coreNav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) },
                 )
             }
+            if (ringPaired && coreConfig.showIndexBatteryLife) {
+                item { BatteryLifeSection(batteryLife) }
+            }
             item {
                 SectionHeader(
                     modifier = Modifier.padding(top = 22.dp, bottom = 2.dp, start = 16.dp, end = 16.dp),
                     leadingContent = {
                         Text(
-                            "Advanced",
+                            stringResource(Res.string.settings_index_advanced),
                             style = MaterialTheme.typography.titleSmall,
                             color = colors.primary
                         )
@@ -437,8 +495,8 @@ fun IndexSettings(coreNav: CoreNav) {
             if (platform.isIOS && clockUnavailableReason() == null) {
                 item {
                     SettingsRow(
-                        title = "Timers & alarms",
-                        subtitle = "View and cancel timers and alarms set by your Index",
+                        title = stringResource(Res.string.settings_index_timers_alarms),
+                        subtitle = stringResource(Res.string.settings_index_timers_alarms_subtitle),
                         onClick = { coreNav.navigateTo(RingRoutes.TimersAndAlarms) },
                     )
                 }
@@ -446,8 +504,8 @@ fun IndexSettings(coreNav: CoreNav) {
             item {
                 val uriHandler = LocalUriHandler.current
                 SettingsRow(
-                    title = "Index on the web (experimental)",
-                    subtitle = "View your Index notes and reminders in a browser at index.rePebble.com",
+                    title = stringResource(Res.string.settings_index_web),
+                    subtitle = stringResource(Res.string.settings_index_web_subtitle),
                     onClick = { uriHandler.openUrlSafely("https://index.rePebble.com") },
                 ) {
                     Icon(
@@ -460,22 +518,23 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 SettingsRow(
-                    title = "Backup",
-                    subtitle = "Sync, manage, or delete cloud backup",
+                    title = stringResource(Res.string.settings_index_backup),
+                    subtitle = stringResource(Res.string.settings_index_backup_subtitle),
                     onClick = { showBackupDialog = true },
                 )
             }
             item {
                 SettingsRow(
-                    title = "Notification Shortcut",
-                    subtitle = providers.shortcutDestinationTitle(noteShortcut) ?: "Email me",
+                    title = stringResource(Res.string.settings_index_notification_shortcut),
+                    subtitle = providers.shortcutDestinationTitle(noteShortcut)
+                        ?: stringResource(Res.string.settings_index_email_me),
                     onClick = viewModel::showNoteShortcutDialog,
                 )
             }
             item {
                 SettingsRow(
-                    title = "Auto-dismiss Notifications",
-                    subtitle = "Dismiss recording action notifications after 5 minutes",
+                    title = stringResource(Res.string.settings_index_auto_dismiss),
+                    subtitle = stringResource(Res.string.settings_index_auto_dismiss_subtitle),
                     onClick = viewModel::toggleAutoDismissActionNotifications,
                 ) {
                     Switch(
@@ -486,14 +545,26 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 SettingsRow(
-                    title = "Ring Firmware Version",
-                    subtitle = currentRingFirmware ?: "Not yet seen device",
+                    title = stringResource(Res.string.settings_index_validate_choices),
+                    subtitle = stringResource(Res.string.settings_index_validate_choices_subtitle),
+                    onClick = viewModel::toggleActionValidation,
+                ) {
+                    Switch(
+                        checked = actionValidationEnabled,
+                        onCheckedChange = { viewModel.toggleActionValidation() }
+                    )
+                }
+            }
+            item {
+                SettingsRow(
+                    title = stringResource(Res.string.settings_index_firmware_version),
+                    subtitle = currentRingFirmware ?: stringResource(Res.string.settings_index_firmware_not_seen),
                 )
             }
             item {
                 SettingsRow(
-                    title = "Diagnostics",
-                    subtitle = "Record diagnostic information from your Index 01, only needed if support asks.",
+                    title = stringResource(Res.string.settings_index_diagnostics),
+                    subtitle = stringResource(Res.string.settings_index_diagnostics_subtitle),
                     enabled = ringPaired && diagnosticsState != DiagnosticsState.Running,
                     onClick = {
                         if (diagnosticsState != DiagnosticsState.Idle) viewModel.resetDiagnostics()
@@ -505,8 +576,8 @@ fun IndexSettings(coreNav: CoreNav) {
             if (debugDetailsEnabled || platform.isSecondaryProfile || coreConfig.disableRingBluetoothSync) {
                 item {
                     SettingsRow(
-                        title = "Disable Bluetooth Sync",
-                        subtitle = "Turn on if Pebble is also installed on another profile of this phone. Index can't sync when two profiles connect to the ring at once.",
+                        title = stringResource(Res.string.settings_index_disable_bt_sync),
+                        subtitle = stringResource(Res.string.settings_index_disable_bt_sync_subtitle),
                         onClick = {
                             coreConfigHolder.update(coreConfig.copy(disableRingBluetoothSync = !coreConfig.disableRingBluetoothSync))
                         },
@@ -528,21 +599,22 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             fun togglePendingIntentScanEnabled() {
                 viewModel.togglePendingIntentScanEnabled()
-                scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
+                scope.launch { snackbarHostState.showSnackbar(getString(Res.string.settings_index_force_close)) }
             }
             item {
                 SettingsRow(
-                    title = "Use PendingIntent scan",
+                    title = stringResource(Res.string.settings_index_pending_intent_scan),
                     subtitle = if (platform.isAndroid) {
-                        "Improves background reliability and battery consumption"
+                        stringResource(Res.string.settings_index_pending_intent_scan_subtitle)
                     } else {
-                        "Available on Android only"
+                        stringResource(Res.string.settings_index_android_only)
                     },
                     enabled = platform.isAndroid,
                     onClick = ::togglePendingIntentScanEnabled,
                     trailing = {
                         Switch(
                             checked = pendingIntentScanEnabled,
+                            enabled = platform.isAndroid,
                             onCheckedChange = { togglePendingIntentScanEnabled() }
                         )
                     }
@@ -550,21 +622,22 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             fun toggleScanByPairedAddress() {
                 viewModel.toggleScanByPairedAddress()
-                scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
+                scope.launch { snackbarHostState.showSnackbar(getString(Res.string.settings_index_force_close)) }
             }
             item {
                 SettingsRow(
-                    title = "Scan by paired address",
+                    title = stringResource(Res.string.settings_index_scan_by_address),
                     subtitle = if (platform.isAndroid) {
-                        "Improves latency and battery"
+                        stringResource(Res.string.settings_index_scan_by_address_subtitle)
                     } else {
-                        "Available on Android only"
+                        stringResource(Res.string.settings_index_android_only)
                     },
                     enabled = platform.isAndroid,
                     onClick = ::toggleScanByPairedAddress,
                     trailing = {
                         Switch(
                             checked = scanByPairedAddress,
+                            enabled = platform.isAndroid,
                             onCheckedChange = { toggleScanByPairedAddress() }
                         )
                     }
@@ -572,8 +645,8 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 SettingsRow(
-                    title = "Enable Debug Details",
-                    subtitle = "Version: ${viewModel.version}",
+                    title = stringResource(Res.string.settings_index_debug_details),
+                    subtitle = stringResource(Res.string.settings_index_version, viewModel.version),
                     onClick = viewModel::toggleDebugDetailsEnabled,
                 ) {
                     Switch(
@@ -647,9 +720,10 @@ fun NoteShortcutDialog(
     onDismissRequest: () -> Unit
 ) {
     var targetShortcut by remember { mutableStateOf(currentShortcut) }
+    val emailMe = stringResource(Res.string.settings_index_email_me)
     val options = remember {
         buildList {
-            add(NoteShortcutType.SendToMe to "Email me")
+            add(NoteShortcutType.SendToMe to emailMe)
             availableNoteProviders.forEach {
                 add(NoteShortcutType.SendToNoteProvider(it.id) to it.notesTitle)
             }
@@ -660,13 +734,13 @@ fun NoteShortcutDialog(
     }
     M3Dialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("Notification Shortcut") },
+        title = { Text(stringResource(Res.string.settings_index_notification_shortcut)) },
         buttons = {
             TextButton(onClick = onDismissRequest) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
             TextButton(onClick = { onShortcutSelected(targetShortcut) }) {
-                Text("OK")
+                Text(stringResource(UtilRes.string.ok))
             }
         }
     ) {

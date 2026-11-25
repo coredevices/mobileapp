@@ -12,6 +12,9 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.firmware_check_failed
+import org.jetbrains.compose.resources.getString
 
 class Cohorts(
     private val httpClient: PebbleHttpClient,
@@ -38,12 +41,12 @@ class Cohorts(
         )
         if (response == null) {
             logger.i { "No response from cohorts" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_failed))
         }
         val normalFw = response.fw?.normal
         if (normalFw == null) {
             logger.i { "No firmware found for $hardware" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_failed))
         }
         val latestFwVersion = FirmwareVersion.from(
             tag = normalFw.friendlyVersion,
@@ -55,7 +58,7 @@ class Cohorts(
         )
         if (latestFwVersion == null) {
             logger.e { "Couldn't parse firmware version from response" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(getString(Res.string.firmware_check_failed))
         }
         if (watch.runningFwVersion.isRecovery || latestFwVersion > watch.runningFwVersion) {
             return FirmwareUpdateCheckResult.FoundUpdate(

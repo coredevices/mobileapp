@@ -31,6 +31,13 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.getString
+import coreapp.ring.generated.resources.feed_action_added_to_calendar
+import coreapp.ring.generated.resources.feed_action_completed
+import coreapp.ring.generated.resources.feed_action_denied
+import coreapp.ring.generated.resources.feed_action_failed
+import coreapp.ring.generated.resources.feed_action_gathered_info
+import coreapp.ring.generated.resources.feed_action_messaged
+import coreapp.ring.generated.resources.feed_action_needs_confirmation
 
 @Composable
 fun SemanticResultIcon(
@@ -48,7 +55,7 @@ fun SemanticResultIcon(
         is SemanticResult.SupportingData -> Icons.Outlined.IntegrationInstructions
         is SemanticResult.ActionLogged -> Icons.Default.Code
         is SemanticResult.CalendarEventCreation -> Icons.Default.DateRange
-        is SemanticResult.RequiresConfirmation -> Icons.Outlined.Lock
+        is SemanticResult.RequiresConfirmation, is SemanticResult.ValidationFailure -> Icons.Outlined.Lock
         is SemanticResult.UserDenied -> Icons.Outlined.Block
     }
     Icon(
@@ -73,9 +80,9 @@ fun SemanticResultActionTaken(
 
 suspend fun SemanticResult.actionText(): String {
     return when (this) {
-        is SemanticResult.MessageSent -> "Messaged ${this.recipientName}"
-        is SemanticResult.GenericSuccess -> "Action completed"
-        is SemanticResult.GenericFailure -> "Action failed"
+        is SemanticResult.MessageSent -> getString(Res.string.feed_action_messaged, this.recipientName)
+        is SemanticResult.GenericSuccess -> getString(Res.string.feed_action_completed)
+        is SemanticResult.GenericFailure -> getString(Res.string.feed_action_failed)
         is SemanticResult.AlarmCreation -> getString(Res.string.alarm_set)
         is SemanticResult.TimerCreation -> getString(Res.string.timer_started)
         is SemanticResult.TaskCreation -> getString(Res.string.reminder_added)
@@ -84,15 +91,15 @@ suspend fun SemanticResult.actionText(): String {
         } else {
             getString(Res.string.noted)
         }
-        is SemanticResult.SupportingData -> "Gathered info"
+        is SemanticResult.SupportingData -> getString(Res.string.feed_action_gathered_info)
         is SemanticResult.ActionLogged -> this.title
         is SemanticResult.CalendarEventCreation -> {
             val dateTime = startTime.toLocalDateTime(TimeZone.currentSystemDefault())
             val humanDate = UITimeUtil.humanDate(dateTime.date)
             val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
-            "Added $title at $humanDate, $humanTime to calendar"
+            getString(Res.string.feed_action_added_to_calendar, title, humanDate, humanTime)
         }
-        is SemanticResult.RequiresConfirmation -> "Needs confirmation"
-        is SemanticResult.UserDenied -> "Action denied"
+        is SemanticResult.RequiresConfirmation, is SemanticResult.ValidationFailure -> getString(Res.string.feed_action_needs_confirmation)
+        is SemanticResult.UserDenied -> getString(Res.string.feed_action_denied)
     }
 }

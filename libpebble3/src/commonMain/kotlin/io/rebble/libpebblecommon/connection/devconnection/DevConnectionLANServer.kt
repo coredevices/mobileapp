@@ -49,12 +49,12 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
-class DevConnectionServer(
+public class DevConnectionServer internal constructor(
     libPebble: LibPebble,
     lastStates: LastFirmwareUpdateStates,
 ): DevConnectionTransport(libPebble, lastStates) {
-    companion object {
-        const val PORT = 9000
+    public companion object {
+        public const val PORT: Int = 9000
         private val logger = Logger.withTag("DevConnectionServer")
     }
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -176,5 +176,5 @@ class DevConnectionServer(
     }
 }
 
-suspend fun WebSocketSession.send(message: StructMappable) =
+internal suspend fun WebSocketSession.send(message: StructMappable): Unit =
     send(message.toBytes().asByteArray())

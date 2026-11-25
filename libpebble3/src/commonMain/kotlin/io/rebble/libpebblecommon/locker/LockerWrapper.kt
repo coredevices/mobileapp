@@ -7,19 +7,19 @@ import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 @Serializable
-enum class AppType(val code: String) {
+public enum class AppType(public val code: String) {
     Watchface("watchface"),
     Watchapp("watchapp"),
     /** A pbw that carries only a plugin (no watchapp binary): registered, never synced to a watch. */
     Plugin("plugin"),
     ;
 
-    companion object {
-        fun fromString(value: String): AppType? = entries.firstOrNull { it.code == value }
+    public companion object {
+        public fun fromString(value: String): AppType? = entries.firstOrNull { it.code == value }
     }
 }
 
-enum class AppCapability(val code: String) {
+public enum class AppCapability(public val code: String) {
     Health("health"),
     Location("location"),
     Timeline("timeline"),
@@ -28,15 +28,15 @@ enum class AppCapability(val code: String) {
     // Not included: "configurable" (separate field in database, doesn't require permission grant)
     ;
 
-    companion object {
-        fun fromString(values: List<String>?): List<AppCapability> = values?.mapNotNull { value ->
+    public companion object {
+        public fun fromString(values: List<String>?): List<AppCapability> = values?.mapNotNull { value ->
             entries.firstOrNull { it.code == value }
         } ?: emptyList()
     }
 }
 
 @Immutable
-data class AppPlatform(
+public data class AppPlatform internal constructor(
     val watchType: WatchType,
     val screenshotImageUrl: String? = null,
     val listImageUrl: String? = null,
@@ -45,7 +45,7 @@ data class AppPlatform(
     val listImageTintable: Boolean = false,
 )
 
-data class AppProperties(
+public data class AppProperties(
     val id: Uuid,
     val type: AppType,
     val title: String,
@@ -67,7 +67,7 @@ data class AppProperties(
     val legacy: Boolean = false,
 )
 
-data class AppBasicProperties(
+public data class AppBasicProperties internal constructor(
     val id: Uuid,
     val type: AppType,
     val title: String,
@@ -75,23 +75,24 @@ data class AppBasicProperties(
 )
 
 @Immutable
-sealed class LockerWrapper {
-    abstract val properties: AppProperties
+public sealed class LockerWrapper {
+    public abstract val properties: AppProperties
 
-    data class NormalApp(
+    public data class NormalApp(
         override val properties: AppProperties,
         val sideloaded: Boolean,
         val configurable: Boolean,
         val sync: Boolean,
+        val hasPlugin: Boolean,
     ) : LockerWrapper()
 
-    data class SystemApp(
+    public data class SystemApp internal constructor(
         override val properties: AppProperties,
         val systemApp: SystemApps,
     ) : LockerWrapper()
 }
 
-fun LockerWrapper.findCompatiblePlatform(watchType: WatchType?): AppPlatform? {
+public fun LockerWrapper.findCompatiblePlatform(watchType: WatchType?): AppPlatform? {
     val useWatchType = watchType?.getBestVariant(properties.platforms.map { it.watchType.codename })
     return properties.platforms.firstOrNull { it.watchType == useWatchType }
 }

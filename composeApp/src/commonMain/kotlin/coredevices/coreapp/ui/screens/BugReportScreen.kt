@@ -67,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -81,9 +82,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
-import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
-import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.pebble.ui.toPngBytes
 import io.rebble.libpebblecommon.connection.ConnectedPebble
@@ -97,6 +97,8 @@ import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -108,6 +110,44 @@ import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
 import size
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.bug_report_add_image
+import coreapp.composeapp.generated.resources.bug_report_add_images
+import coreapp.composeapp.generated.resources.bug_report_attach_files
+import coreapp.composeapp.generated.resources.bug_report_attach_image
+import coreapp.composeapp.generated.resources.bug_report_capturing_screenshot
+import coreapp.composeapp.generated.resources.bug_report_changelog_hint
+import coreapp.composeapp.generated.resources.bug_report_clear_attachments
+import coreapp.composeapp.generated.resources.bug_report_creating
+import coreapp.composeapp.generated.resources.bug_report_describe
+import coreapp.composeapp.generated.resources.bug_report_follow_up_hint
+import coreapp.composeapp.generated.resources.bug_report_gathering_watch_logs
+import coreapp.composeapp.generated.resources.bug_report_how_to
+import coreapp.composeapp.generated.resources.bug_report_include_recent_recordings
+import coreapp.composeapp.generated.resources.bug_report_include_recording
+import coreapp.composeapp.generated.resources.bug_report_logs_note
+import coreapp.composeapp.generated.resources.bug_report_must_sign_in
+import coreapp.composeapp.generated.resources.bug_report_my_reports
+import coreapp.composeapp.generated.resources.bug_report_remove_attachments
+import coreapp.composeapp.generated.resources.bug_report_remove_files
+import coreapp.composeapp.generated.resources.bug_report_remove_images
+import coreapp.composeapp.generated.resources.bug_report_retake
+import coreapp.composeapp.generated.resources.bug_report_send
+import coreapp.composeapp.generated.resources.bug_report_send_icon
+import coreapp.composeapp.generated.resources.bug_report_sent
+import coreapp.composeapp.generated.resources.bug_report_share
+import coreapp.composeapp.generated.resources.bug_report_sign_in_required
+import coreapp.composeapp.generated.resources.bug_report_success
+import coreapp.composeapp.generated.resources.bug_report_take_screenshot
+import coreapp.composeapp.generated.resources.bug_report_title
+import coreapp.composeapp.generated.resources.bug_report_type_index
+import coreapp.composeapp.generated.resources.bug_report_type_label
+import coreapp.composeapp.generated.resources.bug_report_type_watch
+import coreapp.composeapp.generated.resources.bug_report_watch_screenshot
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.remove
+import coreapp.util.generated.resources.sign_in
+import org.jetbrains.compose.resources.pluralStringResource
 
 expect fun isThirdPartyTest(): Boolean
 expect fun getExperimentalDebugInfoDirectory(): String
@@ -137,8 +177,12 @@ fun BugReportScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
         // Watch screenshot capture / stored-watch detection
-        val libPebble = rememberLibPebble()
-        val watches by libPebble.watches.collectAsState()
+        val loadedWatches = rememberWatches()
+        val watchesTimedOut by produceState(false) {
+            delay(2.seconds)
+            value = true
+        }
+        val watches = loadedWatches ?: if (watchesTimedOut) emptyList() else return@Box
         // Default to an Index bug report when there are no watches stored in libpebble.
         var isWatch by remember { mutableStateOf(pebble && watches.isNotEmpty()) }
         val coreConfigFlow: CoreConfigFlow = koinInject()
@@ -191,12 +235,16 @@ fun BugReportScreen(
         var watchScreenshot by remember { mutableStateOf<ImageBitmap?>(null) }
         var screenshotLoading by remember { mutableStateOf(false) }
 
+        val signInRequiredText = stringResource(Res.string.bug_report_sign_in_required)
+        val creatingText = stringResource(Res.string.bug_report_creating)
+        val gatheringWatchLogsText = stringResource(Res.string.bug_report_gathering_watch_logs)
+
         fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
 
             // Check if user is signed in before proceeding
             if (user == null && !shareLocally) {
-                setStatus("Please sign in before submitting a bug report")
+                setStatus(signInRequiredText)
                 return
             }
 
@@ -207,7 +255,7 @@ fun BugReportScreen(
                 // Extract Google ID token from current user
                 val currentUser = user
                 if (currentUser == null && !shareLocally) {
-                    setStatus("Please sign in before submitting a bug report")
+                    setStatus(signInRequiredText)
                     setSending(false)
                     return@launch
                 }
@@ -269,14 +317,14 @@ fun BugReportScreen(
                         }
 
                         BugReportState.Creating -> {
-                            setStatus("Creating bug report...")
+                            setStatus(creatingText)
                         }
 
                         BugReportState.GatheringWatchLogs -> {
                             if (!shareLocally) {
                                 coreNav.goBack()
                             } else {
-                                setStatus("Gathering Watch Logs")
+                                setStatus(gatheringWatchLogsText)
                             }
                         }
 
@@ -310,13 +358,13 @@ fun BugReportScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
-                    title = { Text("Bug Report") },
+                    title = { Text(stringResource(Res.string.bug_report_title)) },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
                                 Icons.AutoMirrored.Default.ArrowBack,
                                 contentDescription = stringResource(
-                                    Res.string.back
+                                    UtilRes.string.back
                                 )
                             )
                         }
@@ -327,7 +375,7 @@ fun BugReportScreen(
                                 sendLogs(shareLocally = true)
                             },
                             icon = Icons.Filled.Share,
-                            description = "Share",
+                            description = stringResource(Res.string.bug_report_share),
                         )
                     },
                 )
@@ -371,20 +419,20 @@ fun BugReportScreen(
                                 showSuccess -> {
                                     Icon(
                                         Icons.Default.Check,
-                                        "Success",
+                                        stringResource(Res.string.bug_report_success),
                                         modifier = Modifier.size(ButtonDefaults.IconSize),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                    Text("Report Sent!")
+                                    Text(stringResource(Res.string.bug_report_sent))
                                 }
 
                                 else -> {
-                                    Text("Send Report")
+                                    Text(stringResource(Res.string.bug_report_send))
                                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                     Icon(
                                         Icons.Default.ChevronRight,
-                                        "Send",
+                                        stringResource(Res.string.bug_report_send_icon),
                                         modifier = Modifier.size(ButtonDefaults.IconSize)
                                     )
                                 }
@@ -405,13 +453,13 @@ fun BugReportScreen(
                     modifier = Modifier.height(200.dp).fillMaxWidth().padding(16.dp),
                     value = userMessage,
                     onValueChange = setUserMessage,
-                    label = { Text("Please describe the bug") },
+                    label = { Text(stringResource(Res.string.bug_report_describe)) },
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences
                     )
                 )
                 if (coreConfig.enableIndex) {
-                    Text("This is a:", modifier = Modifier.padding(top = 8.dp))
+                    Text(stringResource(Res.string.bug_report_type_label), modifier = Modifier.padding(top = 8.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -422,18 +470,18 @@ fun BugReportScreen(
                                 isWatch = false
                                 watchScreenshot = null
                             },
-                            label = { Text("Index bug") }
+                            label = { Text(stringResource(Res.string.bug_report_type_index)) }
                         )
                         FilterChip(
                             selected = isWatch,
                             onClick = { isWatch = true },
-                            label = { Text("Watch bug") }
+                            label = { Text(stringResource(Res.string.bug_report_type_watch)) }
                         )
                     }
                 }
                 if (user == null) {
                     Text(
-                        "You must sign in to submit a bug report",
+                        stringResource(Res.string.bug_report_must_sign_in),
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(4.dp),
@@ -442,7 +490,7 @@ fun BugReportScreen(
                     Button(
                         onClick = { showSignInDialog = true },
                     ) {
-                        Text("Sign In")
+                        Text(stringResource(UtilRes.string.sign_in))
                     }
                     Spacer(Modifier.height(8.dp))
                 }
@@ -454,7 +502,7 @@ fun BugReportScreen(
                         ) { setSendRecording(!sendRecording) }) {
                         Checkbox(sendRecording, { setSendRecording(it) }, enabled = !sending)
                         Text(
-                            "Include recording",
+                            stringResource(Res.string.bug_report_include_recording),
                             modifier = Modifier.align(Alignment.CenterVertically)
                         )
                     }
@@ -467,7 +515,7 @@ fun BugReportScreen(
                         ) { setSendRecentRecordings(!sendRecentRecordings) }) {
                         Checkbox(sendRecentRecordings, { setSendRecentRecordings(it) }, enabled = !sending)
                         Text(
-                            "Include recent recordings",
+                            stringResource(Res.string.bug_report_include_recent_recordings),
                             modifier = Modifier.align(Alignment.CenterVertically)
                         )
                     }
@@ -499,7 +547,7 @@ fun BugReportScreen(
                                 modifier = Modifier.size(ButtonDefaults.IconSize)
                             )
                             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                            Text("Take Watch Screenshot")
+                            Text(stringResource(Res.string.bug_report_take_screenshot))
                         }
                     } else if (screenshotLoading) {
                         Row(
@@ -507,7 +555,7 @@ fun BugReportScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                            Text("Capturing screenshot...", fontSize = 14.sp)
+                            Text(stringResource(Res.string.bug_report_capturing_screenshot), fontSize = 14.sp)
                         }
                     } else {
                         watchScreenshot?.let { screenshot ->
@@ -524,7 +572,7 @@ fun BugReportScreen(
                                     val width = height / screenshot.height * screenshot.width
                                     Image(
                                         bitmap = screenshot,
-                                        contentDescription = "Watch screenshot",
+                                        contentDescription = stringResource(Res.string.bug_report_watch_screenshot),
                                         modifier = Modifier.height(height).width(width),
                                     )
                                     Row(
@@ -535,13 +583,13 @@ fun BugReportScreen(
                                             onClick = { captureScreenshot() },
                                             modifier = Modifier.size(32.dp),
                                         ) {
-                                            Icon(Icons.Default.Refresh, "Retake", modifier = Modifier.size(18.dp))
+                                            Icon(Icons.Default.Refresh, stringResource(Res.string.bug_report_retake), modifier = Modifier.size(18.dp))
                                         }
                                         IconButton(
                                             onClick = { watchScreenshot = null },
                                             modifier = Modifier.size(32.dp),
                                         ) {
-                                            Icon(Icons.Default.Close, "Remove", modifier = Modifier.size(18.dp))
+                                            Icon(Icons.Default.Close, stringResource(UtilRes.string.remove), modifier = Modifier.size(18.dp))
                                         }
                                     }
                                 }
@@ -558,11 +606,11 @@ fun BugReportScreen(
                         }
                     },
                     modifier = Modifier.padding(8.dp),
-                    text = "How to submit a great bug report",
+                    text = stringResource(Res.string.bug_report_how_to),
                     primaryColor = false,
                 )
                 Text(
-                    "Tap to see what's working and what's still in development",
+                    stringResource(Res.string.bug_report_changelog_hint),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(8.dp).clickable {
                         scope.launch {
@@ -574,7 +622,7 @@ fun BugReportScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Please note that logs + device info will be sent with this report",
+                    stringResource(Res.string.bug_report_logs_note),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(8.dp),
                     fontSize = 12.sp
@@ -591,7 +639,7 @@ fun BugReportScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text = "You can follow up on an existing bug report by adding more logs or information:",
+                            text = stringResource(Res.string.bug_report_follow_up_hint),
                             textAlign = TextAlign.Center,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(6.dp),
@@ -603,7 +651,7 @@ fun BugReportScreen(
                             modifier = Modifier.padding(8.dp),
                         ) {
                             Text(
-                                text = "My Bug Reports",
+                                text = stringResource(Res.string.bug_report_my_reports),
                                 fontSize = 14.sp,
                             )
                         }
@@ -661,7 +709,7 @@ private fun AttachmentButtons(
                     },
                     modifier = Modifier.animateContentSize()
                 ) {
-                    Icon(Icons.Default.AttachFile, "Attach Files")
+                    Icon(Icons.Default.AttachFile, stringResource(Res.string.bug_report_attach_files))
                 }
             } else {
                 IconButton(
@@ -670,7 +718,7 @@ private fun AttachmentButtons(
                     }
                 ) {
                     Row(horizontalArrangement = Arrangement.Center) {
-                        Icon(Icons.Default.Delete, "Remove Attachments")
+                        Icon(Icons.Default.Delete, stringResource(Res.string.bug_report_remove_attachments))
                         Text(
                             attachments.size.toString(),
                             style = MaterialTheme.typography.labelSmall,
@@ -685,7 +733,7 @@ private fun AttachmentButtons(
                         openImageAttachmentScreen()
                     },
                 ) {
-                    Icon(Icons.Default.InsertPhoto, "Add Image")
+                    Icon(Icons.Default.InsertPhoto, stringResource(Res.string.bug_report_add_image))
                 }
             } else {
                 IconButton(
@@ -696,7 +744,7 @@ private fun AttachmentButtons(
                     Row(horizontalArrangement = Arrangement.Center) {
                         Icon(
                             Icons.Default.HideImage,
-                            "Remove Images",
+                            stringResource(Res.string.bug_report_remove_images),
                             tint = IconButtonDefaults.iconButtonColors().contentColor
                         )
                         Text(
@@ -723,19 +771,19 @@ private fun AttachmentButtons(
             if (!attachments.isNullOrEmpty()) {
                 Icon(
                     Icons.Outlined.Delete,
-                    contentDescription = "Clear attachments",
+                    contentDescription = stringResource(Res.string.bug_report_clear_attachments),
                     modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Remove ${attachments.size} file(s)")
+                Text(pluralStringResource(Res.plurals.bug_report_remove_files, attachments.size, attachments.size))
             } else {
                 Icon(
                     Icons.Default.AttachFile,
-                    contentDescription = "Attach an image",
+                    contentDescription = stringResource(Res.string.bug_report_attach_image),
                     modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Add Images")
+                Text(stringResource(Res.string.bug_report_add_images))
             }
         }
     }

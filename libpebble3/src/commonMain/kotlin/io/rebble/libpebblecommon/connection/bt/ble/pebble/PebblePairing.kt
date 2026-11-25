@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 
-class PebblePairing(
+internal class PebblePairing(
     private val context: AppContext,
     private val config: BleConfigFlow,
     private val blePlatformConfig: BlePlatformConfig,
@@ -168,7 +168,7 @@ class PebblePairing(
     }
 }
 
-fun WatchType.needsPairingTrigger(): Boolean = when (this) {
+internal fun WatchType.needsPairingTrigger(): Boolean = when (this) {
     WatchType.APLITE -> true // ????
     WatchType.BASALT -> false
     WatchType.CHALK -> false

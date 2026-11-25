@@ -2,6 +2,10 @@ package coredevices.ring.external.indexwebhook
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.webhook_vm_remove_failed
+import coreapp.ring.generated.resources.webhook_vm_save_failed
+import org.jetbrains.compose.resources.getString
 import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +65,9 @@ class IndexWebhookSettingsViewModel(
     private val _clickPayloadInput = MutableStateFlow("")
     val clickPayloadInput = _clickPayloadInput.asStateFlow()
 
+    private val _sendJsonInput = MutableStateFlow(false)
+    val sendJsonInput = _sendJsonInput.asStateFlow()
+
     private val _signRequestsInput = MutableStateFlow(false)
     val signRequestsInput = _signRequestsInput.asStateFlow()
 
@@ -118,7 +125,7 @@ class IndexWebhookSettingsViewModel(
                 webhookPreferences.clear(gesture)
                 if (_gesture.value == gesture) closeDialog()
             } catch (_: Exception) {
-                _testState.value = WebhookTestState.Done(false, "Could not remove webhook")
+                _testState.value = WebhookTestState.Done(false, getString(Res.string.webhook_vm_remove_failed))
             }
         }
     }
@@ -151,6 +158,10 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateSendJson(sendJson: Boolean) {
+        _sendJsonInput.value = sendJson
+    }
+
     fun updateClickPayload(payload: String) {
         _clickPayloadInput.value = payload
     }
@@ -173,7 +184,7 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null } ?: return
         if (_signingSecretLoading.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value.takeIf { signRequests }
+        val signingSecret = _signingSecretInput.value.trim().takeIf { signRequests }
         if (signRequests && signingSecret.isNullOrBlank()) return
         _testState.value = WebhookTestState.Sending
         viewModelScope.launch {
@@ -184,6 +195,7 @@ class IndexWebhookSettingsViewModel(
                 signRequests = signRequests,
                 signingSecret = signingSecret,
                 clickPayload = _clickPayloadInput.value,
+                sendJson = _sendJsonInput.value,
             )
             _testState.value = WebhookTestState.Done(
                 ok = result.ok,
@@ -206,10 +218,11 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null }
         if (_signingSecretLoading.value || _saving.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value
+        val signingSecret = _signingSecretInput.value.trim()
         if (signRequests && signingSecret.isBlank()) return
         val payloadMode = _payloadModeInput.value
         val clickPayload = _clickPayloadInput.value.trim()
+        val sendJson = _sendJsonInput.value
         val headers = draftHeaders()
         _saving.value = true
         viewModelScope.launch {
@@ -232,12 +245,13 @@ class IndexWebhookSettingsViewModel(
                             signRequests = signRequests,
                             saved = true,
                             clickPayload = clickPayload,
+                            sendJson = sendJson,
                         ),
                     )
                 }
                 if (_gesture.value == gesture) closeDialog()
             } catch (_: Exception) {
-                _testState.value = WebhookTestState.Done(false, "Could not save webhook")
+                _testState.value = WebhookTestState.Done(false, getString(Res.string.webhook_vm_save_failed))
             } finally {
                 _saving.value = false
             }
@@ -251,6 +265,7 @@ class IndexWebhookSettingsViewModel(
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = config.payloadMode
         _clickPayloadInput.value = config.clickPayload
+        _sendJsonInput.value = config.sendJson
         _signRequestsInput.value = config.signRequests
         _signingSecretInput.value = ""
         val loadId = ++secretLoadId

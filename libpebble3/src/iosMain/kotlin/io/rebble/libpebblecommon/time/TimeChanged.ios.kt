@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.time
 import io.rebble.libpebblecommon.connection.AppContext
 import platform.Foundation.NSNotificationCenter
 
-class IosTimeChangedReceiver() : TimeChanged {
+internal class IosTimeChangedReceiver() : TimeChanged {
     override fun registerForTimeChanges(onChanged: () -> Unit) {
         NSNotificationCenter.defaultCenter()
             .addObserverForName(
@@ -24,4 +24,4 @@ class IosTimeChangedReceiver() : TimeChanged {
     }
 }
 
-actual fun createTimeChanged(appContext: AppContext): TimeChanged = IosTimeChangedReceiver()
+internal actual fun createTimeChanged(appContext: AppContext): TimeChanged = IosTimeChangedReceiver()

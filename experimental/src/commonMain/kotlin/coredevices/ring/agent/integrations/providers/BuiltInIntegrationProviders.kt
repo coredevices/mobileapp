@@ -28,7 +28,8 @@ object BuiltInIntegrationProviders {
         override val title = "Built-in"
         override val notesTitle = "Index Notes"
         override val remindersTitle = "Index Reminders"
-        override val supports = setOf(Note, Reminder)
+        override val listsTitle = "Index Lists"
+        override val supports = setOf(Note, Reminder, IntegrationSupport.List)
         override val storesItemsLocally = true
         override suspend fun isAuthorized() = true
         override fun notes(): NoteIntegration = get<LocalNoteClient>()
@@ -52,14 +53,14 @@ object BuiltInIntegrationProviders {
     object GoogleTasks : IntegrationProvider, KoinComponent {
         override val id = "google_tasks"
         override val title = "Google Tasks"
-        override val supports = setOf(Reminder)
+        override val supports = setOf(Reminder, IntegrationSupport.List)
         override fun reminders(): ReminderIntegration = get<GTasksIntegration>()
     }
 
     object IosReminders : IntegrationProvider {
         override val id = "ios_reminders"
         override val title = "iPhone Reminders"
-        override val supports = setOf(Reminder)
+        override val supports = setOf(Reminder, IntegrationSupport.List)
         override val platforms = setOf(SupportedPlatform.Ios)
         override val isHiddenByPlugins = false
         override suspend fun isAuthorized() = true
@@ -69,7 +70,7 @@ object BuiltInIntegrationProviders {
     object Tasker : IntegrationProvider {
         override val id = "tasker"
         override val title = "Tasker"
-        override val supports = setOf(Note, Reminder)
+        override val supports = setOf(Note, Reminder, IntegrationSupport.List)
         override val platforms = setOf(SupportedPlatform.Android)
         override fun notes(): NoteIntegration = createTaskerNoteClient()
         override fun reminders(): ReminderIntegration = createTaskerReminderIntegration()

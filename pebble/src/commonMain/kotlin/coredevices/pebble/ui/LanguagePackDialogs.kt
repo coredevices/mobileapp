@@ -28,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -59,6 +58,49 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
 import kotlin.coroutines.cancellation.CancellationException
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.langpack_error_read_installed
+import coreapp.pebble.generated.resources.langpack_error_refresh_suffix
+import coreapp.pebble.generated.resources.langpack_error_change_language
+import coreapp.pebble.generated.resources.langpack_watch_language
+import coreapp.pebble.generated.resources.langpack_english
+import coreapp.pebble.generated.resources.langpack_built_in
+import coreapp.pebble.generated.resources.langpack_status_installing
+import coreapp.pebble.generated.resources.langpack_status_changing
+import coreapp.pebble.generated.resources.langpack_status_loading
+import coreapp.pebble.generated.resources.langpack_status_count
+import coreapp.pebble.generated.resources.langpack_add_language_pack
+import coreapp.pebble.generated.resources.langpack_remove_to_add
+import coreapp.pebble.generated.resources.langpack_remove_title
+import coreapp.pebble.generated.resources.langpack_remove_active_message
+import coreapp.pebble.generated.resources.langpack_remove_message
+import coreapp.pebble.generated.resources.langpack_error_remove
+import coreapp.pebble.generated.resources.langpack_removing
+import coreapp.pebble.generated.resources.langpack_unknown
+import coreapp.pebble.generated.resources.langpack_unreadable
+import coreapp.pebble.generated.resources.langpack_translation_and_fonts
+import coreapp.pebble.generated.resources.langpack_adds_characters
+import coreapp.pebble.generated.resources.langpack_remove_to_free_slot
+import coreapp.pebble.generated.resources.langpack_remove_content_description
+import coreapp.pebble.generated.resources.langpack_add_title
+import coreapp.pebble.generated.resources.langpack_title
+import coreapp.pebble.generated.resources.langpack_error_load
+import coreapp.pebble.generated.resources.langpack_loading
+import coreapp.pebble.generated.resources.langpack_use_as_watch_language
+import coreapp.pebble.generated.resources.langpack_help_translate
+import coreapp.pebble.generated.resources.langpack_error_timeout
+import coreapp.pebble.generated.resources.langpack_error_download
+import coreapp.pebble.generated.resources.langpack_downloading
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.add
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.done
+import coreapp.util.generated.resources.install
+import coreapp.util.generated.resources.refresh
+import coreapp.util.generated.resources.remove
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 private val logger = Logger.withTag("LanguagePackDialogs")
 
@@ -99,7 +141,7 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
         } catch (e: Exception) {
             if (e is CancellationException && e !is TimeoutCancellationException) throw e
             installedPacks = null
-            error = "Could not read installed packs."
+            error = getString(Res.string.langpack_error_read_installed)
         } finally {
             loading = false
         }
@@ -108,58 +150,60 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
     val busy = talkingToWatch || installingName != null
     val enabled = !busy && !loading && installedPacks != null
 
-    fun runOp(setInProgress: (Boolean) -> Unit, failureMessage: String, op: suspend (ConnectedPebbleDevice) -> Boolean) {
+    fun runOp(setInProgress: (Boolean) -> Unit, failureMessage: StringResource, op: suspend (ConnectedPebbleDevice) -> Boolean) {
         setInProgress(true)
         error = null
         scope.launch {
             try {
                 val succeeded = op(currentWatch)
                 installedPacks = currentWatch.listLanguagePacks()
-                if (!succeeded) error = failureMessage
+                if (!succeeded) error = getString(failureMessage)
             } catch (e: Exception) {
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 installedPacks = null
-                error = "$failureMessage Refresh before trying again."
+                error = getString(Res.string.langpack_error_refresh_suffix, getString(failureMessage))
             } finally {
                 setInProgress(false)
             }
         }
     }
 
-    fun select(pack: WatchLanguagePack?) = runOp({ selecting = it }, "Could not change the watch language.") {
+    fun select(pack: WatchLanguagePack?) = runOp({ selecting = it }, Res.string.langpack_error_change_language) {
         it.setActiveLanguage(pack)
     }
 
     val packs = installedPacks.orEmpty()
     AlertDialog(
         onDismissRequest = { if (!talkingToWatch) onDismissRequest() },
-        title = { Text("Watch Language") },
+        title = { Text(stringResource(Res.string.langpack_watch_language)) },
         text = {
             LazyColumn {
-                item {
-                    LanguageOption(
-                        title = "English",
-                        subtitle = "Built-in",
-                        selected = installedPacks != null && packs.none { it.isActive },
-                        enabled = enabled,
-                        onSelect = { select(null) },
-                    )
-                }
-                items(packs, key = { it.slot }) { pack ->
-                    InstalledPackRow(
-                        pack = pack,
-                        enabled = enabled,
-                        onSelect = { select(pack) },
-                        onRemove = { packToRemove = pack },
-                    )
+                if (installedPacks != null) {
+                    item {
+                        LanguageOption(
+                            title = stringResource(Res.string.langpack_english),
+                            subtitle = stringResource(Res.string.langpack_built_in),
+                            selected = packs.none { it.isActive },
+                            enabled = enabled,
+                            onSelect = { select(null) },
+                        )
+                    }
+                    items(packs, key = { it.slot }) { pack ->
+                        InstalledPackRow(
+                            pack = pack,
+                            enabled = enabled,
+                            onSelect = { select(pack) },
+                            onRemove = { packToRemove = pack },
+                        )
+                    }
                 }
                 item {
                     Column(modifier = Modifier.padding(top = 8.dp)) {
                         val status = when {
-                            installingName != null -> "Installing $installingName…"
-                            selecting -> "Changing language…"
-                            loading -> "Loading installed packs…"
-                            installedPacks != null -> "${packs.size} of $MAX_LANGUAGE_PACKS packs installed"
+                            installingName != null -> stringResource(Res.string.langpack_status_installing, installingName)
+                            selecting -> stringResource(Res.string.langpack_status_changing)
+                            loading -> stringResource(Res.string.langpack_status_loading)
+                            installedPacks != null -> stringResource(Res.string.langpack_status_count, packs.size, MAX_LANGUAGE_PACKS)
                             else -> null
                         }
                         status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -178,22 +222,22 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
                         }
                         error?.let { message ->
                             Text(message, color = MaterialTheme.colorScheme.error)
-                            TextButton(enabled = !busy && !loading, onClick = { refresh++ }) { Text("Refresh") }
+                            TextButton(enabled = !busy && !loading, onClick = { refresh++ }) { Text(stringResource(UtilRes.string.refresh)) }
                         }
                         OutlinedButton(
                             enabled = enabled && packs.size < MAX_LANGUAGE_PACKS,
                             onClick = { showPicker = true },
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        ) { Text("Add language pack") }
+                        ) { Text(stringResource(Res.string.langpack_add_language_pack)) }
                         if (installedPacks != null && packs.size >= MAX_LANGUAGE_PACKS) {
-                            Text("Remove a pack to add another.", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(Res.string.langpack_remove_to_add), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismissRequest, enabled = !talkingToWatch) { Text("Done") }
+            TextButton(onClick = onDismissRequest, enabled = !talkingToWatch) { Text(stringResource(UtilRes.string.done)) }
         },
     )
     if (showPicker) {
@@ -208,11 +252,11 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
     packToRemove?.let { pack ->
         AlertDialog(
             onDismissRequest = { if (!removing) packToRemove = null },
-            title = { Text("Remove ${pack.label()}?") },
+            title = { Text(stringResource(Res.string.langpack_remove_title, pack.label())) },
             text = {
                 Text(
-                    if (pack.isActive) "The watch will switch to English and lose this pack's fonts."
-                    else "The watch will lose this pack's fonts."
+                    if (pack.isActive) stringResource(Res.string.langpack_remove_active_message)
+                    else stringResource(Res.string.langpack_remove_message)
                 )
             },
             confirmButton = {
@@ -222,19 +266,20 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
                             removing = inProgress
                             if (!inProgress) packToRemove = null
                         },
-                        failureMessage = "Could not remove the pack.",
+                        failureMessage = Res.string.langpack_error_remove,
                     ) { it.removeLanguagePack(pack) }
-                }) { Text(if (removing) "Removing…" else "Remove") }
+                }) { Text(if (removing) stringResource(Res.string.langpack_removing) else stringResource(UtilRes.string.remove)) }
             },
-            dismissButton = { TextButton(enabled = !removing, onClick = { packToRemove = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(enabled = !removing, onClick = { packToRemove = null }) { Text(stringResource(UtilRes.string.cancel)) } },
         )
     }
 }
 
+@Composable
 private fun WatchLanguagePack.label(): String = when {
     hasTranslation -> name
-    readable -> "Unknown"
-    else -> "Unreadable pack"
+    readable -> stringResource(Res.string.langpack_unknown)
+    else -> stringResource(Res.string.langpack_unreadable)
 }
 
 @Composable
@@ -249,7 +294,7 @@ private fun InstalledPackRow(
             if (pack.hasTranslation) {
                 LanguageOption(
                     title = pack.name,
-                    subtitle = "Translation and fonts",
+                    subtitle = stringResource(Res.string.langpack_translation_and_fonts),
                     selected = pack.isActive,
                     enabled = enabled,
                     onSelect = onSelect,
@@ -257,7 +302,7 @@ private fun InstalledPackRow(
             } else {
                 LanguageOption(
                     title = pack.label(),
-                    subtitle = if (pack.readable) "Adds characters to English" else "Remove it to free the slot",
+                    subtitle = if (pack.readable) stringResource(Res.string.langpack_adds_characters) else stringResource(Res.string.langpack_remove_to_free_slot),
                     selected = null,
                     enabled = enabled,
                     onSelect = {},
@@ -265,7 +310,7 @@ private fun InstalledPackRow(
             }
         }
         IconButton(enabled = enabled, onClick = onRemove) {
-            Icon(Icons.Outlined.Delete, contentDescription = "Remove ${pack.label()}")
+            Icon(Icons.Outlined.Delete, contentDescription = stringResource(Res.string.langpack_remove_content_description, pack.label()))
         }
     }
 }
@@ -304,11 +349,16 @@ private fun LanguagePackPickerDialog(
     onDismissRequest: () -> Unit,
 ) {
     val languagePackRepository: LanguagePackRepository = koinInject()
-    val languagePacks by produceState(languagePackRepository.cachedLanguagePacksForWatch(watch), watch.identifier) {
-        value = languagePackRepository.languagePacksForWatch(watch)
+    val manifest by languagePackRepository.manifest.collectAsState()
+    val languagePacks = remember(manifest, watch.identifier) {
+        manifest?.let { languagePackRepository.languagePacksForWatch(it, watch) }
+    }
+    var manifestFetchFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (languagePacks == null) manifestFetchFailed = !languagePackRepository.syncManifest()
     }
     val groups = remember(languagePacks, installedLocales) {
-        groupLanguagePacks(languagePacks.filter { canonicalLocale(it.isoLocal) !in installedLocales })
+        groupLanguagePacks(languagePacks.orEmpty().filter { canonicalLocale(it.isoLocal) !in installedLocales })
     }
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -323,10 +373,17 @@ private fun LanguagePackPickerDialog(
     val selectedGroup = selected?.let { pack -> groups.firstOrNull { (_, packs) -> pack in packs }?.first }
     AlertDialog(
         onDismissRequest = { if (!preparing) onDismissRequest() },
-        title = { Text(if (addToExisting) "Add Language Pack" else "Language Packs") },
+        title = { Text(if (addToExisting) stringResource(Res.string.langpack_add_title) else stringResource(Res.string.langpack_title)) },
         text = {
             Column {
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (languagePacks == null) {
+                    if (manifestFetchFailed) {
+                        Text(stringResource(Res.string.langpack_error_load), color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text(stringResource(Res.string.langpack_loading))
+                    }
+                }
                 LazyColumn(
                     modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -334,7 +391,7 @@ private fun LanguagePackPickerDialog(
                     groups.forEach { (group, packs) ->
                         item(key = group.name) {
                             Text(
-                                group.title,
+                                stringResource(group.title),
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                             )
@@ -362,12 +419,12 @@ private fun LanguagePackPickerDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = useAsWatchLanguage, onCheckedChange = { useAsWatchLanguage = it }, enabled = !busy)
-                        Text("Use as watch language")
+                        Text(stringResource(Res.string.langpack_use_as_watch_language))
                     }
                 }
                 selected?.takeIf { it.canContribute() }?.published?.let { published ->
                     TextButton(onClick = { uriHandler.openUri(published.translationUrl) }) {
-                        Text("Help translate")
+                        Text(stringResource(Res.string.langpack_help_translate))
                     }
                 }
             }
@@ -380,30 +437,26 @@ private fun LanguagePackPickerDialog(
                     preparing = true
                     scope.launch {
                         try {
-                            if (lp.published != null) {
-                                val path = languagePackRepository.prepareDownload(lp)
-                                watch.installLanguagePack(path, lp.displayName(), activate)
-                            } else {
-                                watch.installLanguagePack(lp.file, lp.displayName(), activate)
-                            }
+                            val path = languagePackRepository.prepareDownload(lp)
+                            watch.installLanguagePack(path, lp.displayName(), activate)
                             onInstallStarted()
                         } catch (e: TimeoutCancellationException) {
-                            error = "Download timed out. Please try again."
+                            error = getString(Res.string.langpack_error_timeout)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             logger.w(e) { "Language pack download failed" }
-                            error = "Could not download or verify the language pack. Please try again."
+                            error = getString(Res.string.langpack_error_download)
                         } finally {
                             preparing = false
                         }
                     }
                 },
                 enabled = selected != null && !busy,
-            ) { Text(if (preparing) "Downloading…" else if (addToExisting) "Add" else "Install") }
+            ) { Text(if (preparing) stringResource(Res.string.langpack_downloading) else if (addToExisting) stringResource(UtilRes.string.add) else stringResource(UtilRes.string.install)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest, enabled = !preparing) { Text("Cancel") }
+            TextButton(onClick = onDismissRequest, enabled = !preparing) { Text(stringResource(UtilRes.string.cancel)) }
         },
     )
 }

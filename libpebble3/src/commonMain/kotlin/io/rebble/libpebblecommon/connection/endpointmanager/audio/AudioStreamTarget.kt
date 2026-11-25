@@ -7,7 +7,7 @@ import kotlin.uuid.Uuid
  * A companion app that can receive its watchapp's microphone stream. Implemented alongside
  * [io.rebble.libpebblecommon.connection.CompanionApp] by companions that support it.
  */
-interface AudioStreamTarget {
+internal interface AudioStreamTarget {
     val uuid: Uuid
 
     /** [onReady] fires once the stream is accepted; returns false if it never was or the companion stopped first. */

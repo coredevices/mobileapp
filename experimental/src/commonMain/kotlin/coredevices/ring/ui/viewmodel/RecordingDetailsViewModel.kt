@@ -1,6 +1,16 @@
 package coredevices.ring.ui.viewmodel
 
 import PlatformUiContext
+import coreapp.ring.generated.resources.Res
+import coreapp.ring.generated.resources.recording_vm_delete_failed
+import coreapp.ring.generated.resources.recording_vm_deleted
+import coreapp.ring.generated.resources.recording_vm_deleted_with_items
+import coreapp.ring.generated.resources.recording_vm_export_failed
+import coreapp.ring.generated.resources.recording_vm_no_file_to_export
+import coreapp.ring.generated.resources.recording_vm_play_failed
+import coreapp.ring.generated.resources.recording_vm_retrying
+import org.jetbrains.compose.resources.getPluralString
+import org.jetbrains.compose.resources.getString
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,6 +32,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import coredevices.util.writeToDownloads
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,7 +48,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.io.files.Path
 
 class RecordingDetailsViewModel(
     private val recordingId: Long,
@@ -183,16 +193,24 @@ class RecordingDetailsViewModel(
                 withContext(NonCancellable) {
                     linked.forEach { itemRepo.softDelete(it.firestoreId) }
                     recordingRepo.deleteRecording(recordingId)
+                    state?.entries?.mapNotNull { it.fileName }?.forEach {
+                        recordingStorage.deleteRecording(it)
+                        recordingStorage.deleteRecording("$it-original")
+                    }
                 }
                 snackbarHostState.showSnackbar(
-                    "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
+                    if (linked.isNotEmpty()) {
+                        getPluralString(Res.plurals.recording_vm_deleted_with_items, linked.size, linked.size)
+                    } else {
+                        getString(Res.string.recording_vm_deleted)
+                    },
                 )
                 onAfter()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 logger.e(e) { "deleteRecording failed" }
-                snackbarHostState.showSnackbar("Couldn't delete: ${e.message ?: e}")
+                snackbarHostState.showSnackbar(getString(Res.string.recording_vm_delete_failed, (e.message ?: e).toString()))
             }
         }
     }
@@ -207,7 +225,7 @@ class RecordingDetailsViewModel(
         } catch (e: Exception) {
             logger.e(e) { "No playable audio for $fileName" }
             playbackState.value = MessagePlaybackState.Stopped
-            snackbarHostState.showSnackbar("Could not play recording — audio unavailable")
+            snackbarHostState.showSnackbar(getString(Res.string.recording_vm_play_failed))
             return
         }
         withContext(Dispatchers.IO) {
@@ -237,12 +255,19 @@ class RecordingDetailsViewModel(
         viewModelScope.launch {
             val item = itemState.value as? ItemState.Loaded ?: return@launch
             item.entries.firstOrNull()?.fileName?.let {
-                val path = recordingStorage.exportRecording(it)
-                writeToDownloads(uiContext, path)
+                try {
+                    val path = recordingStorage.exportRecording(it)
+                    writeToDownloads(uiContext, path, "audio/wav")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to export recording" }
+                    snackbarHostState.showSnackbar(message = getString(Res.string.recording_vm_export_failed))
+                }
             } ?: run {
                 logger.e { "Can't export, no recording file to export" }
                 snackbarHostState.showSnackbar(
-                    message = "No recording file to export"
+                    message = getString(Res.string.recording_vm_no_file_to_export)
                 )
             }
         }
@@ -270,7 +295,7 @@ class RecordingDetailsViewModel(
                     recordingEntryId = entry.id,
                 )
             }
-            snackbarHostState.showSnackbar("Retrying...")
+            snackbarHostState.showSnackbar(getString(Res.string.recording_vm_retrying))
         }
     }
 
@@ -298,8 +323,6 @@ class RecordingDetailsViewModel(
 
     }
 }
-
-expect suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mimeType: String = "audio/wav")
 
 sealed class MessagePlaybackState {
     data class Playing(val id: Long, val percentageComplete: Double): MessagePlaybackState()

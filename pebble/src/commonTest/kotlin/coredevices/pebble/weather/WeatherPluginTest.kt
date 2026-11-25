@@ -27,6 +27,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -145,8 +146,9 @@ class WeatherSeriesTest {
     private val london = entry(LONDON, "London").copy(
         lastUpdateTimeUtcSecs = fetched,
         locationUtcOffsetMin = 0,
-        todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte()) },
-        tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte()) },
+        todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte(), uvIndexX10 = (it * 10).toShort()) },
+        todayUvIndexX10 = 75,
+        tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte(), precipProbability = it, precipMm = it / 10.0) },
         todayWindSpeed = 10,
         todayWindDirection = 270,
         dailyForecast = listOf(
@@ -183,11 +185,26 @@ class WeatherSeriesTest {
         assertEquals(270.0, number(WeatherPlugin.PROPERTY_WIND_DIRECTION))
         assertEquals(70.0, number(WeatherPlugin.PROPERTY_HUMIDITY))
         assertEquals(0.0, number(WeatherPlugin.PROPERTY_UTC_OFFSET))
+        assertEquals(9.0, number(WeatherPlugin.PROPERTY_UV_INDEX))
         assertEquals(
             midnight + 7 * 3600,
             Json.decodeFromJsonElement<TimestampShape>(properties.getValue(WeatherPlugin.PROPERTY_SUNRISE).getValue(SourceShapeNames.TIMESTAMP)).value,
         )
         assertEquals(listOf(midnight + 17 * 3600, null), properties.series(WeatherPlugin.PROPERTY_DAILY_SUNSET).timestamp!!.values)
+    }
+
+    @Test
+    fun hourlyPrecipitationIsServed() = runTest {
+        val properties = read(listOf(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION, WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT))
+        val chance = properties.series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION)
+        assertEquals(midnight, chance.start)
+        assertEquals(48, chance.numericValue!!.values.size)
+        assertNull(chance.numericValue!!.values[0])
+        assertEquals(5.0, chance.numericValue!!.values[29])
+        assertEquals("5%", chance.shortText!!.values[29])
+        val amount = properties.series(WeatherPlugin.PROPERTY_HOURLY_PRECIPITATION_AMOUNT)
+        assertEquals(0.5, amount.numericValue!!.values[29])
+        assertEquals("0.5 mm", amount.shortText!!.values[29])
     }
 
     @Test

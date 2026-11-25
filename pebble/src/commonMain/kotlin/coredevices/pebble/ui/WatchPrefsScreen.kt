@@ -21,6 +21,158 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.settings_prefs_minutes
+import coreapp.pebble.generated.resources.watch_pref_wind_speed_desc
+import coreapp.pebble.generated.resources.watch_pref_wind_speed
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_notifications
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_calls
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_alarms
+import coreapp.pebble.generated.resources.watch_pref_timezone_source_is_manual_desc
+import coreapp.pebble.generated.resources.watch_pref_timezone_source_is_manual
+import coreapp.pebble.generated.resources.watch_pref_timeline_quick_view_unsupported_faces_desc
+import coreapp.pebble.generated.resources.watch_pref_timeline_quick_view_unsupported_faces
+import coreapp.pebble.generated.resources.watch_pref_timeline_quick_view_mins_before
+import coreapp.pebble.generated.resources.watch_pref_timeline_quick_view_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_timeline_quick_view_enabled
+import coreapp.pebble.generated.resources.watch_pref_temperature_desc
+import coreapp.pebble.generated.resources.watch_pref_temperature
+import coreapp.pebble.generated.resources.watch_pref_system_text_size
+import coreapp.pebble.generated.resources.watch_pref_standby_mode_desc
+import coreapp.pebble.generated.resources.watch_pref_standby_mode
+import coreapp.pebble.generated.resources.watch_pref_respect_phone_silence_desc
+import coreapp.pebble.generated.resources.watch_pref_respect_phone_silence
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekend_schedule_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekend_schedule_enabled
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekend_schedule
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekday_schedule_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekday_schedule_enabled
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_weekday_schedule
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_touch_backlight_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_touch_backlight
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_show_notifications
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_notification_backlight_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_notification_backlight
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_motion_backlight_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_motion_backlight
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_manually_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_manually_enabled
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_interruptions
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_auto_dismiss_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_auto_dismiss
+import coreapp.pebble.generated.resources.watch_pref_ql_up
+import coreapp.pebble.generated.resources.watch_pref_ql_single_click_up
+import coreapp.pebble.generated.resources.watch_pref_ql_single_click_down
+import coreapp.pebble.generated.resources.watch_pref_ql_select
+import coreapp.pebble.generated.resources.watch_pref_ql_down
+import coreapp.pebble.generated.resources.watch_pref_ql_combo_up_down
+import coreapp.pebble.generated.resources.watch_pref_ql_combo_back_up
+import coreapp.pebble.generated.resources.watch_pref_ql_back
+import coreapp.pebble.generated.resources.watch_pref_notification_vibe_delay_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_vibe_delay
+import coreapp.pebble.generated.resources.watch_pref_notification_timeout_ms_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_timeout_ms
+import coreapp.pebble.generated.resources.watch_pref_notification_text_size
+import coreapp.pebble.generated.resources.watch_pref_notification_filter
+import coreapp.pebble.generated.resources.watch_pref_notification_dismissal_sync_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_dismissal_sync
+import coreapp.pebble.generated.resources.watch_pref_notification_backlight_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_backlight
+import coreapp.pebble.generated.resources.watch_pref_music_show_volume_controls
+import coreapp.pebble.generated.resources.watch_pref_music_show_progress_bar
+import coreapp.pebble.generated.resources.watch_pref_music_show_album_art
+import coreapp.pebble.generated.resources.watch_pref_motion_sensitivity
+import coreapp.pebble.generated.resources.watch_pref_menu_scroll_wrap_around_desc
+import coreapp.pebble.generated.resources.watch_pref_menu_scroll_wrap_around
+import coreapp.pebble.generated.resources.watch_pref_menu_scroll_vibe
+import coreapp.pebble.generated.resources.watch_pref_legacy_vibe_intensity
+import coreapp.pebble.generated.resources.watch_pref_left_handed_mode_desc
+import coreapp.pebble.generated.resources.watch_pref_left_handed_mode
+import coreapp.pebble.generated.resources.watch_pref_theme_highlight_color
+import coreapp.pebble.generated.resources.watch_pref_dark_mode
+import coreapp.pebble.generated.resources.watch_pref_dark_mode_schedule
+import coreapp.pebble.generated.resources.watch_pref_legacy_app_display
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_hourly
+import coreapp.pebble.generated.resources.watch_pref_vibe_score_on_disconnect
+import coreapp.pebble.generated.resources.settings_prefs_hourly_notice
+import coreapp.pebble.generated.resources.settings_prefs_on_disconnect
+import coreapp.pebble.generated.resources.watch_pref_speaker_muted
+import coreapp.pebble.generated.resources.watch_pref_speaker_volume
+import coreapp.pebble.generated.resources.watch_pref_notification_grouping
+import coreapp.pebble.generated.resources.watch_pref_notification_grouping_desc
+import coreapp.pebble.generated.resources.watch_pref_notification_status_bar
+import coreapp.pebble.generated.resources.watch_pref_insights_style
+import coreapp.pebble.generated.resources.watch_pref_insights_style_desc
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker
+import coreapp.pebble.generated.resources.watch_pref_quiet_time_mute_speaker_desc
+import coreapp.pebble.generated.resources.watch_pref_touch_enabled
+import coreapp.pebble.generated.resources.watch_pref_touch_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_touch_navigation_menu
+import coreapp.pebble.generated.resources.watch_pref_touch_navigation_menu_desc
+import coreapp.pebble.generated.resources.watch_pref_dynamic_backlight_mode_desc
+import coreapp.pebble.generated.resources.watch_pref_dynamic_backlight_mode
+import coreapp.pebble.generated.resources.watch_pref_clock24h
+import coreapp.pebble.generated.resources.watch_pref_calendar_aware_quiet_time_desc
+import coreapp.pebble.generated.resources.watch_pref_calendar_aware_quiet_time
+import coreapp.pebble.generated.resources.watch_pref_backlight_touch_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_touch
+import coreapp.pebble.generated.resources.watch_pref_backlight_timeout_ms
+import coreapp.pebble.generated.resources.watch_pref_backlight_preset_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_preset
+import coreapp.pebble.generated.resources.watch_pref_backlight_motion_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_motion
+import coreapp.pebble.generated.resources.watch_pref_backlight_intensity_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_intensity
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_sunset_minute
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_sunrise_minute
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_night_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_night
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_day_night_enabled_desc
+import coreapp.pebble.generated.resources.watch_pref_backlight_color_day_night_enabled
+import coreapp.pebble.generated.resources.watch_pref_backlight_color
+import coreapp.pebble.generated.resources.watch_pref_backlight
+import coreapp.pebble.generated.resources.watch_pref_ambient_light_threshold
+import coreapp.pebble.generated.resources.watch_pref_ambient_light_sensor_desc
+import coreapp.pebble.generated.resources.watch_pref_ambient_light_sensor
+import coreapp.pebble.generated.resources.watch_pref_alternative_notification_style
+import coreapp.pebble.generated.resources.notifications
+import coreapp.pebble.generated.resources.settings_color
+import coreapp.pebble.generated.resources.settings_group_vibration
+import coreapp.pebble.generated.resources.settings_prefs_alarms
+import coreapp.pebble.generated.resources.settings_prefs_auto_sun_times
+import coreapp.pebble.generated.resources.settings_prefs_auto_sun_times_desc
+import coreapp.pebble.generated.resources.settings_prefs_change_color_at_night
+import coreapp.pebble.generated.resources.settings_prefs_end_time
+import coreapp.pebble.generated.resources.settings_prefs_from
+import coreapp.pebble.generated.resources.settings_prefs_incoming_calls
+import coreapp.pebble.generated.resources.settings_prefs_intensity
+import coreapp.pebble.generated.resources.settings_prefs_minutes_before_event
+import coreapp.pebble.generated.resources.settings_prefs_night_color
+import coreapp.pebble.generated.resources.settings_prefs_preset
+import coreapp.pebble.generated.resources.settings_prefs_reset
+import coreapp.pebble.generated.resources.settings_prefs_reset_confirm_text
+import coreapp.pebble.generated.resources.settings_prefs_reset_confirm_title
+import coreapp.pebble.generated.resources.settings_prefs_reset_to_defaults
+import coreapp.pebble.generated.resources.settings_prefs_reset_to_defaults_desc
+import coreapp.pebble.generated.resources.settings_prefs_seconds
+import coreapp.pebble.generated.resources.settings_prefs_sensitivity
+import coreapp.pebble.generated.resources.settings_prefs_set
+import coreapp.pebble.generated.resources.settings_prefs_show_upcoming_events
+import coreapp.pebble.generated.resources.settings_prefs_start_time
+import coreapp.pebble.generated.resources.settings_prefs_sunrise
+import coreapp.pebble.generated.resources.settings_prefs_sunset
+import coreapp.pebble.generated.resources.settings_prefs_system_intensity
+import coreapp.pebble.generated.resources.settings_prefs_threshold
+import coreapp.pebble.generated.resources.settings_prefs_timeout
+import coreapp.pebble.generated.resources.settings_prefs_to
+import coreapp.pebble.generated.resources.settings_prefs_unsupported_faces
+import coreapp.pebble.generated.resources.settings_prefs_navigation
+import coreapp.pebble.generated.resources.settings_prefs_wrap_around
+import coreapp.util.generated.resources.Res as UtilRes
+import coreapp.util.generated.resources.cancel
+import coreapp.util.generated.resources.enable
+import coreapp.util.generated.resources.none
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.ConfirmDialog
@@ -33,6 +185,7 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.ColorWatchPref
+import io.rebble.libpebblecommon.database.entity.DarkModeSetting
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting
@@ -47,6 +200,9 @@ import io.rebble.libpebblecommon.timeline.TimelineColor
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
@@ -71,6 +227,11 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
+internal fun List<WatchPreference<*>>.hideTouchNavigationWhenTouchOff(): List<WatchPreference<*>> {
+    val touch = firstOrNull { it.pref == BoolWatchPref.TouchEnabled }?.valueOrDefault()
+    return if (touch == false) filterNot { it.pref == BoolWatchPref.TouchNavigationMenu } else this
+}
+
 private val BACKLIGHT_SUN_TIMES = setOf<WatchPref<*>>(
     NumberWatchPref.BacklightColorSunriseMinute,
     NumberWatchPref.BacklightColorSunsetMinute,
@@ -88,13 +249,14 @@ internal fun List<WatchPreference<*>>.hideUnusedBacklightColorPrefs(autoSunTimes
 private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
     BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
     BoolWatchPref.QuietTimeWeekendScheduleEnabled to ScheduleWatchPref.QuietTimeWeekendSchedule,
+    EnumWatchPref.DarkMode to ScheduleWatchPref.DarkModeSchedule,
 )
 
 /** Schedule hours sit directly under the toggle they belong to, and only while it is on. */
-internal fun List<WatchPreference<*>>.groupQuietTimeScheduleHours(): List<WatchPreference<*>> {
+internal fun List<WatchPreference<*>>.groupScheduleHours(): List<WatchPreference<*>> {
     val hours = filter { it.pref is ScheduleWatchPref }
     return filterNot { it.pref is ScheduleWatchPref }.flatMap { item ->
-        val pref = SCHEDULE_HOURS[item.pref]?.takeIf { item.valueOrDefault() == true }
+        val pref = SCHEDULE_HOURS[item.pref]?.takeIf { item.valueOrDefault().let { it == true || it == DarkModeSetting.Scheduled } }
         listOfNotNull(item, hours.firstOrNull { it.pref == pref })
     }
 }
@@ -105,12 +267,15 @@ fun watchPrefs(): List<SettingsItem> {
     val coreConfigHolder = koinInject<CoreConfigHolder>()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val coreConfig by coreConfigHolder.config.collectAsState()
+    val healthTracking by libPebble.healthSettings.map { it.trackingEnabled }.collectAsState(false)
     val weatherFetcher = koinInject<WeatherFetcher>()
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions, coreConfig) {
+    val mapped = remember(settings, quickLaunchOptions, coreConfig, healthTracking) {
         settings.inLayoutOrder()
             .hidePresetManagedBacklightPrefs()
-            .groupQuietTimeScheduleHours()
+            .hideTouchNavigationWhenTouchOff()
+            .filterNot { it.pref == EnumWatchPref.InsightsStyle && !healthTracking }
+            .groupScheduleHours()
             .hideUnusedBacklightColorPrefs(coreConfig.backlightColorAutoSunriseSunset)
             .flatMap { item ->
                 val setting = when (val pref = item.pref) {
@@ -133,8 +298,8 @@ fun watchPrefs(): List<SettingsItem> {
     val showConfirmReset = remember { mutableStateOf(false) }
     ConfirmDialog(
         show = showConfirmReset,
-        title = "Reset To Defaults?",
-        text = "Reset all settings to defaults",
+        title = stringResource(Res.string.settings_prefs_reset_confirm_title),
+        text = stringResource(Res.string.settings_prefs_reset_confirm_text),
         onConfirm = {
             settings.forEach { setting ->
                 if (setting.value != setting.pref.defaultValue) {
@@ -144,16 +309,16 @@ fun watchPrefs(): List<SettingsItem> {
                 }
             }
         },
-        confirmText = "Reset",
+        confirmText = stringResource(Res.string.settings_prefs_reset),
     )
     val reset = basicSettingsActionItem(
-        title = "Reset To Defaults",
+        title = SettingsText(Res.string.settings_prefs_reset_to_defaults),
         topLevelType = TopLevelType.Watch,
         section = Section.Defaults,
         action = {
             showConfirmReset.value = true
         },
-        description = "Reset all watch settings to defaults",
+        description = SettingsText(Res.string.settings_prefs_reset_to_defaults_desc),
     )
     return listOf(reset) + mapped
 }
@@ -163,81 +328,100 @@ internal class PrefLayout(
     val section: Section,
     val group: SettingsGroup? = null,
     /** Its title under the group's heading. */
-    val title: String? = null,
+    val title: StringResource? = null,
+    val name: StringResource,
+    val description: StringResource? = null,
 )
 
 /** Every watch pref, in the order the settings screen shows them (WatchPrefLayoutTest checks none is missing). */
 internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
-    PrefLayout(QuicklaunchWatchPref.QlUp, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlDown, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlSelect, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlBack, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlComboBackUp, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlComboUpDown, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlSingleClickUp, Section.QuickLaunch),
-    PrefLayout(QuicklaunchWatchPref.QlSingleClickDown, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlUp, Section.QuickLaunch, name = Res.string.watch_pref_ql_up),
+    PrefLayout(QuicklaunchWatchPref.QlDown, Section.QuickLaunch, name = Res.string.watch_pref_ql_down),
+    PrefLayout(QuicklaunchWatchPref.QlSelect, Section.QuickLaunch, name = Res.string.watch_pref_ql_select),
+    PrefLayout(QuicklaunchWatchPref.QlBack, Section.QuickLaunch, name = Res.string.watch_pref_ql_back),
+    PrefLayout(QuicklaunchWatchPref.QlComboBackUp, Section.QuickLaunch, name = Res.string.watch_pref_ql_combo_back_up),
+    PrefLayout(QuicklaunchWatchPref.QlComboUpDown, Section.QuickLaunch, name = Res.string.watch_pref_ql_combo_up_down),
+    PrefLayout(QuicklaunchWatchPref.QlSingleClickUp, Section.QuickLaunch, name = Res.string.watch_pref_ql_single_click_up),
+    PrefLayout(QuicklaunchWatchPref.QlSingleClickDown, Section.QuickLaunch, name = Res.string.watch_pref_ql_single_click_down),
 
-    PrefLayout(EnumWatchPref.SystemTextSize, Section.Display),
-    PrefLayout(BoolWatchPref.Backlight, Section.Display, SettingsGroup.Backlight, "Enabled"),
-    PrefLayout(EnumWatchPref.BacklightPreset, Section.Display, SettingsGroup.Backlight, "Preset"),
-    PrefLayout(EnumWatchPref.BacklightIntensity, Section.Display, SettingsGroup.Backlight, "Intensity"),
-    PrefLayout(EnumWatchPref.DynamicBacklightMode, Section.Display, SettingsGroup.Backlight),
-    PrefLayout(EnumWatchPref.BacklightTouch, Section.Display, SettingsGroup.Backlight),
-    PrefLayout(NumberWatchPref.BacklightTimeoutMs, Section.Display, SettingsGroup.Backlight, "Timeout"),
-    PrefLayout(BoolWatchPref.AmbientLightSensor, Section.Display, SettingsGroup.BacklightAmbient, "Enabled"),
-    PrefLayout(NumberWatchPref.AmbientLightThreshold, Section.Display, SettingsGroup.BacklightAmbient, "Threshold"),
-    PrefLayout(BoolWatchPref.BacklightMotion, Section.Display, SettingsGroup.BacklightMotion, "Enabled"),
-    PrefLayout(EnumWatchPref.MotionSensitivity, Section.Display, SettingsGroup.BacklightMotion, "Sensitivity"),
-    PrefLayout(RgbColorWatchPref.BacklightColor, Section.Display, SettingsGroup.BacklightColor, "Color"),
-    PrefLayout(BoolWatchPref.BacklightColorDayNightEnabled, Section.Display, SettingsGroup.BacklightColor, "Change Color at Night"),
-    PrefLayout(RgbColorWatchPref.BacklightColorNight, Section.Display, SettingsGroup.BacklightColor, "Night Color"),
-    PrefLayout(NumberWatchPref.BacklightColorSunriseMinute, Section.Display, SettingsGroup.BacklightColor, "Sunrise"),
-    PrefLayout(NumberWatchPref.BacklightColorSunsetMinute, Section.Display, SettingsGroup.BacklightColor, "Sunset"),
-    PrefLayout(BoolWatchPref.MenuScrollWrapAround, Section.Display, SettingsGroup.MenuScrolling, "Wrap Around"),
-    PrefLayout(EnumWatchPref.MenuScrollVibe, Section.Display, SettingsGroup.MenuScrolling, "Vibration"),
-    PrefLayout(BoolWatchPref.LeftHandedMode, Section.Display),
+    PrefLayout(EnumWatchPref.SystemTextSize, Section.Display, name = Res.string.watch_pref_system_text_size),
+    PrefLayout(BoolWatchPref.Backlight, Section.Display, SettingsGroup.Backlight, title = UtilRes.string.enable, name = Res.string.watch_pref_backlight),
+    PrefLayout(EnumWatchPref.BacklightPreset, Section.Display, SettingsGroup.Backlight, title = Res.string.settings_prefs_preset, name = Res.string.watch_pref_backlight_preset, description = Res.string.watch_pref_backlight_preset_desc),
+    PrefLayout(EnumWatchPref.BacklightIntensity, Section.Display, SettingsGroup.Backlight, title = Res.string.settings_prefs_intensity, name = Res.string.watch_pref_backlight_intensity, description = Res.string.watch_pref_backlight_intensity_desc),
+    PrefLayout(EnumWatchPref.DynamicBacklightMode, Section.Display, SettingsGroup.Backlight, name = Res.string.watch_pref_dynamic_backlight_mode, description = Res.string.watch_pref_dynamic_backlight_mode_desc),
+    PrefLayout(EnumWatchPref.BacklightTouch, Section.Display, SettingsGroup.Backlight, name = Res.string.watch_pref_backlight_touch, description = Res.string.watch_pref_backlight_touch_desc),
+    PrefLayout(NumberWatchPref.BacklightTimeoutMs, Section.Display, SettingsGroup.Backlight, title = Res.string.settings_prefs_timeout, name = Res.string.watch_pref_backlight_timeout_ms),
+    PrefLayout(BoolWatchPref.AmbientLightSensor, Section.Display, SettingsGroup.BacklightAmbient, title = UtilRes.string.enable, name = Res.string.watch_pref_ambient_light_sensor, description = Res.string.watch_pref_ambient_light_sensor_desc),
+    PrefLayout(NumberWatchPref.AmbientLightThreshold, Section.Display, SettingsGroup.BacklightAmbient, title = Res.string.settings_prefs_threshold, name = Res.string.watch_pref_ambient_light_threshold),
+    PrefLayout(BoolWatchPref.BacklightMotion, Section.Display, SettingsGroup.BacklightMotion, title = UtilRes.string.enable, name = Res.string.watch_pref_backlight_motion, description = Res.string.watch_pref_backlight_motion_desc),
+    PrefLayout(EnumWatchPref.MotionSensitivity, Section.Display, SettingsGroup.BacklightMotion, title = Res.string.settings_prefs_sensitivity, name = Res.string.watch_pref_motion_sensitivity),
+    PrefLayout(RgbColorWatchPref.BacklightColor, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_color, name = Res.string.watch_pref_backlight_color, description = Res.string.watch_pref_backlight_color_desc),
+    PrefLayout(BoolWatchPref.BacklightColorDayNightEnabled, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_prefs_change_color_at_night, name = Res.string.watch_pref_backlight_color_day_night_enabled, description = Res.string.watch_pref_backlight_color_day_night_enabled_desc),
+    PrefLayout(RgbColorWatchPref.BacklightColorNight, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_prefs_night_color, name = Res.string.watch_pref_backlight_color_night, description = Res.string.watch_pref_backlight_color_night_desc),
+    PrefLayout(NumberWatchPref.BacklightColorSunriseMinute, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_prefs_sunrise, name = Res.string.watch_pref_backlight_color_sunrise_minute),
+    PrefLayout(NumberWatchPref.BacklightColorSunsetMinute, Section.Display, SettingsGroup.BacklightColor, title = Res.string.settings_prefs_sunset, name = Res.string.watch_pref_backlight_color_sunset_minute),
+    PrefLayout(BoolWatchPref.MenuScrollWrapAround, Section.Display, SettingsGroup.MenuScrolling, title = Res.string.settings_prefs_wrap_around, name = Res.string.watch_pref_menu_scroll_wrap_around, description = Res.string.watch_pref_menu_scroll_wrap_around_desc),
+    PrefLayout(EnumWatchPref.MenuScrollVibe, Section.Display, SettingsGroup.MenuScrolling, title = Res.string.settings_group_vibration, name = Res.string.watch_pref_menu_scroll_vibe),
+    PrefLayout(BoolWatchPref.TouchEnabled, Section.Display, SettingsGroup.Touch, title = UtilRes.string.enable, name = Res.string.watch_pref_touch_enabled, description = Res.string.watch_pref_touch_enabled_desc),
+    PrefLayout(BoolWatchPref.TouchNavigationMenu, Section.Display, SettingsGroup.Touch, title = Res.string.settings_prefs_navigation, name = Res.string.watch_pref_touch_navigation_menu, description = Res.string.watch_pref_touch_navigation_menu_desc),
+    PrefLayout(BoolWatchPref.LeftHandedMode, Section.Display, name = Res.string.watch_pref_left_handed_mode, description = Res.string.watch_pref_left_handed_mode_desc),
+    PrefLayout(EnumWatchPref.LegacyAppDisplay, Section.Display, name = Res.string.watch_pref_legacy_app_display),
 
-    PrefLayout(EnumWatchPref.Temperature, Section.Weather),
-    PrefLayout(EnumWatchPref.WindSpeed, Section.Weather),
+    PrefLayout(EnumWatchPref.DarkMode, Section.Themes, name = Res.string.watch_pref_dark_mode),
+    PrefLayout(ScheduleWatchPref.DarkModeSchedule, Section.Themes, name = Res.string.watch_pref_dark_mode_schedule),
+    PrefLayout(ColorWatchPref.ThemeHighlightColor, Section.Themes, name = Res.string.watch_pref_theme_highlight_color),
 
-    PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Notifications, SettingsGroup.Vibration, "System Intensity"),
-    PrefLayout(EnumWatchPref.VibeScoreNotifications, Section.Notifications, SettingsGroup.Vibration, "Notifications"),
-    PrefLayout(EnumWatchPref.VibeScoreCalls, Section.Notifications, SettingsGroup.Vibration, "Incoming Calls"),
-    PrefLayout(EnumWatchPref.VibeScoreAlarms, Section.Notifications, SettingsGroup.Vibration, "Alarms"),
-    PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, SettingsGroup.Vibration, "Delay Until Notification Is Visible"),
-    PrefLayout(BoolWatchPref.NotificationBacklight, Section.Notifications),
-    PrefLayout(BoolWatchPref.RespectPhoneSilence, Section.Notifications),
-    PrefLayout(BoolWatchPref.NotificationDismissalSync, Section.Notifications),
-    PrefLayout(EnumWatchPref.NotificationTextSize, Section.Notifications),
-    PrefLayout(EnumWatchPref.NotificationFilter, Section.Notifications),
-    PrefLayout(NumberWatchPref.NotificationTimeoutMs, Section.Notifications),
-    PrefLayout(BoolWatchPref.AlternativeNotificationStyle, Section.Notifications),
+    PrefLayout(EnumWatchPref.Temperature, Section.Weather, name = Res.string.watch_pref_temperature, description = Res.string.watch_pref_temperature_desc),
+    PrefLayout(EnumWatchPref.WindSpeed, Section.Weather, name = Res.string.watch_pref_wind_speed, description = Res.string.watch_pref_wind_speed_desc),
 
-    PrefLayout(BoolWatchPref.TimezoneSourceIsManual, Section.Time),
-    PrefLayout(BoolWatchPref.Clock24h, Section.Time),
+    PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, name = Res.string.watch_pref_notification_vibe_delay, description = Res.string.watch_pref_notification_vibe_delay_desc),
+    PrefLayout(BoolWatchPref.NotificationBacklight, Section.Notifications, name = Res.string.watch_pref_notification_backlight, description = Res.string.watch_pref_notification_backlight_desc),
+    PrefLayout(BoolWatchPref.RespectPhoneSilence, Section.Notifications, name = Res.string.watch_pref_respect_phone_silence, description = Res.string.watch_pref_respect_phone_silence_desc),
+    PrefLayout(BoolWatchPref.NotificationDismissalSync, Section.Notifications, name = Res.string.watch_pref_notification_dismissal_sync, description = Res.string.watch_pref_notification_dismissal_sync_desc),
+    PrefLayout(EnumWatchPref.NotificationTextSize, Section.Notifications, name = Res.string.watch_pref_notification_text_size),
+    PrefLayout(EnumWatchPref.NotificationFilter, Section.Notifications, name = Res.string.watch_pref_notification_filter),
+    PrefLayout(NumberWatchPref.NotificationTimeoutMs, Section.Notifications, name = Res.string.watch_pref_notification_timeout_ms, description = Res.string.watch_pref_notification_timeout_ms_desc),
+    PrefLayout(BoolWatchPref.AlternativeNotificationStyle, Section.Notifications, name = Res.string.watch_pref_alternative_notification_style),
+    PrefLayout(EnumWatchPref.NotificationGrouping, Section.Notifications, name = Res.string.watch_pref_notification_grouping, description = Res.string.watch_pref_notification_grouping_desc),
+    PrefLayout(EnumWatchPref.NotificationStatusBar, Section.Notifications, name = Res.string.watch_pref_notification_status_bar),
 
-    PrefLayout(BoolWatchPref.TimelineQuickViewEnabled, Section.Timeline, SettingsGroup.QuickView, "Show Upcoming Events"),
-    PrefLayout(NumberWatchPref.TimelineQuickViewMinsBefore, Section.Timeline, SettingsGroup.QuickView, "Minutes Before Event"),
-    PrefLayout(EnumWatchPref.TimelineQuickViewUnsupportedFaces, Section.Timeline, SettingsGroup.QuickView, "Unsupported Faces"),
+    PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_system_intensity, name = Res.string.watch_pref_legacy_vibe_intensity),
+    PrefLayout(EnumWatchPref.VibeScoreNotifications, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.notifications, name = Res.string.watch_pref_vibe_score_notifications),
+    PrefLayout(EnumWatchPref.VibeScoreCalls, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_incoming_calls, name = Res.string.watch_pref_vibe_score_calls),
+    PrefLayout(EnumWatchPref.VibeScoreAlarms, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_alarms, name = Res.string.watch_pref_vibe_score_alarms),
+    PrefLayout(EnumWatchPref.VibeScoreHourly, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_hourly_notice, name = Res.string.watch_pref_vibe_score_hourly),
+    PrefLayout(EnumWatchPref.VibeScoreOnDisconnect, Section.Vibrations, SettingsGroup.Vibration, title = Res.string.settings_prefs_on_disconnect, name = Res.string.watch_pref_vibe_score_on_disconnect),
+    PrefLayout(BoolWatchPref.SpeakerMuted, Section.Vibrations, name = Res.string.watch_pref_speaker_muted),
+    PrefLayout(NumberWatchPref.SpeakerVolume, Section.Vibrations, name = Res.string.watch_pref_speaker_volume),
 
-    PrefLayout(BoolWatchPref.QuietTimeManuallyEnabled, Section.QuietTime),
-    PrefLayout(BoolWatchPref.CalendarAwareQuietTime, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeWeekdayScheduleEnabled, Section.QuietTime),
-    PrefLayout(ScheduleWatchPref.QuietTimeWeekdaySchedule, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeWeekendScheduleEnabled, Section.QuietTime),
-    PrefLayout(ScheduleWatchPref.QuietTimeWeekendSchedule, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeMotionBacklight, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeTouchBacklight, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeNotificationBacklight, Section.QuietTime),
-    PrefLayout(BoolWatchPref.QuietTimeAutoDismiss, Section.QuietTime),
-    PrefLayout(EnumWatchPref.QuietTimeInterruptions, Section.QuietTime),
-    PrefLayout(EnumWatchPref.QuietTimeShowNotifications, Section.QuietTime),
+    PrefLayout(BoolWatchPref.TimezoneSourceIsManual, Section.Time, name = Res.string.watch_pref_timezone_source_is_manual, description = Res.string.watch_pref_timezone_source_is_manual_desc),
+    PrefLayout(BoolWatchPref.Clock24h, Section.Time, name = Res.string.watch_pref_clock24h),
 
-    PrefLayout(BoolWatchPref.MusicShowVolumeControls, Section.Music),
-    PrefLayout(BoolWatchPref.MusicShowProgressBar, Section.Music),
-    PrefLayout(BoolWatchPref.MusicShowAlbumArt, Section.Music),
+    PrefLayout(BoolWatchPref.TimelineQuickViewEnabled, Section.Timeline, SettingsGroup.QuickView, title = Res.string.settings_prefs_show_upcoming_events, name = Res.string.watch_pref_timeline_quick_view_enabled, description = Res.string.watch_pref_timeline_quick_view_enabled_desc),
+    PrefLayout(NumberWatchPref.TimelineQuickViewMinsBefore, Section.Timeline, SettingsGroup.QuickView, title = Res.string.settings_prefs_minutes_before_event, name = Res.string.watch_pref_timeline_quick_view_mins_before),
+    PrefLayout(EnumWatchPref.TimelineQuickViewUnsupportedFaces, Section.Timeline, SettingsGroup.QuickView, title = Res.string.settings_prefs_unsupported_faces, name = Res.string.watch_pref_timeline_quick_view_unsupported_faces, description = Res.string.watch_pref_timeline_quick_view_unsupported_faces_desc),
 
-    PrefLayout(BoolWatchPref.StandbyMode, Section.Other),
+    PrefLayout(BoolWatchPref.QuietTimeManuallyEnabled, Section.QuietTime, name = Res.string.watch_pref_quiet_time_manually_enabled, description = Res.string.watch_pref_quiet_time_manually_enabled_desc),
+    PrefLayout(BoolWatchPref.CalendarAwareQuietTime, Section.QuietTime, name = Res.string.watch_pref_calendar_aware_quiet_time, description = Res.string.watch_pref_calendar_aware_quiet_time_desc),
+    PrefLayout(BoolWatchPref.QuietTimeWeekdayScheduleEnabled, Section.QuietTime, name = Res.string.watch_pref_quiet_time_weekday_schedule_enabled, description = Res.string.watch_pref_quiet_time_weekday_schedule_enabled_desc),
+    PrefLayout(ScheduleWatchPref.QuietTimeWeekdaySchedule, Section.QuietTime, name = Res.string.watch_pref_quiet_time_weekday_schedule),
+    PrefLayout(BoolWatchPref.QuietTimeWeekendScheduleEnabled, Section.QuietTime, name = Res.string.watch_pref_quiet_time_weekend_schedule_enabled, description = Res.string.watch_pref_quiet_time_weekend_schedule_enabled_desc),
+    PrefLayout(ScheduleWatchPref.QuietTimeWeekendSchedule, Section.QuietTime, name = Res.string.watch_pref_quiet_time_weekend_schedule),
+    PrefLayout(BoolWatchPref.QuietTimeMotionBacklight, Section.QuietTime, name = Res.string.watch_pref_quiet_time_motion_backlight, description = Res.string.watch_pref_quiet_time_motion_backlight_desc),
+    PrefLayout(BoolWatchPref.QuietTimeTouchBacklight, Section.QuietTime, name = Res.string.watch_pref_quiet_time_touch_backlight, description = Res.string.watch_pref_quiet_time_touch_backlight_desc),
+    PrefLayout(BoolWatchPref.QuietTimeNotificationBacklight, Section.QuietTime, name = Res.string.watch_pref_quiet_time_notification_backlight, description = Res.string.watch_pref_quiet_time_notification_backlight_desc),
+    PrefLayout(BoolWatchPref.QuietTimeAutoDismiss, Section.QuietTime, name = Res.string.watch_pref_quiet_time_auto_dismiss, description = Res.string.watch_pref_quiet_time_auto_dismiss_desc),
+    PrefLayout(BoolWatchPref.QuietTimeMuteSpeaker, Section.QuietTime, name = Res.string.watch_pref_quiet_time_mute_speaker, description = Res.string.watch_pref_quiet_time_mute_speaker_desc),
+    PrefLayout(EnumWatchPref.QuietTimeInterruptions, Section.QuietTime, name = Res.string.watch_pref_quiet_time_interruptions),
+    PrefLayout(EnumWatchPref.QuietTimeShowNotifications, Section.QuietTime, name = Res.string.watch_pref_quiet_time_show_notifications),
+
+    PrefLayout(BoolWatchPref.MusicShowVolumeControls, Section.Music, name = Res.string.watch_pref_music_show_volume_controls),
+    PrefLayout(BoolWatchPref.MusicShowProgressBar, Section.Music, name = Res.string.watch_pref_music_show_progress_bar),
+    PrefLayout(BoolWatchPref.MusicShowAlbumArt, Section.Music, name = Res.string.watch_pref_music_show_album_art),
+
+    PrefLayout(EnumWatchPref.InsightsStyle, Section.Health, SettingsGroup.Insights, name = Res.string.watch_pref_insights_style, description = Res.string.watch_pref_insights_style_desc),
+
+    PrefLayout(BoolWatchPref.StandbyMode, Section.Other, name = Res.string.watch_pref_standby_mode, description = Res.string.watch_pref_standby_mode_desc),
 )
 
 private val LAYOUT = WATCH_PREF_LAYOUT.associateBy { it.pref }
@@ -245,7 +429,10 @@ private val POSITION = WATCH_PREF_LAYOUT.withIndex().associate { (index, layout)
 
 fun WatchPref<*>.section(): Section = LAYOUT[this]?.section ?: Section.Other
 
-fun WatchPref<*>.settingsTitle(): String = LAYOUT[this]?.title ?: displayName
+fun WatchPref<*>.settingsTitle(): SettingsText =
+    (LAYOUT[this]?.let { it.title ?: it.name })?.let { SettingsText(it) } ?: SettingsText(displayName)
+
+fun WatchPref<*>.settingsDescription(): SettingsText? = LAYOUT[this]?.description?.let { SettingsText(it) }
 
 fun WatchPref<*>.settingsGroup(): SettingsGroup? = LAYOUT[this]?.group
 
@@ -253,8 +440,8 @@ internal fun List<WatchPreference<*>>.inLayoutOrder(): List<WatchPreference<*>> 
     sortedBy { POSITION[it.pref] ?: Int.MAX_VALUE }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
-    // Weather is configured on the phone, even though the unit it sets is a watch pref.
-    EnumWatchPref.WindSpeed, EnumWatchPref.Temperature -> TopLevelType.Phone
+    // Configured alongside phone settings, even though these are watch prefs.
+    EnumWatchPref.WindSpeed, EnumWatchPref.Temperature, EnumWatchPref.InsightsStyle -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
 
@@ -266,7 +453,7 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
                 pref = pref,
                 item = item,
                 libPebble = libPebble,
-                valueFormatter = { seconds -> "$seconds seconds" },
+                valueFormatter = { seconds -> pluralStringResource(Res.plurals.settings_prefs_seconds, seconds.toInt(), seconds) },
             )
         }
         NumberWatchPref.NotificationTimeoutMs -> {
@@ -281,10 +468,10 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
             )
         }
         NumberWatchPref.BacklightColorSunriseMinute, NumberWatchPref.BacklightColorSunsetMinute -> timeOfDayPref(item, libPebble)
-        else -> basicSettingsNumberItem(
+        NumberWatchPref.TimelineQuickViewMinsBefore -> basicSettingsNumberItem(
             id = pref.id,
             title = pref.settingsTitle(),
-            description = pref.description,
+            description = pref.settingsDescription(),
             topLevelType = pref.topLevelType(),
             section = pref.section(),
             group = pref.settingsGroup(),
@@ -296,7 +483,25 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
             },
             isDebugSetting = pref.isDebugSetting,
             defaultValue = pref.defaultValue,
-            unit = pref.unit,
+            unit = null,
+            valueFormatter = { minutes -> pluralStringResource(Res.plurals.settings_prefs_minutes, minutes.toInt(), minutes) },
+        )
+        else -> basicSettingsNumberItem(
+            id = pref.id,
+            title = pref.settingsTitle(),
+            description = pref.settingsDescription(),
+            topLevelType = pref.topLevelType(),
+            section = pref.section(),
+            group = pref.settingsGroup(),
+            value = item.valueOrDefault(),
+            min = pref.min,
+            max = pref.max,
+            onValueChange = {
+                libPebble.setWatchPref(item.copy(value = it))
+            },
+            isDebugSetting = pref.isDebugSetting,
+            defaultValue = pref.defaultValue,
+            unit = SettingsText(pref.unit),
         )
     }
 }
@@ -310,12 +515,12 @@ private fun basicSettingsNumberSecondsItem(
     pref: NumberWatchPref,
     item: WatchPreference<Long>,
     libPebble: LibPebble,
-    valueFormatter: (Long) -> String,
+    valueFormatter: @Composable (Long) -> String,
     steps: Int? = null,
 ): SettingsItem = basicSettingsNumberItem(
     id = pref.id,
     title = pref.settingsTitle(),
-    description = pref.description,
+    description = pref.settingsDescription(),
     topLevelType = pref.topLevelType(),
     section = pref.section(),
     group = pref.settingsGroup(),
@@ -327,7 +532,7 @@ private fun basicSettingsNumberSecondsItem(
     },
     isDebugSetting = pref.isDebugSetting,
     defaultValue = pref.defaultValue.milliseconds.inWholeSeconds,
-    unit = "",
+    unit = null,
     valueFormatter = valueFormatter,
     steps = steps,
 )
@@ -346,12 +551,12 @@ private fun schedulePref(
         item = {
             ListItem(
                 headlineContent = {
-                    Text(pref.displayName)
+                    Text(pref.settingsTitle().text())
                 },
                 supportingContent = {
                     Column {
-                        pref.description?.let { description ->
-                            Text(description, fontSize = 11.sp)
+                        pref.settingsDescription()?.let { description ->
+                            Text(description.text(), fontSize = 11.sp)
                         }
                         SelectTimeRange(
                             schedule = item.valueOrDefault(),
@@ -368,9 +573,9 @@ private fun schedulePref(
     )
 }
 
-private enum class ScheduleEdge(val title: String) {
-    From("Start time"),
-    To("End time"),
+private enum class ScheduleEdge(val title: StringResource) {
+    From(Res.string.settings_prefs_start_time),
+    To(Res.string.settings_prefs_end_time),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -381,11 +586,11 @@ internal fun SelectTimeRange(
 ) {
     var editing by remember { mutableStateOf<ScheduleEdge?>(null) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("From", fontSize = 14.sp)
+        Text(stringResource(Res.string.settings_prefs_from), fontSize = 14.sp)
         TextButton(onClick = { editing = ScheduleEdge.From }) {
             Text(schedule.fromTime())
         }
-        Text("to", fontSize = 14.sp)
+        Text(stringResource(Res.string.settings_prefs_to), fontSize = 14.sp)
         TextButton(onClick = { editing = ScheduleEdge.To }) {
             Text(schedule.toTime())
         }
@@ -397,10 +602,10 @@ internal fun SelectTimeRange(
     )
     TimePickerDialog(
         onDismissRequest = { editing = null },
-        title = { Text(edge.title) },
+        title = { Text(stringResource(edge.title)) },
         dismissButton = {
             TextButton(onClick = { editing = null }) {
-                Text("Cancel")
+                Text(stringResource(UtilRes.string.cancel))
             }
         },
         confirmButton = {
@@ -419,7 +624,7 @@ internal fun SelectTimeRange(
                     }
                 )
             }) {
-                Text("Set")
+                Text(stringResource(Res.string.settings_prefs_set))
             }
         },
     ) {
@@ -439,12 +644,12 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
         item = {
             ListItem(
                 headlineContent = {
-                    Text(pref.displayName)
+                    Text(pref.settingsTitle().text())
                 },
                 supportingContent = {
                     Column {
-                        pref.description?.let { description ->
-                            Text(description, fontSize = 11.sp)
+                        pref.settingsDescription()?.let { description ->
+                            Text(description.text(), fontSize = 11.sp)
                         }
                         SelectColorOrNone(
                             currentColorName = default.identifier,
@@ -467,7 +672,7 @@ private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): S
     return basicSettingsToggleItem(
         id = item.pref.id,
         title = item.pref.settingsTitle(),
-        description = item.pref.description,
+        description = item.pref.settingsDescription(),
         topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
         group = item.pref.settingsGroup(),
@@ -484,7 +689,7 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
     return basicSettingsDropdownItem(
         id = pref.id,
         title = pref.settingsTitle(),
-        description = pref.description,
+        description = pref.settingsDescription(),
         topLevelType = pref.topLevelType(),
         section = pref.section(),
         group = pref.settingsGroup(),
@@ -493,7 +698,7 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
         onItemSelected = {
             libPebble.setWatchPref(item.copy(value = it))
         },
-        itemText = { it.displayName },
+        itemText = { it.label() },
         isDebugSetting = pref.isDebugSetting,
     )
 }
@@ -508,11 +713,11 @@ private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): Set
         group = pref.settingsGroup(),
         item = {
             ListItem(
-                headlineContent = { Text(pref.settingsTitle()) },
+                headlineContent = { Text(pref.settingsTitle().text()) },
                 supportingContent = {
                     Column {
-                        pref.description?.let { description ->
-                            Text(description, fontSize = 11.sp)
+                        pref.settingsDescription()?.let { description ->
+                            Text(description.text(), fontSize = 11.sp)
                         }
                         SelectRgbColor(
                             currentRgb = item.valueOrDefault(),
@@ -534,8 +739,8 @@ private fun autoSunTimesItem(coreConfigHolder: CoreConfigHolder, weatherFetcher:
     val pref = RgbColorWatchPref.BacklightColorNight
     val coreConfig = coreConfigHolder.config.value
     return basicSettingsToggleItem(
-        title = "Automatic Sunrise/Sunset",
-        description = "Use the sunrise and sunset times for your location",
+        title = SettingsText(Res.string.settings_prefs_auto_sun_times),
+        description = SettingsText(Res.string.settings_prefs_auto_sun_times_desc),
         topLevelType = pref.topLevelType(),
         section = pref.section(),
         group = pref.settingsGroup(),
@@ -556,7 +761,7 @@ private fun timeOfDayPref(item: WatchPreference<Long>, libPebble: LibPebble): Se
         section = pref.section(),
         group = pref.settingsGroup(),
         item = {
-            SelectTimeOfDay(pref.settingsTitle(), item.valueOrDefault()) {
+            SelectTimeOfDay(pref.settingsTitle().text(), item.valueOrDefault()) {
                 libPebble.setWatchPref(item.copy(value = it))
             }
         },
@@ -580,12 +785,12 @@ private fun SelectTimeOfDay(label: String, minuteOfDay: Long, onChange: (Long) -
     TimePickerDialog(
         onDismissRequest = { editing = false },
         title = { Text(label) },
-        dismissButton = { TextButton(onClick = { editing = false }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { editing = false }) { Text(stringResource(UtilRes.string.cancel)) } },
         confirmButton = {
             TextButton(onClick = {
                 editing = false
                 onChange((state.hour * 60 + state.minute).toLong())
-            }) { Text("Set") }
+            }) { Text(stringResource(Res.string.settings_prefs_set)) }
         },
     ) {
         TimePicker(state = state)
@@ -606,8 +811,9 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
     ).map { apps ->
         apps.filter { app -> app.isSynced() }
     }.collectAsState(emptyList())
-    return remember(installedApps) {
-        listOf(QuickLaunchOption(null, "None")) +
+    val noneLabel = stringResource(UtilRes.string.none)
+    return remember(installedApps, noneLabel) {
+        listOf(QuickLaunchOption(null, noneLabel)) +
                 SYSTEM_SHORTCUTS.map { (uuid, name) -> QuickLaunchOption(uuid, name) } +
                 installedApps.map { app ->
                     QuickLaunchOption(app.properties.id, app.properties.title)
@@ -621,7 +827,7 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
     return basicSettingsDropdownItem(
         id = item.pref.id,
         title = item.pref.settingsTitle(),
-        description = item.pref.description,
+        description = item.pref.settingsDescription(),
         topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
         group = item.pref.settingsGroup(),

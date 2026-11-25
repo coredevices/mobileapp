@@ -5,13 +5,13 @@ import com.oldguy.common.io.Buffer
 import com.oldguy.common.io.ByteBuffer
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ExtendedPebbleScanRecord.Companion.decodeExtendedPebbleScanRecord
 
-data class PebbleLeScanRecord(
+public data class PebbleLeScanRecord internal constructor(
     val payloadType: Byte,
     val serialNumber: String,
     val extendedInfo: ExtendedPebbleScanRecord?,
 ) {
-    companion object {
-        fun ByteArray.decodePebbleScanRecord(): PebbleLeScanRecord {
+    public companion object {
+        internal fun ByteArray.decodePebbleScanRecord(): PebbleLeScanRecord {
             val buffer = ByteBuffer(this, Buffer.ByteOrder.LittleEndian)
             return PebbleLeScanRecord(
                 payloadType = buffer.byte,
@@ -22,7 +22,7 @@ data class PebbleLeScanRecord(
     }
 }
 
-data class ExtendedPebbleScanRecord(
+public data class ExtendedPebbleScanRecord internal constructor(
     val hardwarePlatform: Int,
     val color: Byte,
     val major: Int,
@@ -31,8 +31,8 @@ data class ExtendedPebbleScanRecord(
     val runningPrf: Boolean,
     val firstUse: Boolean,
 ) {
-    companion object {
-        fun ByteBuffer.decodeExtendedPebbleScanRecord(): ExtendedPebbleScanRecord? {
+    public companion object {
+        internal fun ByteBuffer.decodeExtendedPebbleScanRecord(): ExtendedPebbleScanRecord? {
             val buffer = this
             // Only added in v3.0
             if (!buffer.hasRemaining) {

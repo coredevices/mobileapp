@@ -41,7 +41,7 @@ private const val KEY_HEARTBEAT_COUNTER_PREFIX = "coreanalytics_counter_"
 private const val KEY_HEARTBEAT_COUNTER_START_TIMESTAMP = "coreanalytics_counter_start_timestamp"
 private const val KEY_LAST_HEARTBEAT_TIMESTAMP = "coreanalytics_last_heartbeat_timestamp"
 
-/** Counters reset on every heartbeat; each is always reported, as 0 if untouched. */
+/** Counters reset on every heartbeat; these are always reported, as 0 if untouched, and any other counter when it was. */
 val HEARTBEAT_COUNTERS = PluginHeartbeatCounters.all
 
 class RealCoreAnalytics(
@@ -111,7 +111,7 @@ class RealCoreAnalytics(
                         cache.getInt(KEY_RING_BATTERY_VOLTAGE, -1)
                     }
                 ) +
-                HEARTBEAT_COUNTERS.map { name ->
+                heartbeatCounterNames().map { name ->
                     HeartbeatMetric(
                         name,
                         withContext(Dispatchers.IO) {
@@ -128,7 +128,7 @@ class RealCoreAnalytics(
             cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
             cache.remove(KEY_RING_BATTERY_VOLTAGE)
             cache.remove(KEY_HEARTBEAT_COUNTER_START_TIMESTAMP)
-            HEARTBEAT_COUNTERS.forEach { cache.remove(KEY_HEARTBEAT_COUNTER_PREFIX + it) }
+            heartbeatCounterNames().forEach { cache.remove(KEY_HEARTBEAT_COUNTER_PREFIX + it) }
             cache[KEY_LAST_HEARTBEAT_TIMESTAMP] = now.toEpochMilliseconds()
         }
         logEvent("heartbeat", heartbeatMetrics.associate { it.name to it.value })
@@ -172,6 +172,11 @@ class RealCoreAnalytics(
         val key = KEY_HEARTBEAT_COUNTER_PREFIX + name
         cache[key] = cache.getInt(key, 0) + 1
     }
+
+    private fun heartbeatCounterNames(): Set<String> = HEARTBEAT_COUNTERS.toSet() +
+        cache.keys
+            .filter { it.startsWith(KEY_HEARTBEAT_COUNTER_PREFIX) && it != KEY_HEARTBEAT_COUNTER_START_TIMESTAMP }
+            .map { it.removePrefix(KEY_HEARTBEAT_COUNTER_PREFIX) }
 
     private suspend fun heartbeatDuration(): Duration {
         val cachedTimestamps = withContext(Dispatchers.IO) {

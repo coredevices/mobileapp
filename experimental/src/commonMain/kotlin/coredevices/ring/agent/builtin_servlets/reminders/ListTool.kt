@@ -10,20 +10,20 @@ import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
-import coredevices.ring.agent.builtin_servlets.destinationProperty
-import coredevices.ring.agent.builtin_servlets.withoutDestination
+import coredevices.ring.agent.builtin_servlets.LIST_ITEM_DESTINATION_DESCRIPTION
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.agent.integrations.fuzzyFilter
 import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.externalDestination
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import coredevices.util.capitalizeFirstWord
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import kotlin.time.Clock
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
@@ -32,14 +32,11 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlin.time.Clock
 
 class ListTool: BuiltInMcpTool(
-    definition = DEFINITION,
-    localDefinition = DEFINITION.withoutDestination(),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
         Never guess 'reminder_date_time_human' — only pass a time the user actually said, otherwise omit it.
     """.trimIndent()
@@ -49,7 +46,7 @@ class ListTool: BuiltInMcpTool(
 
     companion object Companion {
         const val TOOL_NAME = "create_list_item"
-        const val TOOL_DESCRIPTION = "Add an item to a shopping list, grocery list, or to-do list. Use when the user names a list or wants to buy groceries, food, or household supplies."
+        const val TOOL_DESCRIPTION = "Add an item to a shopping list, grocery list, or to-do list. Only use when the user names a list or asks to add or buy something, not for a bare item name like 'tortilla chips'."
         private val logger = Logger.withTag(ReminderTool::class.simpleName!!)
 
         /**
@@ -84,47 +81,23 @@ class ListTool: BuiltInMcpTool(
                 ?.id
             return bestMatchOn { it.title } ?: bestMatchOn { it.seed }
         }
-        private val DEFINITION = Tool(
-            name = TOOL_NAME,
-            description = TOOL_DESCRIPTION,
-            inputSchema = ToolSchema(
-                properties = JsonObject(
-                    mapOf(
-                        "list_name" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The name of the list to add the item to e.g. 'shopping', 'todo'. " +
-                                        "Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists."
-                            ).toJson()
-                        ),
-                        "message" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The text of the list item to add"
-                            ).toJson()
-                        ),
-                        "reminder_date_time_human" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'"
-                            ).toJson()
-                        ),
-                        DESTINATION_ARG to destinationProperty("list item"),
-                    )
-                ),
-                required = listOf(
-                    "list_name",
-                    "message"
-                )
-            )
-        )
     }
 
+    @ToolDefinition(
+        servlet = ListServlet.NAME,
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        localModelServlet = ReminderServlet.NAME,
+    )
     @Serializable
     private data class ListItemArgs(
+        @ToolParam("The name of the list to add the item to e.g. 'shopping', 'todo'. " + "Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists.")
         val list_name: String,
-        val reminder_date_time_human: String? = null,
+        @ToolParam("The text of the list item to add")
         val message: String,
+        @ToolParam("If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'")
+        val reminder_date_time_human: String? = null,
+        @ToolParam(LIST_ITEM_DESTINATION_DESCRIPTION)
         val destination: String? = null,
     )
 
@@ -164,11 +137,9 @@ class ListTool: BuiltInMcpTool(
             }
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
-                    logger.d { "Parsed absolute date: $parsed will assume 9am" }
-                    LocalDateTime(
-                        date = parsed.date,
-                        time = kotlinx.datetime.LocalTime(9, 0)
-                    )
+                    val resolved = parsed.resolveDefaultTime(Clock.System.now(), tz)
+                    logger.d { "Parsed absolute date: $parsed resolved to $resolved" }
+                    resolved
                 }
                 is InterpretedDateTime.AbsoluteDateTime -> {
                     logger.d { "Parsed absolute date time: $parsed" }
@@ -217,7 +188,7 @@ class ListTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
-        val provider = providers.destinationProvider(listItemArgs.destination, IntegrationSupport.Reminder)
+        val provider = providers.destinationProvider(listItemArgs.destination, IntegrationSupport.List)
             ?: return ToolCallResult(
                 JsonSnake.encodeToString(
                     ListAddResult(
@@ -230,9 +201,9 @@ class ListTool: BuiltInMcpTool(
             )
 
         return try {
-            val integration = providers.reminderIntegration(provider)
+            val integration = providers.listIntegration(provider)
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
-            val reminderId = integration.createReminder(
+            val itemId = integration.createListItem(
                 listItemArgs.message,
                 instant,
                 listId = list?.id,
@@ -240,7 +211,7 @@ class ListTool: BuiltInMcpTool(
             )
             val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(
-                JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),
+                JsonSnake.encodeToString(ListAddResult(success = true, id = itemId)),
                 SemanticResult.ListItemCreation(
                     content = listItemArgs.message,
                     listUsed = list?.title,
@@ -250,7 +221,7 @@ class ListTool: BuiltInMcpTool(
                 )
             )
         } catch (e: Exception) {
-            logger.e(e) { "Failed to create reminder" }
+            logger.e(e) { "Failed to create list item" }
             ToolCallResult(
                 JsonSnake.encodeToString(
                     ListAddResult(

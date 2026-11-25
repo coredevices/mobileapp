@@ -32,6 +32,8 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import coredevices.ring.reminders.ReminderScheduler
+import coredevices.ring.reminders.RemindersWidgetPublisher
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
@@ -39,6 +41,8 @@ import platform.Foundation.NSUserDomainMask
 actual val platformRingModule = module {
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)
+    singleOf(::ReminderScheduler)
+    singleOf(::RemindersWidgetPublisher)
     factoryOf(::AudioRecorder)
     factoryOf(::AudioPlayer)
     factory {

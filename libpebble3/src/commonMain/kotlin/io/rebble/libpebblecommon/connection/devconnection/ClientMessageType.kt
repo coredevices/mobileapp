@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.connection.devconnection
 
-enum class ClientMessageType(val value: Byte) {
+internal enum class ClientMessageType(val value: Byte) {
     RelayToWatch(0x01),
     InstallBundle(0x04),
     //PhoneInfo(0x06),

@@ -3,14 +3,10 @@ package coredevices.ring.agent.builtin_servlets.messaging
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
 
 actual class SendBeeperMessageTool : BuiltInMcpTool(
-    definition = Tool(
-        name = SendBeeperMessageToolConstants.TOOL_NAME,
-        description = SendBeeperMessageToolConstants.TOOL_DESCRIPTION,
-        inputSchema = SendBeeperMessageToolConstants.INPUT_SCHEMA
-    )
+    definition = builtinToolDefinitions.getValue(SendBeeperMessageToolConstants.TOOL_NAME)
 ) {
     actual override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         throw NotImplementedError("iOS does not support sending instant messages yet.")

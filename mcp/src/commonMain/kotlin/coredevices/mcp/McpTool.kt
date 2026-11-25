@@ -5,8 +5,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.Tool
 
 interface McpTool {
     val definition: Tool
-    /** Schema shown to the on-device model, which is fine-tuned on a fixed tool list. */
-    val localDefinition: Tool get() = definition
-    val extraContext: String?
+    /** Every call waits on the user's confirmation, which the tool asks for itself. */
+    val requiresConfirmation: Boolean get() = false
+    suspend fun getExtraContext(): String?
     suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult
 }

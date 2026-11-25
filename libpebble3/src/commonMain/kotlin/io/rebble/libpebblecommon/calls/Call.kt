@@ -1,18 +1,18 @@
 package io.rebble.libpebblecommon.calls
 
-sealed interface Call {
-    val contactName: String?
-    val contactNumber: String
-    val cookie: UInt
+public sealed interface Call {
+    public val contactName: String?
+    public val contactNumber: String
+    public val cookie: UInt
 
-    sealed interface EndableCall: Call {
-        fun endCall()
+    public sealed interface EndableCall: Call {
+        public fun endCall()
     }
-    sealed interface AnswerableCall: Call {
-        fun answerCall()
+    public sealed interface AnswerableCall: Call {
+        public fun answerCall()
     }
 
-    class RingingCall(
+    public class RingingCall internal constructor(
         override val contactName: String?,
         override val contactNumber: String,
         override val cookie: UInt,
@@ -28,7 +28,7 @@ sealed interface Call {
         }
     }
 
-    class DialingCall(
+    public class DialingCall internal constructor(
         override val contactName: String?,
         override val contactNumber: String,
         override val cookie: UInt,
@@ -39,7 +39,7 @@ sealed interface Call {
         }
     }
 
-    class ActiveCall(
+    public class ActiveCall internal constructor(
         override val contactName: String?,
         override val contactNumber: String,
         override val cookie: UInt,
@@ -50,7 +50,7 @@ sealed interface Call {
         }
     }
 
-    class HoldingCall(
+    public class HoldingCall internal constructor(
         override val contactName: String?,
         override val contactNumber: String,
         override val cookie: UInt,

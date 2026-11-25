@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * declare the same types directly. See `new-plugin-api.md`.
  */
 @Serializable
-data class PluginManifest(
+public data class PluginManifest internal constructor(
     // No uuid/name: a plugin's identity is its pbw's (appinfo uuid + name).
     val description: String = "",
     val script: String = "plugin.js",
@@ -27,7 +27,7 @@ data class PluginManifest(
 )
 
 @Serializable
-data class PermissionDeclaration(
+public data class PermissionDeclaration internal constructor(
     val name: String,
     /** Completes "<app> wants to", e.g. "Control your lights". */
     val label: String,
@@ -39,10 +39,10 @@ data class PermissionDeclaration(
  * declaration (see [PluginManifest.oauth]); fields land here if a connector ever needs options.
  */
 @Serializable
-class OAuthConnector
+public class OAuthConnector internal constructor()
 
 @Serializable
-data class SourceDeclaration(
+public data class SourceDeclaration(
     val category: String,
     /** Kinds of thing this block describes. Items listed together share everything below. */
     val items: List<String>,
@@ -53,15 +53,15 @@ data class SourceDeclaration(
     val callerPermissions: List<PluginPermission> = emptyList(),
     val suggestedRefreshIntervalSec: Int = DEFAULT_REFRESH_SEC,
 ) {
-    fun serves(category: String, item: String) = category == this.category && item in items
+    public fun serves(category: String, item: String): Boolean = category == this.category && item in items
 
-    companion object {
-        const val DEFAULT_REFRESH_SEC = 300
+    public companion object {
+        public const val DEFAULT_REFRESH_SEC: Int = 300
     }
 }
 
 @Serializable
-data class ActionDeclaration(
+public data class ActionDeclaration(
     val name: String,
     val description: String = "",
     /** JSON Schema for the action's arguments. Passed through verbatim to the MCP tool definition. */
@@ -91,17 +91,19 @@ data class ActionDeclaration(
     val bindable: Boolean
         get() = requiredParams.all { it == PARAM_INSTANCE_ID || it == PARAM_ITEM }
 
-    companion object {
-        const val PARAM_INSTANCE_ID = "instanceId"
-        const val PARAM_ITEM = "item"
+    public companion object {
+        public const val PARAM_INSTANCE_ID: String = "instanceId"
+        public const val PARAM_ITEM: String = "item"
     }
 }
 
 @Serializable
-data class ActionResult(
+public data class ActionResult(
     val ok: Boolean,
     /** Shown as a toast on the watch; returned verbatim to an LLM caller. Ignored if ok = false */
     val text: String? = null,
+    /** Used by Index harness to show a result to the user */
+    val semanticResult: String? = null,
     /** `"<category>/<item>"` entries whose cached envelopes this action invalidated. */
     val refreshed: List<String> = emptyList(),
     /**
@@ -113,8 +115,8 @@ data class ActionResult(
     /** Error message. Shown to user and LLM */
     val message: String? = null,
 ) {
-    companion object {
-        fun error(code: String, message: String? = null) =
+    public companion object {
+        public fun error(code: String, message: String? = null): ActionResult =
             ActionResult(ok = false, code = code, message = message)
     }
 }
@@ -122,15 +124,15 @@ data class ActionResult(
 /**
  * Plugin error codes known to the app
  */
-object PluginErrors {
-    const val PLUGIN_UNAVAILABLE = "PLUGIN_UNAVAILABLE"
-    const val PERMISSION_DENIED = "PERMISSION_DENIED"
-    const val RATE_LIMITED = "RATE_LIMITED"
-    const val TIMEOUT = "TIMEOUT"
-    const val AUTH_REQUIRED = "AUTH_REQUIRED"
-    const val INVALID_ARGS = "INVALID_ARGS"
-    const val INVALID_REQUEST = "INVALID_REQUEST"
-    const val UNKNOWN = "UNKNOWN"
+public object PluginErrors {
+    public const val PLUGIN_UNAVAILABLE: String = "PLUGIN_UNAVAILABLE"
+    public const val PERMISSION_DENIED: String = "PERMISSION_DENIED"
+    public const val RATE_LIMITED: String = "RATE_LIMITED"
+    public const val TIMEOUT: String = "TIMEOUT"
+    public const val AUTH_REQUIRED: String = "AUTH_REQUIRED"
+    public const val INVALID_ARGS: String = "INVALID_ARGS"
+    internal const val INVALID_REQUEST: String = "INVALID_REQUEST"
+    public const val UNKNOWN: String = "UNKNOWN"
 }
 
 internal const val LEGACY_CALLER_MESSAGE = "Using plugins needs \"manifestVersion\": 2 in appinfo.json"

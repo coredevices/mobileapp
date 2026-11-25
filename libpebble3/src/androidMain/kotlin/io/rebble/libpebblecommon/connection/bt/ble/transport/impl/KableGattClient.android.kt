@@ -5,23 +5,27 @@ import co.touchlab.kermit.Logger
 import com.juul.kable.AndroidPeripheral
 import com.juul.kable.Peripheral
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun peripheralFromIdentifier(
+internal actual fun peripheralFromIdentifier(
     identifier: PebbleBleIdentifier,
     name: String,
     autoConnect: Boolean,
 ): Peripheral? = Peripheral(identifier.macAddress) {
     autoConnectIf { autoConnect }
+    mtu = TARGET_MTU
 }
 
-actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+// Kable negotiates the MTU (TARGET_MTU) while connecting; this only reports the result.
+internal actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     if (this is AndroidPeripheral) {
-        return this.requestMtu(mtu)
+        return this.mtu.value ?: DEFAULT_MTU
     }
     throw IllegalStateException("Not an AndroidPeripheral")
 }
@@ -30,7 +34,7 @@ private val LOG_TAG = "Peripheral.refreshServicesNative"
 private val REDISCOVER_TIMEOUT = 10.seconds
 private const val KABLE_ON_SERVICE_CHANGED_CLASS = "com.juul.kable.gatt.OnServiceChanged"
 
-actual suspend fun Peripheral.refreshServicesNative(): Boolean {
+internal actual suspend fun Peripheral.refreshServicesNative(): Boolean {
     val logger = Logger.withTag(LOG_TAG)
     if (this !is AndroidPeripheral) {
         logger.w("Not an AndroidPeripheral, skipping refresh")

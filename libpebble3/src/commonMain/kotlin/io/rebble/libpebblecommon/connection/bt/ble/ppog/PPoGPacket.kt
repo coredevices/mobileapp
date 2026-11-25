@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.ppog
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.putBytes
 
-sealed class PPoGPacket {
+internal sealed class PPoGPacket {
   abstract val sequence: Int
 
   data class Data(
@@ -55,7 +55,7 @@ sealed class PPoGPacket {
   }
 }
 
-enum class PPoGVersion(
+internal enum class PPoGVersion(
   val version: Int,
   val supportsWindowNegotiation: Boolean,
   val supportsCoalescedAcking: Boolean,
@@ -103,7 +103,7 @@ internal fun ByteArray.asPPoGPacket(): PPoGPacket {
 private fun Byte.asPPoGVersion(): PPoGVersion = PPoGVersion.entries.first { it.version == this.toInt() }
 // TODO dedup constants with LeConstants.kt
 private const val V0_WINDOW_SIZE = 4
-const val MAX_SUPPORTED_WINDOW_SIZE = 25
+internal const val MAX_SUPPORTED_WINDOW_SIZE: Int = 25
 
 private const val SEQUENCE_MASK = 0b11111000
 private const val PACKET_TYPE_MASK = 0b00000111
