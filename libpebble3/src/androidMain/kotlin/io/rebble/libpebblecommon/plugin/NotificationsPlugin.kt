@@ -1,14 +1,18 @@
 package io.rebble.libpebblecommon.plugin
 
 import android.app.Notification
+import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
 import android.util.LruCache
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.imaging.EncodedImage
 import io.rebble.libpebblecommon.imaging.encodeForWatch
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.isGroupSummary
 import io.rebble.libpebblecommon.notification.appIconBitmap
+import io.rebble.libpebblecommon.notification.toBoundedBitmap
 import io.rebble.libpebblecommon.util.stripBidiIsolates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +45,8 @@ internal class NotificationsPlugin(
     override val name: String = "Notifications"
     override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
+    private val logger = Logger.withTag("NotificationsPlugin")
+
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(
             category = CATEGORY,
@@ -56,6 +62,23 @@ internal class NotificationsPlugin(
             callerPermissions = listOf(PluginPermission(PluginPermissions.NOTIFICATIONS)),
             suggestedRefreshIntervalSec = 30,
         ),
+        SourceDeclaration(
+            category = CATEGORY,
+            items = listOf(ITEM_ONGOING),
+            properties = mapOf(
+                SourceInstance.PROPERTY_NAME to TEXT_SHAPES,
+                PROPERTY_BODY to TEXT_SHAPES,
+                PROPERTY_SUB_TEXT to TEXT_SHAPES,
+                PROPERTY_APP to listOf(SourceShapeNames.SHORT_TEXT),
+                SourceInstance.PROPERTY_PACKAGE to listOf(SourceShapeNames.LONG_TEXT),
+                PROPERTY_PROGRESS to listOf(SourceShapeNames.NUMERIC_VALUE, SourceShapeNames.SHORT_TEXT),
+                PROPERTY_APP_ICON to listOf(SourceShapeNames.IMAGE),
+                PROPERTY_LARGE_ICON to listOf(SourceShapeNames.IMAGE),
+            ),
+            supportsMultiple = true,
+            callerPermissions = listOf(PluginPermission(PluginPermissions.NOTIFICATIONS)),
+            suggestedRefreshIntervalSec = 30,
+        ),
     )
 
     override fun observe(
@@ -66,15 +89,18 @@ internal class NotificationsPlugin(
         limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
-        val iconSize = iconPixelSize
+        val ongoing = item == ITEM_ONGOING
+        val appIconSize = iconPixelSize
             ?.takeIf { properties == null || PROPERTY_APP_ICON in properties }
+        val largeIconSize = iconPixelSize
+            ?.takeIf { ongoing && (properties == null || PROPERTY_LARGE_ICON in properties) }
         return connection.shadeChanged
             .onStart { emit(Unit) }
-            .map { readShade() }
+            .map { readShade(ongoing = ongoing) }
             // Nothing rather than an empty envelope when the shade can't be read: "no
             // notifications" is a claim, and a subscriber would draw it as one.
             .filterNotNull()
-            .map { toEnvelope(it, iconSize) }
+            .map { toEnvelope(it, appIconSize, largeIconSize) }
             .distinctUntilChanged()
     }
 
@@ -83,23 +109,30 @@ internal class NotificationsPlugin(
      * the process comes back, and a call before then throws. No retry here: the connection
      * reports a shade change when the listener binds, which re-reads.
      */
-    private fun readShade(): List<ShadeNotification>? =
+    private fun readShade(ongoing: Boolean): List<ShadeNotification>? =
         connection.activeNotifications()
-            ?.mapNotNull { it.toShadeNotification(sensitive = connection.hasSensitiveContent(it.key)) }
+            ?.mapNotNull {
+                it.toShadeNotification(
+                    sensitive = connection.hasSensitiveContent(it.key),
+                    wantOngoing = ongoing,
+                )
+            }
             ?.sortedByDescending { it.postedAt }
 
     private suspend fun toEnvelope(
         notifications: List<ShadeNotification>,
-        iconSize: IconPixelSize?,
+        appIconSize: IconPixelSize?,
+        largeIconSize: IconPixelSize?,
     ) = SourceEnvelope(
         pluginUuid = pluginUuid.toString(),
         validUntilMs = null,
-        instances = notifications.map { toInstance(it, iconSize) },
+        instances = notifications.map { toInstance(it, appIconSize, largeIconSize) },
     )
 
     private suspend fun toInstance(
         notification: ShadeNotification,
-        iconSize: IconPixelSize?,
+        appIconSize: IconPixelSize?,
+        largeIconSize: IconPixelSize?,
     ): SourceInstance {
         val appName = notificationAppDao.getEntry(notification.packageName)?.name
             ?: notification.packageName
@@ -110,6 +143,9 @@ internal class NotificationsPlugin(
                 if (notification.body.isNotBlank()) {
                     put(PROPERTY_BODY, textShapes(notification.body))
                 }
+                if (notification.subText.isNotBlank()) {
+                    put(PROPERTY_SUB_TEXT, textShapes(notification.subText))
+                }
                 put(
                     PROPERTY_APP,
                     mapOf(SourceShapeNames.SHORT_TEXT to encode(ShortTextShape(appName))),
@@ -118,9 +154,15 @@ internal class NotificationsPlugin(
                     SourceInstance.PROPERTY_PACKAGE,
                     mapOf(SourceShapeNames.LONG_TEXT to encode(LongTextShape(notification.packageName))),
                 )
-                iconSize
+                if (notification.progress != null && notification.progressMax != null) {
+                    put(PROPERTY_PROGRESS, progressShapes(notification.progress, notification.progressMax))
+                }
+                appIconSize
                     ?.let { appIcon(notification.packageName, it) }
                     ?.let { put(PROPERTY_APP_ICON, mapOf(SourceShapeNames.IMAGE to it)) }
+                largeIconSize
+                    ?.let { size -> notification.largeIcon?.let { largeIcon(notification.key, it, size) } }
+                    ?.let { put(PROPERTY_LARGE_ICON, mapOf(SourceShapeNames.IMAGE to it)) }
             },
         )
     }
@@ -134,24 +176,66 @@ internal class NotificationsPlugin(
         override fun sizeOf(key: String, value: JsonElement): Int = value.toString().length
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
     private suspend fun appIcon(packageName: String, size: IconPixelSize): JsonElement? {
         val key = "$packageName|${size.w}x${size.h}"
         icons.get(key)?.let { return it }
         val encoded = withContext(Dispatchers.Default) {
             appIconBitmap(packageName, appContext)?.encodeForWatch(size.w, size.h)
         } ?: return null
-        val shape = encode(
-            ImageShape(
-                pixels = Base64.encode(encoded.pixels.toByteArray()),
-                palette = Base64.encode(encoded.palette.toByteArray()),
-                width = encoded.width,
-                height = encoded.height,
-            )
-        )
+        val shape = encodeImage(encoded)
         icons.put(key, shape)
         return shape
     }
+
+    /**
+     * A large icon is valid until its notification is re-posted: the framework keeps the same
+     * [Icon] instance while a notification stands, so keying on its identity (plus the
+     * notification key and size) hits while the icon is unchanged and misses on a new one.
+     * (An app that mutates its large-icon bitmap in place gets the cached encoding.)
+     */
+    private val largeIcons = object : LruCache<String, JsonElement>(MAX_ICON_CACHE_CHARS) {
+        override fun sizeOf(key: String, value: JsonElement): Int = value.toString().length
+    }
+
+    private suspend fun largeIcon(
+        notificationKey: String,
+        icon: Icon,
+        size: IconPixelSize,
+    ): JsonElement? {
+        val key = "$notificationKey|${System.identityHashCode(icon)}|${size.w}x${size.h}"
+        largeIcons.get(key)?.let { return it }
+        // loadDrawable reads the app Resources, which Android only guarantees on the main
+        // thread; the load goes there, the heavier encode stays off it.
+        val drawable = withContext(Dispatchers.Main) {
+            try {
+                icon.loadDrawable(appContext.context)
+            } catch (e: Exception) {
+                logger.w(e) { "Couldn't load large icon" }
+                null
+            }
+        } ?: return null
+        val encoded = withContext(Dispatchers.Default) {
+            try {
+                drawable.toBoundedBitmap()?.encodeForWatch(size.w, size.h)
+            } catch (e: Exception) {
+                logger.w(e) { "Couldn't encode large icon" }
+                null
+            }
+        } ?: return null
+        val shape = encodeImage(encoded)
+        largeIcons.put(key, shape)
+        return shape
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun encodeImage(encoded: EncodedImage): JsonElement = encode(
+        ImageShape(
+            pixels = Base64.encode(encoded.pixels.toByteArray()),
+            palette = Base64.encode(encoded.palette.toByteArray()),
+            width = encoded.width,
+            height = encoded.height,
+        )
+    )
 
     private fun textShapes(reading: String) = mapOf(
         SourceShapeNames.SHORT_TEXT to encode(ShortTextShape(reading)),
@@ -163,9 +247,13 @@ internal class NotificationsPlugin(
     companion object {
         const val CATEGORY: String = "notifications"
         const val ITEM_NOTIFICATION: String = "notification"
+        const val ITEM_ONGOING: String = "ongoing"
         const val PROPERTY_BODY: String = "body"
+        const val PROPERTY_SUB_TEXT: String = "sub_text"
         const val PROPERTY_APP: String = "app"
+        const val PROPERTY_PROGRESS: String = "progress"
         const val PROPERTY_APP_ICON: String = "app_icon"
+        const val PROPERTY_LARGE_ICON: String = "large_icon"
 
         private const val MAX_ICON_CACHE_CHARS = 256 * 1024
 
@@ -179,27 +267,55 @@ internal data class ShadeNotification(
     val packageName: String,
     val title: String,
     val body: String,
+    val subText: String = "",
+    val progress: Int? = null,
+    val progressMax: Int? = null,
+    val largeIcon: Icon? = null,
     val postedAt: Long,
 )
 
-internal fun StatusBarNotification.toShadeNotification(sensitive: Boolean): ShadeNotification? {
+internal fun progressShapes(progress: Int, progressMax: Int): Map<String, JsonElement> {
+    val pct = (progress.toLong() * 100L / progressMax).toInt()
+    return mapOf(
+        SourceShapeNames.NUMERIC_VALUE to Json.encodeToJsonElement(
+            NumericValueShape(
+                value = progress.toDouble(),
+                min = 0.0,
+                max = progressMax.toDouble(),
+            )
+        ),
+        SourceShapeNames.SHORT_TEXT to Json.encodeToJsonElement(ShortTextShape("$pct%")),
+    )
+}
+
+internal fun StatusBarNotification.toShadeNotification(
+    sensitive: Boolean,
+    wantOngoing: Boolean = false,
+): ShadeNotification? {
     val extras = notification.extras
+    val indeterminate = wantOngoing && extras?.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false) == true
+    val progressMax = if (wantOngoing) extras?.getInt(Notification.EXTRA_PROGRESS_MAX, 0) ?: 0 else 0
+    val progress = if (wantOngoing) extras?.getInt(Notification.EXTRA_PROGRESS, 0) ?: 0 else 0
     return shadeNotification(
         sensitive = sensitive,
         key = key,
         packageName = packageName,
         isOngoing = isOngoing,
+        wantOngoing = wantOngoing,
         isGroupSummary = notification.isGroupSummary(),
         title = extras?.getCharSequence(Notification.EXTRA_TITLE),
         text = extras?.getCharSequence(Notification.EXTRA_TEXT),
         bigText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT),
+        subText = if (wantOngoing) extras?.getCharSequence(Notification.EXTRA_SUB_TEXT) else null,
+        progress = progress.takeIf { !indeterminate && progressMax > 0 },
+        progressMax = progressMax.takeIf { !indeterminate && progressMax > 0 },
+        largeIcon = if (wantOngoing) notification.getLargeIcon() else null,
         postedAt = postTime,
     )
 }
 
 /**
- * Null for the things a user doesn't count as a notification: ongoing ones (media players,
- * foreground services) can't be dismissed, and a group summary repeats its children. A one-time
+ * Null for notifications that don't match [wantOngoing] or are group summaries. A one-time
  * code, by Android's [sensitive] flag or by its look, is never published: its text is replaced.
  */
 internal fun shadeNotification(
@@ -207,25 +323,40 @@ internal fun shadeNotification(
     key: String,
     packageName: String,
     isOngoing: Boolean,
+    wantOngoing: Boolean = false,
     isGroupSummary: Boolean,
     title: CharSequence?,
     text: CharSequence?,
     bigText: CharSequence?,
+    subText: CharSequence? = null,
+    progress: Int? = null,
+    progressMax: Int? = null,
+    largeIcon: Icon? = null,
     postedAt: Long,
 ): ShadeNotification? {
-    if (isOngoing || isGroupSummary) return null
+    if (isOngoing != wantOngoing || isGroupSummary) return null
     val cleanTitle = stripBidiIsolates(title).orEmpty()
     val cleanBody = stripBidiIsolates(bigText ?: text).orEmpty()
-    if (cleanTitle.isBlank() && cleanBody.isBlank()) return null
-    val redact = sensitive || looksLikeOneTimeCode("$cleanTitle $cleanBody")
+    val cleanSubText = stripBidiIsolates(subText).orEmpty()
+    if (cleanTitle.isBlank() && cleanBody.isBlank() && cleanSubText.isBlank()) return null
+    val redact = sensitive || looksLikeOneTimeCode("$cleanTitle $cleanBody $cleanSubText")
     // A titleless notification still needs something to render as its name.
-    val title = cleanTitle.ifBlank { cleanBody }
+    val resolvedTitle = cleanTitle.ifBlank { cleanBody.ifBlank { cleanSubText } }
     val titleHasCode = cleanTitle.isBlank() || ONE_TIME_CODE.containsMatchIn(cleanTitle)
+    val validProgress = if (progress != null && progressMax != null && progressMax > 0) {
+        progress.coerceIn(0, progressMax)
+    } else {
+        null
+    }
     return ShadeNotification(
         key = key,
         packageName = packageName,
-        title = if (redact && titleHasCode) SENSITIVE_CONTENT else title,
+        title = if (redact && titleHasCode) SENSITIVE_CONTENT else resolvedTitle,
         body = if (cleanTitle.isBlank()) "" else if (redact) SENSITIVE_CONTENT else cleanBody,
+        subText = if (cleanSubText.isBlank()) "" else if (redact) SENSITIVE_CONTENT else cleanSubText,
+        progress = validProgress,
+        progressMax = if (validProgress != null) progressMax else null,
+        largeIcon = if (redact) null else largeIcon,
         postedAt = postedAt,
     )
 }
