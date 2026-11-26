@@ -36,6 +36,7 @@ class TargetCalendarSeederTest {
     ) : Calendar {
         override fun calendars(): Flow<List<CalendarEntity>> = flowOf(calendars)
         override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {}
+        override fun updateCalendarIcon(calendarId: Int, iconCode: String?) {}
         override suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String? = null
         override suspend fun defaultCalendar(): CalendarEntity? = default
     }

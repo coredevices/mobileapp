@@ -373,6 +373,10 @@ public class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun updateCalendarIcon(calendarId: Int, iconCode: String?) {
+        // No-op
+    }
+
     override suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String? = null
 
     override suspend fun defaultCalendar(): CalendarEntity? = null

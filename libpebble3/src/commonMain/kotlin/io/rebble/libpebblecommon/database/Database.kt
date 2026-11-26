@@ -103,7 +103,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppDataUsageEntity::class,
         PluginActionLogEntity::class,
     ],
-    version = 54,
+    version = 55,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -149,6 +149,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 51, to = 52),
         AutoMigration(from = 52, to = 53),
         AutoMigration(from = 53, to = 54, spec = AutoMigration54::class),
+        AutoMigration(from = 54, to = 55),
     ],
     exportSchema = true,
 )

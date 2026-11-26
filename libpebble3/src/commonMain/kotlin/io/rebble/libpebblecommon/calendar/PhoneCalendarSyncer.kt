@@ -131,7 +131,7 @@ internal class PhoneCalendarSyncer(
         }
         calendars.forEach { newCalendar ->
             if (existingCalendars.none { it.platformId == newCalendar.platformId }) {
-                calendarDao.insertOrReplace(newCalendar.inheritEnabledFrom(removedCalendars))
+                calendarDao.insertOrReplace(newCalendar.inheritUserSettingsFrom(removedCalendars))
             }
         }
 
@@ -267,16 +267,23 @@ internal class PhoneCalendarSyncer(
             requestSync()
         }
     }
+
+    override fun updateCalendarIcon(calendarId: Int, iconCode: String?) {
+        libPebbleCoroutineScope.launch {
+            calendarDao.setIconCode(calendarId, iconCode)
+            requestSync()
+        }
+    }
 }
 
 internal data class EventAndPin(val event: CalendarEvent, val pin: TimelinePin)
 
 /**
  * `platformId` is not stable - iOS may hand back a new `calendarIdentifier` for the same calendar
- * (re-subscribe, account resync), which drops the old row and re-adds it enabled. Carry the user's
- * choice over to the replacement.
+ * (re-subscribe, account resync), which drops the old row and re-adds it with default settings.
+ * Carry the user's choices over to the replacement.
  */
-internal fun CalendarEntity.inheritEnabledFrom(removed: List<CalendarEntity>): CalendarEntity {
+internal fun CalendarEntity.inheritUserSettingsFrom(removed: List<CalendarEntity>): CalendarEntity {
     val previous = removed.find { it.ownerId == ownerId && it.name == name } ?: return this
-    return copy(enabled = previous.enabled)
+    return copy(enabled = previous.enabled, iconCode = previous.iconCode)
 }
