@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,8 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +41,7 @@ import coredevices.util.Platform
 import coredevices.util.granted
 import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
@@ -156,7 +161,23 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     libPebble.updateCalendarEnabled(entry.id, isChecked)
                                 }
                             )
-                            Text(entry.name)
+                            Text(entry.name, modifier = Modifier.weight(1f))
+                            var showIconPicker by remember { mutableStateOf(false) }
+                            if (showIconPicker) {
+                                IconPickerDialog(
+                                    onIconSelected = { icon ->
+                                        libPebble.updateCalendarIcon(entry.id, icon?.code)
+                                        showIconPicker = false
+                                    },
+                                    onDismissWithoutResult = { showIconPicker = false },
+                                )
+                            }
+                            IconButton(onClick = { showIconPicker = true }) {
+                                IconImage(
+                                    icon = TimelineIcon.fromCode(entry.iconCode) ?: TimelineIcon.TimelineCalendar,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                         if (entry.enabled && (!entry.syncEvents || !entry.visible)) {
                             Row {
