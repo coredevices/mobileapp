@@ -58,6 +58,11 @@ class CoreDeepLinkHandlerTest {
     }
 
     @Test
+    fun listenDeepLinkOpensTheListenDialog() {
+        assertEquals(RingRoutes.ListenDialog, routeFor(RingRoutes.LISTEN_DEEP_LINK))
+    }
+
+    @Test
     fun wrongSchemeHostOrPathDoesNotParse() {
         assertNull(routeFor("pebble://deep-link/index-settings"))
         assertNull(routeFor("pebblecore://other/index-settings"))

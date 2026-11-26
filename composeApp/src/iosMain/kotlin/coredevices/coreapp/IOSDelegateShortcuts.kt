@@ -1,6 +1,7 @@
 package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
+import com.eygraber.uri.Uri
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.actions.PebbleAppActions
@@ -10,6 +11,7 @@ import coredevices.pebble.actions.PebbleQuietTimeActions
 import coredevices.pebble.actions.PebbleTimelineActions
 import coredevices.pebble.actions.PebbleWatchInfoActions
 import coredevices.pebble.actions.watch.getWatchScreenshotBase64
+import coredevices.ring.ui.navigation.RingRoutes
 import io.rebble.libpebblecommon.SystemAppIDs
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -383,6 +385,17 @@ object IOSDelegateShortcuts : KoinComponent {
                 withContext(Dispatchers.Main) { callback(null) }
             }
         }
+    }
+
+    /**
+     * Called from the iOS Shortcut to open the Index listen dialog, which starts recording
+     * from the phone's microphone.
+     */
+    @OptIn(ExperimentalObjCName::class)
+    @ObjCName("startIndexRecording")
+    fun startIndexRecording() {
+        val coreDeepLinkHandler: CoreDeepLinkHandler = get()
+        coreDeepLinkHandler.handle(Uri.parse(RingRoutes.LISTEN_DEEP_LINK))
     }
 
 }
