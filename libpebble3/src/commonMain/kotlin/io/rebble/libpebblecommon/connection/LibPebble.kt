@@ -390,6 +390,7 @@ public sealed class FirmwareUpdateCheckResult {
 public interface Calendar {
     public fun calendars(): Flow<List<CalendarEntity>>
     public fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
+    public fun updateCalendarIcon(calendarId: Int, iconCode: String?)
     public suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String?
     /** The synced calendar matching the platform's default for new events, if known. */
     public suspend fun defaultCalendar(): CalendarEntity?

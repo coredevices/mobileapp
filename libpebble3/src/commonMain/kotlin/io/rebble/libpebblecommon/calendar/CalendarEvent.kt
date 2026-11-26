@@ -176,7 +176,7 @@ internal fun CalendarEvent.toTimelinePin(
         headings.add("Calendar")
         paragraphs.add(calendar.name)
 
-        tinyIcon { TimelineIcon.TimelineCalendar }
+        tinyIcon { TimelineIcon.fromCode(calendar.iconCode) ?: TimelineIcon.TimelineCalendar }
         title { title }
         if (!location.isNullOrBlank()) {
             location { location }

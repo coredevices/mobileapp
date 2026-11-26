@@ -32,6 +32,9 @@ internal interface CalendarDao {
     @Query("UPDATE CalendarEntity SET enabled = :enabled WHERE id = :calendarId")
     suspend fun setEnabled(calendarId: Int, enabled: Boolean)
 
+    @Query("UPDATE CalendarEntity SET iconCode = :iconCode WHERE id = :calendarId")
+    suspend fun setIconCode(calendarId: Int, iconCode: String?)
+
     @Query("SELECT * FROM CalendarEntity")
     fun getFlow(): Flow<List<CalendarEntity>>
 //

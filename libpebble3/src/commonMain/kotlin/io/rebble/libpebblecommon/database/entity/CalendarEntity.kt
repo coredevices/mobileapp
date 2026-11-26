@@ -19,5 +19,7 @@ public data class CalendarEntity(
         @ColumnInfo(defaultValue = "1")
         val visible: Boolean = true,
         @ColumnInfo(defaultValue = "1")
-        val writable: Boolean = true
+        val writable: Boolean = true,
+        @ColumnInfo(defaultValue = "null")
+        val iconCode: String? = null,
 )
