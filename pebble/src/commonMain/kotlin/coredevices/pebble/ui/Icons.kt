@@ -65,7 +65,7 @@ fun IconPickerDialog(
                 )
 
                 val filteredIcons = remember(searchQuery) {
-                    TimelineIcon.entries.filter { it.key().contains(searchQuery, ignoreCase = true) }
+                    TimelineIcon.entries.filter { it.hasTinyVariant && it.key().contains(searchQuery, ignoreCase = true) }
                 }
 
                 LazyColumn(modifier = Modifier.weight(1f, fill = false)) { items(filteredIcons, key = { it.code }) { icon ->
