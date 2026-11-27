@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction.SemanticAction
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -118,11 +119,7 @@ internal class AndroidNotificationActionHandler(
                 return errorResponse()
             }
         logger.d { "handleReply() actionIntent result code: $resultCode" }
-        return TimelineActionResult(
-            success = true,
-            icon = TimelineIcon.ResultSent,
-            title = "Replied"
-        )
+        return repliedResult()
     }
 
     private suspend fun handleGeneric(notificationAction: LibPebbleNotificationAction): TimelineActionResult {
@@ -131,11 +128,7 @@ internal class AndroidNotificationActionHandler(
             return errorResponse()
         }
         logger.d { "handleGeneric() actionIntent result code: $resultCode" }
-        return TimelineActionResult(
-            success = true,
-            icon = TimelineIcon.GenericConfirmation,
-            title = "Complete"
-        )
+        return notificationAction.genericActionResult()
     }
 
     private suspend fun handleDismiss(itemId: Uuid): TimelineActionResult {
@@ -230,6 +223,40 @@ internal class AndroidNotificationActionHandler(
             } else {
                 intent.send(actionContext, 0, fillIntent, callback, null)
             }
+        }
+    }
+}
+
+private fun repliedResult() = TimelineActionResult(
+    success = true,
+    icon = TimelineIcon.ResultSent,
+    title = "Replied",
+)
+
+internal fun LibPebbleNotificationAction.genericActionResult(): TimelineActionResult {
+    fun result(icon: TimelineIcon, title: String) = TimelineActionResult(
+        success = true,
+        icon = icon,
+        title = title,
+    )
+
+    return when (semanticAction) {
+        SemanticAction.Reply -> repliedResult()
+        SemanticAction.MarkAsRead -> result(TimelineIcon.NotificationGoogleInbox, "Marked as read")
+        SemanticAction.MarkAsUnread -> result(TimelineIcon.GenericEmail, "Marked as unread")
+        SemanticAction.Delete -> result(TimelineIcon.ResultDeleted, "Deleted")
+        SemanticAction.Archive -> result(TimelineIcon.GenericConfirmation, "Archived")
+        SemanticAction.Mute -> result(TimelineIcon.ResultMute, "Muted")
+        SemanticAction.Unmute -> result(TimelineIcon.ResultUnmute, "Unmuted")
+        SemanticAction.ThumbsUp -> result(TimelineIcon.ThumbsUp, "Liked")
+        // The firmware has no thumbs-down result icon.
+        SemanticAction.ThumbsDown -> result(TimelineIcon.GenericConfirmation, "Disliked")
+        SemanticAction.Call -> result(TimelineIcon.DuringPhoneCall, "Calling")
+        SemanticAction.None -> if (title.trim().equals("Like", ignoreCase = true)) {
+            // Some apps only provide the label instead of a semantic action.
+            result(TimelineIcon.ThumbsUp, "Liked")
+        } else {
+            result(TimelineIcon.GenericConfirmation, "Complete")
         }
     }
 }
