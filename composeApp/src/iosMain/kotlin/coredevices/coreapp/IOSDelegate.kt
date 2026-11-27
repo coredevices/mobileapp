@@ -30,6 +30,7 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.plugin.handleFindMyPhoneNotificationResponse
 import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
 import coredevices.ring.reminders.ReminderCompleter
@@ -312,6 +313,10 @@ object IOSDelegate : KoinComponent {
         completionHandler: () -> Unit
     ) {
         logger.d { "userNotificationCenterDidReceive" }
+        if (handleFindMyPhoneNotificationResponse(response)) {
+            completionHandler()
+            return
+        }
         val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
 
         val permissionAnswer = handlePermissionNotificationResponse(get(), response.actionIdentifier, userInfo) {
