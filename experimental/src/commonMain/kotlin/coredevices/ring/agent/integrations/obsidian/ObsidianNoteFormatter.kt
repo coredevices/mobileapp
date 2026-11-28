@@ -7,6 +7,7 @@ data class ObsidianConfig(
     val subfolder: String,
     /** Extra frontmatter tag for timestamped files, e.g. "fleeting". Blank = just "index". */
     val customTag: String = "",
+    val appendPrefix: String = ObsidianNoteFormatter.DEFAULT_APPEND_PREFIX,
 )
 
 /** A concrete filesystem action for one note. [fileName] may contain one subfolder segment. */
@@ -24,6 +25,7 @@ sealed interface ObsidianWrite {
 object ObsidianNoteFormatter {
 
     const val MAIN_NOTE_NAME = "Pebble Index.md"
+    const val DEFAULT_APPEND_PREFIX = "## YYYY-MM-DD HH:mm\\n\\n"
 
     fun plan(config: ObsidianConfig, content: String, year: Int, month: Int, day: Int, hour: Int, minute: Int): ObsidianWrite {
         val date = "$year-${pad2(month)}-${pad2(day)}"
@@ -37,9 +39,9 @@ object ObsidianNoteFormatter {
                 ObsidianWrite.NewFile(fileName, timestampedContent(isoMinute, content, sanitizeTag(config.customTag)))
             }
             ObsidianMode.MAIN_NOTE ->
-                ObsidianWrite.Append(MAIN_NOTE_NAME, appendBlock(date, hour, minute, content))
+                ObsidianWrite.Append(MAIN_NOTE_NAME, appendBlock(config.appendPrefix, date, hour, minute, content))
             ObsidianMode.NAMED_NOTE ->
-                ObsidianWrite.Append(withMdExtension(config.targetNote), appendBlock(date, hour, minute, content))
+                ObsidianWrite.Append(withMdExtension(config.targetNote), appendBlock(config.appendPrefix, date, hour, minute, content))
         }
     }
 
@@ -48,8 +50,13 @@ object ObsidianNoteFormatter {
         return "---\ncreated: $isoMinute\ntags: [$tags]\n---\n\n${content.trimEnd()}\n"
     }
 
-    private fun appendBlock(date: String, hour: Int, minute: Int, content: String): String =
-        "## $date ${pad2(hour)}:${pad2(minute)}\n\n${content.trimEnd()}\n"
+    private fun appendBlock(prefix: String, date: String, hour: Int, minute: Int, content: String): String {
+        val formattedPrefix = prefix
+            .replace("YYYY-MM-DD", date)
+            .replace("HH:mm", "${pad2(hour)}:${pad2(minute)}")
+            .replace("\\n", "\n")
+        return "$formattedPrefix${content.trimEnd()}\n"
+    }
 
     /** Concatenate [block] after [existing], guaranteeing exactly one blank line between them. */
     fun mergeAppend(existing: String?, block: String): String {
