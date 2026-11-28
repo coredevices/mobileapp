@@ -13,6 +13,9 @@ import coredevices.ring.agent.toolschema.builtinToolDefinitions
 import coredevices.ring.database.Preferences
 import coredevices.toolschema.ToolDefinition
 import coredevices.toolschema.ToolParam
+import coredevices.util.KeywordMatch
+import coredevices.util.LocalizedKeywords
+import coredevices.util.MultilingualKeywords
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import io.rebble.libpebblecommon.calendar.NewCalendarEvent
@@ -29,9 +32,10 @@ import org.koin.core.component.inject
 class CreateCalendarEventTool : BuiltInMcpTool(
     definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
-        'create_calendar_event' is ONLY for requests where the user literally says the word
-        "calendar" or "event" while asking to create one, e.g. "add an event to my calendar",
-        "create a calendar event", "put an event on my calendar for Friday at 3pm". Decision rules:
+        'create_calendar_event' is ONLY for requests where the user literally says one of
+        ${CALENDAR_KEYWORDS.promptList()} while asking to create one, e.g. "add an event to my
+        calendar", "create a calendar event", "put an event on my calendar for Friday at 3pm".
+        Decision rules:
         - The words "schedule", "create", "book", "meeting", "appointment" or "time" on their own
           NEVER trigger this tool. "schedule time with X", "schedule a meeting", "book an
           appointment" are NOT calendar requests — handle them with the reminder or note tools.
@@ -44,8 +48,9 @@ class CreateCalendarEventTool : BuiltInMcpTool(
           calendar event — create a note instead.
         - Provide times in the user's local timezone. Use 'duration_human' for a stated duration,
           or 'end_date_time_human' for an explicit end time; omit both for a default 1-hour event.
-        The tool itself rejects calls where the user's message does not contain "calendar" or
-        "event" — do not attempt it for other phrasings.
+        - Whatever language the user speaks, pass the date/time arguments in English.
+        The tool itself rejects calls where the user's message does not contain one of those
+        words — do not attempt it for other phrasings.
     """.trimIndent()
 ), KoinComponent {
     private val libPebble: LibPebble by inject()
@@ -54,8 +59,22 @@ class CreateCalendarEventTool : BuiltInMcpTool(
 
     companion object {
         const val TOOL_NAME = "create_calendar_event"
+
+        /**
+         * Deterministic trigger guard: the tool only runs when the user's message literally
+         * contains one of these words (the LLM steering says the same, but mis-transcribed or
+         * paraphrased requests were still slipping through — MOB-8701). A null/blank message
+         * never matches — a request we can't verify must not write to the user's calendar.
+         */
+        private val CALENDAR_KEYWORDS = MultilingualKeywords(
+            listOf(
+                LocalizedKeywords(listOf("calendar", "event", "events"), KeywordMatch.WholeWord),
+                LocalizedKeywords(listOf("カレンダー", "イベント"), KeywordMatch.Substring),
+            )
+        )
+
         const val TOOL_DESCRIPTION = "Add an event to the user's phone calendar at a specific date and time. " +
-            "Use ONLY when the user literally says 'calendar' or 'event' while asking to create one " +
+            "Use ONLY when the user literally says one of 'calendar', 'event', 'events', 'カレンダー', 'イベント' while asking to create one " +
             "(e.g. 'add an event to my calendar', 'create a calendar event'). Words like 'schedule', " +
             "'create', 'book', 'meeting', 'appointment' or 'time' alone must NOT trigger this tool — " +
             "use the reminder/note tools for those. Do NOT use for reminders, to-dos, timers, or alarms. " +
@@ -63,16 +82,8 @@ class CreateCalendarEventTool : BuiltInMcpTool(
         private val logger = Logger.withTag("CreateCalendarEventTool")
         val DEFAULT_DURATION = 1.hours
 
-        /**
-         * Deterministic trigger guard: the tool only runs when the user's message literally
-         * contains "calendar" or "event(s)" (the LLM steering says the same, but mis-transcribed
-         * or paraphrased requests were still slipping through — MOB-8701). Word-bounded so e.g.
-         * "eventually" doesn't count. Fails closed when the message is null/blank — a request
-         * we can't verify must not write to the user's calendar; the agent falls back to a note.
-         */
-        private val TRIGGER_WORDS = Regex("""\b(calendar|events?)\b""", RegexOption.IGNORE_CASE)
         fun mentionsCalendarOrEvent(userMessage: String?): Boolean =
-            userMessage != null && TRIGGER_WORDS.containsMatchIn(userMessage)
+            CALENDAR_KEYWORDS.matches(userMessage)
 
         /** Parses a human date/time string to an absolute instant, reusing the shared timer resolution. */
         private fun parse(human: String, tz: TimeZone, now: Instant): Instant? {
@@ -172,7 +183,7 @@ class CreateCalendarEventTool : BuiltInMcpTool(
                     CreateEventResult(
                         success = false,
                         errorMessage = "The user did not explicitly ask for a calendar event " +
-                            "(no mention of 'calendar' or 'event'). Use the reminder or note tools instead."
+                            "(no mention of 'calendar' or 'event' in any supported language). Use the reminder or note tools instead."
                     )
                 ),
                 SemanticResult.GenericFailure(
